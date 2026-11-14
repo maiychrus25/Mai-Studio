@@ -12,7 +12,7 @@ export const MAX_ASSET_BYTES = 2 * 1024 * 1024 * 1024;
 const TABLES = ['projects', 'tasks', 'accounts', 'proxies', 'assets', 'settings'] as const;
 type Table = typeof TABLES[number];
 const KINDS: ProjectKind[] = ['studio', 'srt', 'film', 'series', 'affiliate', 'dub'];
-const TASK_KINDS: TaskKind[] = ['image', 'video', 'image-to-video', 'merge', 'slideshow', 'dub', 'speech', 'pipeline'];
+const TASK_KINDS: TaskKind[] = ['image', 'video', 'image-to-video', 'music', 'merge', 'slideshow', 'dub', 'speech', 'pipeline', 'plan', 'extract-audio', 'model-prepare'];
 export function object(value: unknown): Record<string, unknown> {
   if (!value || typeof value !== 'object' || Array.isArray(value)) throw new Error('Dữ liệu phải là object');
   return value as Record<string, unknown>;
@@ -193,7 +193,7 @@ export class Store {
   }
   deleteAsset(id: string): void {
     const path = this.assetPath(id);
-    if (this.tasks().some(task => ['running', 'queued'].includes(task.status) && JSON.stringify(task.input).includes(id))) throw new Error('Tệp đang được công việc sử dụng');
+    if (this.tasks().some(task => ['running', 'queued'].includes(task.status) && (JSON.stringify(task.input).includes(id) || JSON.stringify(task.checkpoint).includes(id) || task.outputIds.includes(id) || JSON.stringify(this.project(task.projectId).data).includes(id)))) throw new Error('Tệp đang được công việc sử dụng');
     unlinkSync(path); this.remove('assets', id);
   }
   log(message: string, level = 'info', taskId = ''): void {

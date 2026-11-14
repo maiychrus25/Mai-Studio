@@ -80,3 +80,58 @@ Files: .github/workflows/build.yml; scripts/check-docs.js; scripts/stress.mjs; R
 ## Progress
 
 Dev implementation M1–M4 exists with actual local operations and contract fixtures; M5 is partial. Host and Linux verification, packaged runtime checks, independent diff review and measured stress results are recorded in SYSTEM_DOCUMENTATION.md and docs/reports/acceptance.md. Live provider access, advanced parity gaps, remaining OS/architecture checks and signed update/rollback acceptance remain open; the unchecked acceptance items above are not implied complete by a passing dev suite.
+
+## Functional parity pass — operator reaffirmed “tốt bằng”, 14/11/2026
+
+The acceptance target remains the approved F01–F14 spec. This pass repairs the simplified behavior found after the first dev handoff; it does not redefine success as feature names or fixture-only equivalence. Keep the currently opened packaged build intact until its replacement is verified. Continue on the isolated standalone feature branch; no MaiHub edits, live paid calls, push or deployment.
+
+### Task P1 — recover executable workflow contracts
+
+**Status: PARTIAL —** core story/film/series contracts và docs/reports/parity.md đã có; prompt/schema đầy đủ gốc remote và một số Aff/merge/covers contracts chưa khép. Controlled pure-function replay sau bước tĩnh có allowlist/SHA riêng, không import module/EXE.
+
+- [ ] Read shipped app.js, config/browser/storyvoice/filmstudio/seriesstudio/affstudio bytecode with matching CPython 3.14, without executing the target. Record exact input fields, stage ordering, prompt schemas and recovery rules in docs/reports/parity.md with artifact paths/function names. Native engine/muse unknowns remain explicit; static inference is not runtime proof.
+- [x] Turn the recovered story timing/grouping/alignment contracts into bounded source-replay fixtures (21 prior + 74 alignment cases, 2×1,000-cue digests); preserve source identity and keep remote recipe unknowns explicit. Other studio contracts remain in P1 scope.
+
+### Task P2 — browser text/generation behavior
+
+**Status: IMPLEMENTED + LOCAL FIXTURE EVIDENCE —** completeText/ref/stream/cancel/resume và generation/music đã có Chrome fixtures. Live Muse account/DOM behavior vẫn chưa nghiệm thu; đây không phải full parity.
+
+Files: src/core/browser.ts, tests/browser.test.ts; reuse Store selectors and profile lease.
+Interface: BrowserManager.completeText(task: Task, context: TaskContext): Promise<string> accepts a queued plan task with prompt/refIds and writes remote admission/thread/result checkpoints. Existing generate remains compatible.
+- [x] RED→GREEN local Chrome fixtures: new replies must be distinguished from prior text, streaming must finish, references must upload, cancel and resume must not submit twice. Test generation ref/timing/error behavior against the recovered contract.
+- [x] Implement supported recovered selector/mode behavior; unknown DOM conditions enter waiting_input with reason. No fabricated live success.
+
+### Task P3 — actual AI planning, stages and narration
+
+**Status: LOCAL IMPLEMENTATION VERIFIED —** queued AI/director, stages/cache/force, measured narration/source alignment, actual-image QC và speech/cohort integration có regression tests. Host snapshot 0.2.0-dev.1 có 296 tests pass; prompt gốc remote và live provider parity vẫn chưa nghiệm thu.
+
+Files: src/core/planning.ts, src/core/studio.ts, src/core/store.ts, src/shared/studio.ts, tests/planning.test.ts, tests/studio.test.ts.
+Interfaces: studio.run gains stage = plan|music|characters|images|videos|speech|check|render|all and optional shotIds. Existing stage omission keeps all. Plan tasks use TaskKind plan. AI completion uses configured text provider or BrowserManager.completeText through the same queue/profile lease. studio.plan remains explicit manual import/splitting for compatibility, and must be labeled manual in UI.
+Persist stage assets in project.data.production maps (characterImages/images/videos/speech by stable ID), input fingerprints and stale state. Reuse task checkpoints; do not delete completed outputs when re-planning. Model output must be bounded JSON, validate cast/scenes/shots/timing/refs before project mutation. Never use a fallback five-second split as a claimed AI plan.
+- [x] RED→GREEN focused HTTP/Chrome/queue evidence: real HTTP planning response changes the saved storyboard; malformed JSON/dangling cast/path refs preserve the previous plan; selected-stage retries reuse prior outputs; render-only never calls a provider; interrupted plan/TTS never duplicate admission.
+- [x] Story narration uses source audio with actual ASR timing or per-sentence TTS durations before visual planning/render. Preserve cue gaps and source audio; record quality reviews as explicit results rather than assuming accuracy. Verify with generated WAV/MP4 and HTTP fixtures, and list unrun live acceptance separately.
+
+### Task P4 — remaining local media/commerce/series behavior
+
+**Status: PARTIAL —** FFmpeg transforms/hierarchy/voice-fit, CSV/JSON và series stale/recap/QA windows/subtitle clock đã nối và kiểm CPU. Nhạc recap liên tục, teaser/credit tự động, continuity và Market live vẫn chưa nghiệm thu.
+
+Files: src/core/media.ts, src/core/pipelines.ts, src/core/products.ts and their tests; orchestration in studio.ts owned by parent.
+Extend MediaInput with trim start/end and MediaOptions with fit pad|crop, fadeIn/fadeOut, audio fade controls. Reuse existing FFmpeg graph/atomic writer. No external paths through renderer.
+- [x] RED→GREEN focused real FFmpeg evidence for trim/crop/fades, gap timing, subtitle/overlay/music, cancellation, PCM extraction/mix, ducking/Ken Burns and hierarchical sequences. Current code supports 1,002 sequence inputs in batches of 100; final check belongs to P5.
+- [x] Connect QA-selected recap to series with raw output cache, stale/failed QA rejection, sidecar clock and retry/deleted-raw regressions. Local CPU evidence exists; continuous music and live equivalence remain open.
+- [ ] Close remaining original merge/covers/audio-export acceptance, automatic teaser/credit and continuity comparison with the Windows runtime.
+- [x] Implement quoted CSV/JSON product batch import with preserved facts/provenance/strict limits, and mark series child production stale on shared-cast changes without replacing media; focused parser/service evidence exists.
+- [ ] Recover Market attachment delivery and validate authorized link/commerce behavior; never bypass vendor entitlements.
+
+### Task P5 — expose actual workflow and verify parity
+
+**Status: LOCAL VERIFICATION COMPLETE / PLATFORM AND LIVE ACCEPTANCE OPEN —** 0.2.0-dev.1 host build/test/lint/docs, two actual Electron rounds of 1,000 tasks and packaged macOS ARM64 ASR/render/playback passed. Earlier 0.1.0 evidence remains historical. Linux artifacts/native verification and live Windows comparison are recorded separately; no paid/live/prod action was performed.
+
+Files: src/ui/AdvancedStudio.tsx, Workspace.tsx, Connections.tsx, Settings.tsx, shared contract and docs. Follow DESIGN.md and retain VI/EN, accessibility, light/dark/mobile.
+- [x] Expose queued AI analysis, explicit manual splitting, selected-step/shot operations, narration/source audio, generation and review states. Connect each control to the shared commands; no extra JSON-only placeholder for an exposed workflow.
+- [x] Review actual diff; run host make build/test/lint/docs-check, two actual Electron stress rounds on desktop/mobile/light/dark and packaged macOS CPU runtime checks. Linux ARM64 full suite passes; ARM64/x64 AppImage/DEB match compiled source and packaged native speech works. x64 selected suite has deadline failures under emulation, retained in the report.
+- [ ] Complete physical x64/other platform and live Windows-vs-port acceptance. Runtime comparison, native unknowns and unconfigured services remain acceptance work; do not report “tốt bằng” without it.
+
+### Documentation checkpoint — functional parity dev
+
+SYSTEM_DOCUMENTATION.md and docs/reports/acceptance.md now distinguish implementation, controlled source replay, native CPU smoke and missing runtime parity. P1/P3/P4 remain partial; P5 is open. Full-suite numbers from in-progress merges are not promoted to final pass. Preserve the concurrently authored director section and historical acceptance records. Account/VPS availability is confirmed, connection/runtime comparison and paid-call authorization are separate. New ASR native/model limits and per-process media/product limits have docs-check markers bound to current constants; constants and version were not changed by this documentation task.

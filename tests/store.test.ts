@@ -5,6 +5,20 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { Store } from '../src/core/store';
 
+test('assets produced during an active pipeline stay locked through checkpoints and current production state', async () => {
+  const root = mkdtempSync(join(tmpdir(), 'maistudio-asset-lock-')); const store = new Store(root);
+  try {
+    const path = join(root, 'frame.png'); writeFileSync(path, Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+j04sAAAAASUVORK5CYII=', 'base64'));
+    const asset = await store.importAsset(path); const project = store.saveProject({ name: 'active' });
+    const [task] = store.createTasks({ projectId: project.id, prompts: ['render'], kind: 'pipeline' });
+    store.updateTask(task.id, { status: 'running', checkpoint: { steps: { image: { assetId: asset.id } } } });
+    assert.throws(() => store.deleteAsset(asset.id), /sử dụng|running|active/i);
+    store.updateTask(task.id, { checkpoint: {} }); store.saveProject({ ...project, data: { production: { images: { one: asset.id } } } });
+    assert.throws(() => store.deleteAsset(asset.id), /sử dụng|running|active/i);
+    store.updateTask(task.id, { status: 'cancelled' }); store.deleteAsset(asset.id); assert.equal(store.assets().length, 0);
+  } finally { store.close(); rmSync(root, { recursive: true, force: true }); }
+});
+
 test('projects and queued tasks persist across reopen without losing input or refs', () => {
   const root = mkdtempSync(join(tmpdir(), 'maistudio-store-'));
   try {

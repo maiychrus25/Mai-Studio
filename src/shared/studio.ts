@@ -1,8 +1,9 @@
 export type ProjectKind = 'studio' | 'srt' | 'film' | 'series' | 'affiliate' | 'dub';
 export type TaskStatus = 'draft' | 'queued' | 'running' | 'waiting_input' | 'paused' | 'succeeded' | 'failed' | 'cancelled' | 'interrupted';
-export type TaskKind = 'image' | 'video' | 'image-to-video' | 'merge' | 'slideshow' | 'dub' | 'speech' | 'pipeline';
-export interface Shot { id: string; prompt: string; duration: number; start?: number; dialogue?: string; speaker?: string; assetId?: string; voiceId?: string }
-export interface Character { id: string; name: string; description: string; assetId?: string; voiceId?: string }
+export type TaskKind = 'image' | 'video' | 'image-to-video' | 'music' | 'merge' | 'slideshow' | 'dub' | 'speech' | 'pipeline' | 'plan' | 'extract-audio' | 'model-prepare';
+export type StudioStage = 'plan' | 'music' | 'characters' | 'images' | 'videos' | 'speech' | 'check' | 'render' | 'all';
+export interface Shot { id: string; prompt: string; duration: number; start?: number; dialogue?: string; speaker?: string; assetId?: string; videoAssetId?: string; voiceId?: string; sceneId?: string; shotType?: string; videoPrompt?: string; characterIds?: string[]; listenerIds?: string[] }
+export interface Character { id: string; name: string; description: string; assetId?: string; voiceId?: string; voiceProfile?: string }
 export interface Project { id: string; name: string; kind: ProjectKind; createdAt: number; updatedAt: number; data: Record<string, unknown> }
 export interface Task {
   id: string; projectId: string; name: string; kind: TaskKind; prompt: string; status: TaskStatus;
@@ -31,8 +32,8 @@ export type StudioCommand =
   | 'account.save' | 'account.delete' | 'account.open' | 'account.close' | 'account.check'
   | 'proxy.save' | 'proxy.delete' | 'proxy.test' | 'settings.save' | 'secret.save'
   | 'queue.pause' | 'queue.resume' | 'asset.delete' | 'asset.export' | 'asset.open' | 'media.import'
-  | 'studio.plan' | 'studio.run' | 'srt.parse' | 'srt.export' | 'media.merge'
-  | 'voice.list' | 'voice.sample' | 'voice.favorite' | 'voice.transcribe' | 'voice.translate'
+  | 'studio.plan' | 'studio.run' | 'srt.parse' | 'srt.export' | 'media.merge' | 'media.extractAudio' | 'project.import.products'
+  | 'voice.list' | 'voice.sample' | 'voice.favorite' | 'voice.transcribe' | 'voice.translate' | 'voice.offline.prepare'
   | 'market.catalog' | 'market.login' | 'market.logout' | 'market.buy' | 'market.library' | 'market.download'
   | 'shopee.product' | 'codex.status' | 'codex.run' | 'codex.cancel' | 'codex.approve'
   | 'license.activate' | 'license.deactivate' | 'license.trial' | 'update.check' | 'update.install' | 'diagnostics';
@@ -49,9 +50,13 @@ export interface TaskContext {
   checkpoint(value: Record<string, unknown>): void;
 }
 export interface TaskResult { outputIds: string[]; message?: string }
-export interface MediaInput { path: string; duration?: number; start?: number; caption?: string }
+export interface MediaInput { path: string; duration?: number; start?: number; caption?: string; trimStart?: number; trimEnd?: number }
 export interface MediaOptions {
   width?: number; height?: number; fps?: number; musicPath?: string; volume?: number; keepAudio?: boolean;
   subtitlePath?: string; title?: string;
   overlayPath?: string;
+  fit?: 'pad' | 'crop'; fadeIn?: number; fadeOut?: number; audioFadeIn?: number; audioFadeOut?: number;
+  ducking?: boolean;
+  fitVoice?: boolean;
+  motion?: 'none' | 'kenburns';
 }

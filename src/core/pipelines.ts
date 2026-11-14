@@ -24,12 +24,12 @@ function unique<T extends { id: string }>(items: T[], label: string): T[] {
   return items;
 }
 
-export function buildShots(input: { script?: string; subtitle?: string; shots?: unknown; product?: Record<string, unknown>; episodeCount?: number }): Shot[] {
+export function buildShots(input: { script?: string; subtitle?: string; shots?: unknown; product?: Record<string, unknown>; episodeCount?: number; visualGrouped?: boolean }): Shot[] {
   record(input, 'shot input');
   if (input.episodeCount !== undefined && (!Number.isInteger(input.episodeCount) || input.episodeCount < 1 || input.episodeCount > MAX_ITEMS)) throw new Error('Invalid episodeCount: expected 1–1000');
   if (input.shots !== undefined) {
     const items = list(input.shots, 'shots');
-    const cues = input.subtitle === undefined ? undefined : parseSrt(text(input.subtitle, 'subtitle', 10 * 1024 * 1024));
+    const cues = input.subtitle === undefined || input.visualGrouped === true ? undefined : parseSrt(text(input.subtitle, 'subtitle', 10 * 1024 * 1024));
     if (cues && cues.length !== items.length) throw new Error('Shot count must match subtitle cue count');
     let end = 0;
     return unique(items.map((value, index) => {
@@ -44,9 +44,11 @@ export function buildShots(input: { script?: string; subtitle?: string; shots?: 
         shot.start = start;
       }
       end = (shot.start ?? end) + duration;
-      for (const key of ['dialogue', 'speaker', 'assetId', 'voiceId'] as const) {
+      for (const key of ['dialogue', 'speaker', 'assetId', 'videoAssetId', 'voiceId'] as const) {
         if (item[key] !== undefined) shot[key] = text(item[key], `shot ${key}`);
       }
+      for (const key of ['sceneId', 'shotType', 'videoPrompt'] as const) if (item[key] !== undefined) shot[key] = text(item[key], `shot ${key}`);
+      for (const key of ['characterIds', 'listenerIds'] as const) if (item[key] !== undefined) shot[key] = list(item[key], key, true).map(value => text(value, key, 256));
       return shot;
     }), 'shot');
   }
@@ -80,7 +82,7 @@ export function validateCharacters(value: unknown): Character[] {
   return unique(list(value, 'characters', true).map(value => {
     const item = record(value, 'character');
     const character: Character = { id: text(item.id, 'character id', 256), name: text(item.name, 'character name', 256), description: text(item.description, 'character description') };
-    for (const key of ['assetId', 'voiceId'] as const) if (item[key] !== undefined) character[key] = text(item[key], `character ${key}`, 256);
+    for (const key of ['assetId', 'voiceId', 'voiceProfile'] as const) if (item[key] !== undefined) character[key] = text(item[key], `character ${key}`, key === 'voiceProfile' ? 4000 : 256);
     return character;
   }), 'character');
 }
@@ -92,18 +94,22 @@ export function validateEpisodes(value: unknown): Array<{ id: string; name: stri
   }), 'episode');
 }
 
-export function pipelineSteps(project: Project): Array<{ id: string; kind: 'image' | 'video' | 'speech'; prompt: string; duration: number; start?: number; refIds: string[]; voiceId?: string }> {
+export function pipelineSteps(project: Project, options: { speech?: boolean } = {}): Array<{ id: string; kind: 'image' | 'video' | 'speech'; prompt: string; duration: number; start?: number; refIds: string[]; voiceId?: string; dialogue?: string; speaker?: string; shotType?: string; videoAssetId?: string }> {
   const data = record(project.data, 'project data');
   const characters = new Map(validateCharacters(data.characters).map(character => [character.id, character]));
+  const productRefs = data.productAssetIds === undefined ? [] : list(data.productAssetIds, 'product references', true).map(id => text(id, 'product reference ID', 256));
+  const style = [data.style, data.styleText].filter(value => typeof value === 'string' && value.trim()).join('. ');
   const steps: ReturnType<typeof pipelineSteps> = [];
   function addShots(source: Record<string, unknown>, scope: string, cast: unknown = undefined): void {
     const shots = buildShots(source);
     for (const [index, shot] of shots.entries()) {
       const raw = Array.isArray(source.shots) ? record(source.shots[index], 'shot') : {};
-      const ids = raw.characterIds ?? cast;
+      const scene = Array.isArray(source.scenes) && shot.sceneId ? source.scenes.map(value => record(value, 'scene')).find(scene => scene.id === shot.sceneId) : undefined;
+      const ids = raw.characterIds ?? scene?.characterIds ?? cast;
       const selected = ids === undefined ? [] : list(ids, 'characterIds', true).map(id => text(id, 'character id', 256));
       if (shot.speaker) selected.push(shot.speaker);
-      const refs = shot.assetId ? [shot.assetId] : [];
+      if (shot.listenerIds) selected.push(...shot.listenerIds);
+      const refs = [...(shot.assetId ? [shot.assetId] : []), ...productRefs];
       for (const id of new Set(selected)) {
         const character = characters.get(id);
         if (!character) throw new Error(`Unknown character/speaker: ${id}`);
@@ -113,9 +119,19 @@ export function pipelineSteps(project: Project): Array<{ id: string; kind: 'imag
       const refIds = [...new Set(refs)];
       if (refIds.length > 16) throw new Error('Pipeline reference limit: 16 per step');
       const timing = shot.start === undefined ? {} : { start: shot.start };
-      if (!shot.assetId) steps.push({ id: `${base}/image`, kind: 'image', prompt: shot.prompt, duration: shot.duration, ...timing, refIds });
-      steps.push({ id: `${base}/video`, kind: 'video', prompt: shot.prompt, duration: shot.duration, ...timing, refIds });
-      if (shot.dialogue) {
+      const visualPrompt = text(`${shot.prompt}${style ? `\nUse this visual style for the whole frame: ${style}.` : ''}`, 'image prompt');
+      if (!shot.assetId && !shot.videoAssetId) steps.push({ id: `${base}/image`, kind: 'image', prompt: visualPrompt, duration: shot.duration, ...timing, refIds });
+      let clipPrompt = shot.videoPrompt || shot.prompt;
+      if (style) clipPrompt += `\nUse this visual style throughout: ${style}.`;
+      if (source.nativeAudio === true || data.nativeAudio === true) {
+        const cast = [...new Set(selected)].map(id => characters.get(id)!);
+        clipPrompt += `\nPreserve the reference frame and character identities. ${scene ? `Location: ${scene.location || ''}; time: ${scene.time || ''}.` : ''}\n${cast.map(character => `${character.name}: ${character.description}. Stable voice: ${character.voiceProfile || 'keep the same voice throughout the film'}.`).join('\n')}`;
+        clipPrompt += shot.dialogue ? `\n${shot.speaker ? characters.get(shot.speaker)?.name || shot.speaker : 'Narrator'} speaks exactly: ${JSON.stringify(shot.dialogue)}. ${shot.listenerIds?.length ? `Listeners: ${shot.listenerIds.map(id => characters.get(id)!.name).join(', ')} react naturally and remain silent.` : ''}` : '\nSilent visual action; no invented speech.';
+        clipPrompt += '\nNo subtitles, logos or background music. Keep natural scene sound and the requested dialogue.';
+      }
+      steps.push({ id: `${base}/video`, kind: 'video', prompt: text(clipPrompt, 'video prompt'), duration: shot.duration, ...timing, refIds,
+        ...(shot.dialogue ? { dialogue: shot.dialogue } : {}), ...(shot.speaker ? { speaker: shot.speaker } : {}), ...(shot.shotType ? { shotType: shot.shotType } : {}), ...(shot.videoAssetId ? { videoAssetId: shot.videoAssetId } : {}) });
+      if (shot.dialogue && options.speech !== false && source.nativeAudio !== true && data.nativeAudio !== true && !['none', 'source'].includes(String(source.narrationMode ?? data.narrationMode))) {
         const voiceId = shot.voiceId ?? (shot.speaker ? characters.get(shot.speaker)?.voiceId : undefined) ?? source.voiceId ?? data.voiceId;
         if (!voiceId) throw new Error(`Speech voice required for shot ${shot.id}`);
         steps.push({ id: `${base}/speech`, kind: 'speech', prompt: shot.dialogue, duration: shot.duration, ...timing, refIds: [], voiceId: text(voiceId, 'voice id', 256) });
@@ -124,7 +140,7 @@ export function pipelineSteps(project: Project): Array<{ id: string; kind: 'imag
     }
   }
   function addScenes(source: Record<string, unknown>, scope: string): void {
-    if (source.scenes === undefined) addShots(source, scope);
+    if (source.shots !== undefined || source.scenes === undefined) addShots(source, scope);
     else {
       const scenes: Array<Record<string, unknown> & { id: string }> = list(source.scenes, 'scenes').map((value, index) => {
         const scene = record(value, 'scene');

@@ -98,7 +98,7 @@ export function JsonField({ label, value, onChange, shape = 'object' }: { label:
 }
 export function Result({ value }: { value: unknown }) {
   if (value === undefined) return null;
-  return <pre className="result">{typeof value === 'string' ? value : JSON.stringify(value, null, 2)}</pre>;
+  return <pre className="result">{typeof value === 'string' ? value : JSON.stringify(value, (key, item) => key === 'embedding' || key === 'embeddings' ? undefined : item, 2)}</pre>;
 }
 export const displayBytes = (bytes: number) => bytes < 1024 * 1024 ? `${(bytes / 1024).toFixed(1)} KB` : `${(bytes / 1024 / 1024).toFixed(1)} MB`;
 export function AccountSelect({ value, onChange }: { value: string; onChange: (value: string) => void }) {

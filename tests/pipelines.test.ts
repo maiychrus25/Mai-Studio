@@ -18,6 +18,17 @@ test('derives shots from SRT cues and accented script paragraphs without invente
   assert.deepEqual(api().buildShots({ product: { name: 'Cà phê', price: 125000, origin: 'Đắk Lắk' } }).map(s => s.prompt), ['name: Cà phê\nprice: 125000\norigin: Đắk Lắk']);
 });
 
+test('affiliate image and video steps retain selected real product photos alongside host references', () => {
+  const steps = api().pipelineSteps(project({ productAssetIds: ['product-photo'], characters: [{ id: 'host', name: 'Host', description: 'Presenter', assetId: 'host-photo' }], shots: [{ id: 'one', prompt: 'Demonstrate the product', duration: 2, characterIds: ['host'] }] }, 'affiliate'));
+  assert.deepEqual(steps.map(step => step.refIds), [['product-photo', 'host-photo'], ['product-photo', 'host-photo']]);
+  assert.throws(() => api().pipelineSteps(project({ productAssetIds: 'wrong', script: 'Product' }, 'affiliate')), /product|array|reference/i);
+});
+
+test('global visual style and custom style text reach generated frames and clips', () => {
+  const steps = api().pipelineSteps(project({ style: 'watercolor', styleText: 'Soft paper texture', shots: [{ id: 'one', prompt: 'A lake', videoPrompt: 'Slow pan', duration: 1 }] }));
+  for (const step of steps) { assert.ok(step.prompt.includes('watercolor')); assert.ok(step.prompt.includes('Soft paper texture')); }
+});
+
 test('SRT absolute cue starts survive shot building and every executable step', () => {
   const subtitle = '1\n00:00:01,000 --> 00:00:02,000\nCảnh một\n\n2\n00:00:04,000 --> 00:00:05,000\nCảnh hai';
   assert.deepEqual(api().buildShots({ subtitle }).map(shot => [shot.start, shot.duration]), [[1, 1], [4, 1]]);
@@ -116,6 +127,11 @@ test('product planning retains supplied structured facts and never fabricates sa
   const shots = api().buildShots({ product: { name: 'Áo', attributes: { color: 'Đỏ', size: 'M' }, images: ['local-image'] } });
   assert.equal(shots[0].prompt, 'name: Áo\nattributes: {"color":"Đỏ","size":"M"}\nimages: ["local-image"]');
   assert.throws(() => api().buildShots({ product: { price: Infinity } }), /product|invalid/i);
+});
+
+test('rejects a 1000-shot narrated plan whose generation expands beyond the executable step budget', () => {
+  const shots = Array.from({ length: 1000 }, (_, index) => ({ id: `s${index}`, prompt: `Scene ${index}`, dialogue: 'Hello', voiceId: 'fixture', duration: 1 }));
+  assert.throws(() => api().pipelineSteps(project({ shots })), /step limit/i);
 });
 
 test('local stress: validates 1000 Unicode shots repeatedly and creates bounded, stable step plans', () => {

@@ -21,10 +21,12 @@ App tự tạo dữ liệu tại Electron userData riêng. Khi kiểm thử, đ�
 1. Tạo dự án, vào Tài khoản để thêm và mở profile Muse hoặc cấu hình image provider tương thích trong Cài đặt.
 2. Nhập prompt/ảnh tham chiếu, lưu nháp và review, sau đó chạy. Mỗi profile chỉ có một lease; dùng Hủy/Tạm dừng khi cần.
 3. Nhập ảnh/video local trong Thư viện để ghép hoặc tạo slideshow mà không cần dịch vụ AI.
-4. SRT/Film/Series/Affiliate có editor shot/cast/script; lưu kế hoạch trước khi chạy pipeline. Lồng tiếng cần video nguồn, SRT và voice provider thực.
+4. SRT/Film/Series/Affiliate có editor shot/cast/script; chọn phân tích AI hoặc chia thủ công, rồi chạy từng bước hoặc toàn bộ. Bước render dùng media đã có; đổi nội dung có thể yêu cầu cập nhật plan hoặc tạo lại đúng bước. Lồng tiếng cần video nguồn, SRT và voice provider thực; chạy speech trước, render lại dùng speech cache và không gửi TTS thêm.
 5. Market/Codex/voice/Shopee có cấu hình/đăng nhập riêng; thiếu quyền hoặc chưa cấu hình sẽ trả lỗi có lý do, không tạo kết quả giả.
 
 Provider OpenAI-compatible dùng base URL bao gồm /v1. Model TTS/ASR/image/text phải đúng capability của endpoint anh sử dụng. Các provider là kết nối tùy chọn của app, không phải lời hứa về số dư, quyền dùng hoặc khả năng của bên thứ ba.
+
+ASR tiếng Việt và speaker embedding có thể chạy CPU local sau khi chuẩn bị model trong Cài đặt. App tải và kiểm SHA bộ model công khai (~86,7 MB payload), không cần Python; weights nằm ngoài thư mục ứng dụng. QC fail/unknown cần xem lại nội dung hoặc tạo lại media được chọn, không tự phát job trả phí để sửa. Series recap là tùy chọn; nhạc recap liên tục, teaser/credit/continuity và căn khẩu hình vẫn cần hoàn thiện/nghiệm thu.
 
 ## Kiểm tra và đóng gói
 

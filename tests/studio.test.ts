@@ -13,6 +13,349 @@ import { MediaTools } from '../src/core/media';
 import { StudioService } from '../src/core/studio';
 import type { CodexJob, Project, StudioState, Task } from '../src/shared/studio';
 
+test('music stage creates only real audio, reuses it and never submits again when rendering', async () => {
+  const root = mkdtempSync(join(tmpdir(), 'maistudio-music-')); const studio = new StudioService(root); let submissions = 0;
+  const wav = join(root, 'music.wav'); assert.equal(spawnSync(require('ffmpeg-static') as string, ['-v', 'error', '-f', 'lavfi', '-i', 'sine=frequency=440:sample_rate=16000:duration=0.5', wav]).status, 0);
+  const { readFileSync } = await import('node:fs'); const audio = readFileSync(wav);
+  const server = createServer((req, res) => {
+    if (req.url === '/audio.wav') { res.setHeader('content-type', 'audio/wav'); res.end(audio); return; }
+    if (req.url === '/submit') { submissions++; res.end('{}'); return; }
+    res.setHeader('content-type', 'text/html'); res.end(`<textarea></textarea><button>Send</button><section></section><script>document.querySelector('button').onclick=async()=>{await fetch('/submit');document.querySelector('section').innerHTML='<article><audio src="/audio.wav"></audio></article>'}</script>`);
+  });
+  await new Promise<void>(resolve => server.listen(0, '127.0.0.1', resolve)); const address = server.address(); assert.ok(address && typeof address !== 'string');
+  try {
+    studio.store.setSettings({ browserVisible: false, museSelectors: { composer: 'textarea', submit: 'button', response: 'article', fileInput: 'input[type=file]', stop: '.stop' } });
+    const account = studio.store.saveAccount({ name: 'fixture', url: `http://127.0.0.1:${address.port}/` });
+    const p = await studio.invoke<Project>('project.save', { name: 'music', kind: 'film', data: { musicPrompt: 'Quiet instrumental piano', shots: [{ id: 'one', prompt: 'Lake', duration: 0.5 }] } });
+    const run = async () => { const task = await studio.invoke<Task>('studio.run', { projectId: p.id, accountId: account.id, stage: 'music' }); for (let n = 0; n < 1000 && ['draft', 'queued', 'running'].includes(studio.store.task(task.id).status); n++) await delay(10); return studio.store.task(task.id); };
+    const first = await run(); assert.equal(first.status, 'succeeded', first.error); assert.equal(submissions, 1); assert.equal(first.outputIds.length, 1);
+    assert.ok(studio.store.asset(first.outputIds[0]).mime.startsWith('audio/')); assert.equal(studio.store.assets().length, 1);
+    const again = await run(); assert.equal(again.status, 'succeeded', again.error); assert.equal(submissions, 1); assert.deepEqual(again.outputIds, first.outputIds);
+    const data = studio.store.project(p.id).data; assert.equal(data.musicId, first.outputIds[0]);
+  } finally { await studio.close(); server.closeAllConnections(); await new Promise<void>(resolve => server.close(() => resolve())); rmSync(root, { recursive: true, force: true }); }
+});
+
+test('explicit regeneration replaces only selected generated assets and validates force before queue admission', async () => {
+  const root = mkdtempSync(join(tmpdir(), 'maistudio-force-')); const studio = new StudioService(root); let requests = 0;
+  const png = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+j04sAAAAASUVORK5CYII=', 'base64');
+  const server = createServer(async (request, response) => { for await (const _chunk of request) { /* drain request */ } requests++; response.setHeader('content-type', 'application/json'); response.end(JSON.stringify({ data: [{ b64_json: png.toString('base64') }] })); });
+  await new Promise<void>(resolve => server.listen(0, '127.0.0.1', resolve)); const address = server.address(); assert.ok(address && typeof address !== 'string');
+  try {
+    await studio.invoke('settings.save', { providers: { image: { baseUrl: `http://127.0.0.1:${address.port}/v1`, model: 'fixture' } } });
+    const p = await studio.invoke<Project>('project.save', { name: 'regenerate', kind: 'film', data: { shots: ['one', 'two'].map(id => ({ id, prompt: id, duration: 1 })) } });
+    const run = async (input = {}) => { const task = await studio.invoke<Task>('studio.run', { projectId: p.id, stage: 'images', ...input }); for (let n = 0; n < 1000 && ['draft', 'queued', 'running'].includes(studio.store.task(task.id).status); n++) await delay(10); const done = studio.store.task(task.id); assert.equal(done.status, 'succeeded', done.error); return done; };
+    await run(); assert.equal(requests, 2); const before = structuredClone(studio.store.project(p.id).data.production) as { images: Record<string, string> };
+    await run(); assert.equal(requests, 2);
+    await run({ force: true, shotIds: ['one'] }); assert.equal(requests, 3);
+    const after = studio.store.project(p.id).data.production as typeof before; assert.notEqual(after.images[`${p.id}/one`], before.images[`${p.id}/one`]); assert.equal(after.images[`${p.id}/two`], before.images[`${p.id}/two`]);
+    await assert.rejects(studio.invoke('studio.run', { projectId: p.id, stage: 'render', force: true }), /force|tạo lại|regenerat/i);
+    await assert.rejects(studio.invoke('studio.run', { projectId: p.id, stage: 'images', force: 'yes' }), /force|boolean/i);
+  } finally { await studio.close(); server.closeAllConnections(); await new Promise<void>(resolve => server.close(() => resolve())); rmSync(root, { recursive: true, force: true }); }
+});
+
+test('a new run cannot bypass unresolved remote admission after an accepted image request loses its connection', async () => {
+  const root = mkdtempSync(join(tmpdir(), 'maistudio-unknown-admission-')); const studio = new StudioService(root); let submitted = 0;
+  const server = createServer(async (req, res) => { for await (const _chunk of req) { /* drain */ } submitted++; res.destroy(); });
+  await new Promise<void>(resolve => server.listen(0, '127.0.0.1', resolve)); const address = server.address(); assert.ok(address && typeof address !== 'string');
+  try {
+    await studio.invoke('settings.save', { providers: { image: { baseUrl: `http://127.0.0.1:${address.port}/v1`, model: 'fixture' } } });
+    const p = await studio.invoke<Project>('project.save', { name: 'unknown acceptance', kind: 'film', data: { shots: [{ id: 'one', prompt: 'lake', duration: 1 }] } });
+    const task = await studio.invoke<Task>('studio.run', { projectId: p.id, stage: 'images' });
+    for (let n = 0; n < 1000 && ['draft', 'queued', 'running'].includes(studio.store.task(task.id).status); n++) await delay(10);
+    assert.equal(submitted, 1);
+    for (const force of [false, true]) await assert.rejects(studio.invoke('studio.run', { projectId: p.id, stage: 'images', force }), /đối soát|unresolved|chưa rõ/i);
+    assert.equal(submitted, 1);
+  } finally { await studio.close(); server.closeAllConnections(); await new Promise<void>(resolve => server.close(() => resolve())); rmSync(root, { recursive: true, force: true }); }
+});
+
+test('switching from images to characters cannot bypass an unresolved portrait request', async () => {
+  const root = mkdtempSync(join(tmpdir(), 'maistudio-stage-admission-')); const studio = new StudioService(root); let requests = 0;
+  const server = createServer(async (req, res) => { for await (const _chunk of req) {} requests++; res.destroy(); });
+  await new Promise<void>(resolve => server.listen(0, '127.0.0.1', resolve)); const address = server.address(); assert.ok(address && typeof address !== 'string');
+  try {
+    await studio.invoke('settings.save', { providers: { image: { baseUrl: `http://127.0.0.1:${address.port}/v1`, model: 'fixture' } } });
+    const p = await studio.invoke<Project>('project.save', { name: 'Portrait acceptance', kind: 'film', data: { characters: [{ id: 'actor', name: 'Actor', description: 'A blue jacket' }], shots: [{ id: 'one', prompt: 'Lake', duration: 1 }] } });
+    const task = await studio.invoke<Task>('studio.run', { projectId: p.id, stage: 'images' }); for (let n = 0; n < 1000 && ['draft', 'queued', 'running'].includes(studio.store.task(task.id).status); n++) await delay(10); assert.equal(requests, 1);
+    await assert.rejects(studio.invoke('studio.run', { projectId: p.id, stage: 'characters' }), /đối soát|chưa rõ/i); assert.equal(requests, 1);
+  } finally { await studio.close(); server.closeAllConnections(); await new Promise<void>(resolve => server.close(() => resolve())); rmSync(root, { recursive: true, force: true }); }
+});
+
+test('dubbing speech persists reusable audio; render and check never submit TTS and unsupported stages reject', async () => {
+  const root = mkdtempSync(join(tmpdir(), 'maistudio-dub-stages-')); const studio = new StudioService(root); let requests = 0;
+  const video = join(root, 'source.mp4'), wav = join(root, 'voice.wav'); const ffmpeg = require('ffmpeg-static') as string;
+  assert.equal(spawnSync(ffmpeg, ['-v', 'error', '-f', 'lavfi', '-i', 'color=c=blue:s=64x64:r=24:d=0.5', '-c:v', 'libx264', '-pix_fmt', 'yuv420p', video]).status, 0);
+  assert.equal(spawnSync(ffmpeg, ['-v', 'error', '-f', 'lavfi', '-i', 'sine=frequency=500:sample_rate=16000:duration=0.3', wav]).status, 0); const { readFileSync } = await import('node:fs'); const audio = readFileSync(wav);
+  const server = createServer(async (req, res) => { for await (const _chunk of req) {} requests++; res.setHeader('content-type', 'audio/wav'); res.end(audio); });
+  await new Promise<void>(resolve => server.listen(0, '127.0.0.1', resolve)); const address = server.address(); assert.ok(address && typeof address !== 'string');
+  try {
+    const [source] = await studio.importFiles([video]); await studio.invoke('settings.save', { providers: { voice: { baseUrl: `http://127.0.0.1:${address.port}/v1`, model: 'fixture' } } });
+    const p = await studio.invoke<Project>('project.save', { name: 'Dub stages', kind: 'dub', data: { sourceAssetId: source.id, subtitle: '1\n00:00:00,000 --> 00:00:00,300\nHello\n', voiceId: 'fixture' } });
+    const run = async (stage: string) => { const task = await studio.invoke<Task>('studio.run', { projectId: p.id, stage }); for (let n = 0; n < 1000 && ['draft', 'queued', 'running'].includes(studio.store.task(task.id).status); n++) await delay(10); return studio.store.task(task.id); };
+    const missing = await run('render'); assert.equal(missing.status, 'waiting_input', missing.error); assert.equal(requests, 0);
+    const speech = await run('speech'); assert.equal(speech.status, 'succeeded', speech.error); assert.equal(requests, 1); assert.ok(speech.outputIds.every(id => studio.store.asset(id).mime.startsWith('audio/')));
+    const render = await run('render'); assert.equal(render.status, 'succeeded', render.error); assert.equal(requests, 1); const rendered = await new MediaTools().probe(studio.store.assetPath(render.outputIds[0])); assert.ok(rendered.hasAudio); assert.deepEqual([rendered.width, rendered.height], [64, 64]);
+    const check = await run('check'); assert.equal(check.status, 'succeeded', check.error); assert.equal(requests, 1); assert.match(check.message, /chưa|unknown|ASR/i);
+    const tight = await studio.invoke<Project>('project.save', { name: 'Short cue', kind: 'dub', data: { sourceAssetId: source.id, subtitle: '1\n00:00:00,000 --> 00:00:00,050\nHello\n', voiceId: 'fixture' } });
+    const first = await studio.invoke<Task>('studio.run', { projectId: tight.id }); for (let n = 0; n < 1000 && ['draft', 'queued', 'running'].includes(studio.store.task(first.id).status); n++) await delay(10);
+    assert.equal(studio.store.task(first.id).status, 'waiting_input', 'an oversized voice must not be cut into a successful video'); assert.equal(requests, 2);
+    const saved = studio.store.project(tight.id); await studio.invoke('project.save', { ...saved, data: { ...saved.data, subtitle: '1\n00:00:00,000 --> 00:00:00,400\nHello\n' } });
+    const repaired = await studio.invoke<Task>('studio.run', { projectId: tight.id, stage: 'render' }); for (let n = 0; n < 1000 && ['draft', 'queued', 'running'].includes(studio.store.task(repaired.id).status); n++) await delay(10);
+    assert.equal(studio.store.task(repaired.id).status, 'succeeded', studio.store.task(repaired.id).error); assert.equal(requests, 2, 'extending the cue reuses speech already generated');
+    for (const stage of ['plan', 'characters', 'images', 'videos', 'music']) await assert.rejects(studio.invoke('studio.run', { projectId: p.id, stage }), /dub|lồng tiếng|dubbing/i);
+  } finally { await studio.close(); server.closeAllConnections(); await new Promise<void>(resolve => server.close(() => resolve())); rmSync(root, { recursive: true, force: true }); }
+});
+
+test('changing portrait style invalidates generated references without replacing completed files', async () => {
+  const root = mkdtempSync(join(tmpdir(), 'maistudio-portrait-style-')); const studio = new StudioService(root); let requests = 0;
+  const server = createServer(async (req, res) => { for await (const _chunk of req) { /* drain */ } requests++; res.setHeader('content-type', 'application/json'); res.end(JSON.stringify({ data: [{ b64_json: 'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+j04sAAAAASUVORK5CYII=' }] })); });
+  await new Promise<void>(resolve => server.listen(0, '127.0.0.1', resolve)); const address = server.address(); assert.ok(address && typeof address !== 'string');
+  try {
+    await studio.invoke('settings.save', { providers: { image: { baseUrl: `http://127.0.0.1:${address.port}/v1`, model: 'fixture' } } });
+    let p = await studio.invoke<Project>('project.save', { name: 'Portraits', kind: 'film', data: { style: 'photorealistic', characters: [{ id: 'mai', name: 'Mai', description: 'Blue shirt' }] } });
+    const run = async () => { const task = await studio.invoke<Task>('studio.run', { projectId: p.id, stage: 'characters' }); for (let n = 0; n < 1000 && ['draft', 'queued', 'running'].includes(studio.store.task(task.id).status); n++) await delay(10); assert.equal(studio.store.task(task.id).status, 'succeeded', studio.store.task(task.id).error); };
+    await run(); assert.equal(requests, 1); p = studio.store.project(p.id);
+    await studio.invoke('project.save', { ...p, data: { ...p.data, style: 'watercolor' } }); await run(); assert.equal(requests, 2); assert.equal(studio.store.assets().length, 2);
+  } finally { await studio.close(); server.closeAllConnections(); await new Promise<void>(resolve => server.close(() => resolve())); rmSync(root, { recursive: true, force: true }); }
+});
+
+test('editing the source story marks an AI plan stale while explicit storyboard edits remain authoritative', async () => {
+  const root = mkdtempSync(join(tmpdir(), 'maistudio-plan-edit-')); const studio = new StudioService(root);
+  try {
+    const p = await studio.invoke<Project>('project.save', { name: 'AI plan', kind: 'film', data: { script: 'Old story', planning: { source: 'ai-api' }, planningNeedsUpdate: false, shots: [{ id: 'one', prompt: 'Old story visual', duration: 1 }] } });
+    const changed = await studio.invoke<Project>('project.save', { ...p, data: { ...p.data, script: 'New story' } }); assert.equal(changed.data.planningNeedsUpdate, true);
+    await assert.rejects(studio.invoke('studio.run', { projectId: p.id, stage: 'images' }), /kế hoạch|plan/i);
+    const edited = await studio.invoke<Project>('project.save', { ...changed, data: { ...changed.data, shots: [{ id: 'one', prompt: 'My reviewed visual for the new story', duration: 1 }] } }); assert.equal(edited.data.planningNeedsUpdate, false); assert.equal((edited.data.shots as Array<{ prompt: string }>)[0].prompt, 'My reviewed visual for the new story');
+  } finally { await studio.close(); rmSync(root, { recursive: true, force: true }); }
+});
+
+test('resuming an older pipeline keeps a newer regenerated frame and invalidates downstream checkpoints', async () => {
+  const root = mkdtempSync(join(tmpdir(), 'maistudio-resume-frame-')); const studio = new StudioService(root); let requests = 0;
+  const server = createServer(async (req, res) => { for await (const _chunk of req) { /* drain */ } requests++; res.setHeader('content-type', 'application/json'); res.end(JSON.stringify({ data: [{ b64_json: 'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+j04sAAAAASUVORK5CYII=' }] })); });
+  await new Promise<void>(resolve => server.listen(0, '127.0.0.1', resolve)); const address = server.address(); assert.ok(address && typeof address !== 'string');
+  try {
+    await studio.invoke('settings.save', { providers: { image: { baseUrl: `http://127.0.0.1:${address.port}/v1`, model: 'fixture' } } });
+    const p = await studio.invoke<Project>('project.save', { name: 'Resume', kind: 'film', data: { shots: [{ id: 'one', prompt: 'lake', duration: 1 }] } });
+    const finish = async (task: Task) => { for (let n = 0; n < 1000 && ['draft', 'queued', 'running'].includes(studio.store.task(task.id).status); n++) await delay(10); return studio.store.task(task.id); };
+    const old = await finish(await studio.invoke<Task>('studio.run', { projectId: p.id })); assert.equal(old.status, 'waiting_input');
+    const newer = await finish(await studio.invoke<Task>('studio.run', { projectId: p.id, stage: 'images', force: true })); assert.equal(newer.status, 'succeeded', newer.error); assert.equal(requests, 2);
+    const data = studio.store.project(p.id).data.production as { images: Record<string, string> }; const id = data.images[`${p.id}/one`];
+    await studio.invoke('task.action', { action: 'retry', ids: [old.id] }); await finish(old);
+    assert.equal((studio.store.project(p.id).data.production as typeof data).images[`${p.id}/one`], id); assert.equal(requests, 2);
+  } finally { await studio.close(); server.closeAllConnections(); await new Promise<void>(resolve => server.close(() => resolve())); rmSync(root, { recursive: true, force: true }); }
+});
+
+test('native dialogue render uses owned clips, preserves the complete measured speech span and exports captions from that span', async () => {
+  const root = mkdtempSync(join(tmpdir(), 'maistudio-native-cut-')); const studio = new StudioService(root);
+  try {
+    const source = join(root, 'dialogue.mp4');
+    assert.equal(spawnSync(require('ffmpeg-static') as string, ['-v', 'error', '-f', 'lavfi', '-i', 'color=c=blue:s=64x64:r=24:d=6', '-f', 'lavfi', '-i', 'sine=frequency=180:sample_rate=16000:duration=3', '-filter_complex', '[1:a]adelay=1000:all=1,apad=whole_dur=6[a]', '-map', '0:v', '-map', '[a]', '-c:v', 'libx264', '-pix_fmt', 'yuv420p', '-c:a', 'aac', '-t', '6', source]).status, 0);
+    const [clip] = await studio.importFiles([source]);
+    const p = await studio.invoke<Project>('project.save', { name: 'native', kind: 'film', data: { nativeAudio: true, pace: 'flow', width: 64, height: 64, shots: [{ id: 'one', prompt: 'Mai nói', videoAssetId: clip.id, duration: 0.5, dialogue: 'Một câu thoại dài cần giữ trọn tiếng nói.' }] } });
+    const task = await studio.invoke<Task>('studio.run', { projectId: p.id, stage: 'render' });
+    for (let n = 0; n < 1000 && ['draft', 'queued', 'running'].includes(studio.store.task(task.id).status); n++) await delay(10);
+    const done = studio.store.task(task.id); assert.equal(done.status, 'succeeded', done.error);
+    const video = await new MediaTools().probe(studio.store.assetPath(done.outputIds[0])); assert.ok(video.hasAudio); assert.ok(video.duration > 3 && video.duration < 6, `speech was cut to ${video.duration}`);
+    const srt = await studio.invoke<{ id: string }>('srt.export', { projectId: p.id }); const { readFileSync } = await import('node:fs');
+    const cues = await studio.invoke<Array<{ start: number; end: number; text: string }>>('srt.parse', { text: readFileSync(studio.store.assetPath(srt.id), 'utf8') });
+    assert.equal(cues[0].text, 'Một câu thoại dài cần giữ trọn tiếng nói.'); assert.ok(cues[0].end - cues[0].start > 2.5);
+    const latest = studio.store.project(p.id); await studio.invoke('project.save', { ...latest, data: { ...latest.data, shots: [{ ...(latest.data.shots as Array<Record<string, unknown>>)[0], dialogue: 'New dialogue requires a new measured clock.' }] } });
+    await assert.rejects(studio.invoke('srt.export', { projectId: p.id }), /dựng|render|cũ|clock/i);
+  } finally { await studio.close(); rmSync(root, { recursive: true, force: true }); }
+});
+
+test('SRT sidecars preserve source gaps and include the rendered title offset', async () => {
+  const root = mkdtempSync(join(tmpdir(), 'maistudio-sidecar-title-')); const studio = new StudioService(root);
+  const file = join(root, 'frame.png'); writeFileSync(file, Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+j04sAAAAASUVORK5CYII=', 'base64'));
+  try {
+    const [photo] = await studio.importFiles([file]); const p = await studio.invoke<Project>('project.save', { name: 'Caption title', kind: 'srt', data: { renderMode: 'slideshow', width: 64, height: 64, titleCard: 'Title', titleDuration: 0.5, subtitle: '1\n00:00:01,000 --> 00:00:01,300\nXin chào\n', shots: [{ id: 'one', prompt: 'lake', assetId: photo.id, duration: 0.3, start: 1 }] } });
+    const task = await studio.invoke<Task>('studio.run', { projectId: p.id, stage: 'render' }); for (let n = 0; n < 1000 && ['draft', 'queued', 'running'].includes(studio.store.task(task.id).status); n++) await delay(10);
+    const done = studio.store.task(task.id); assert.equal(done.status, 'succeeded', done.error); const info = await new MediaTools().probe(studio.store.assetPath(done.outputIds[0])); assert.ok(Math.abs(info.duration - 1.8) < 0.05);
+    const srt = await studio.invoke<{ id: string }>('srt.export', { projectId: p.id }); const { readFileSync } = await import('node:fs'); const cues = await studio.invoke<Array<{ start: number; end: number }>>('srt.parse', { text: readFileSync(studio.store.assetPath(srt.id), 'utf8') }); assert.deepEqual(cues.map(cue => [cue.start, cue.end]), [[1.5, 1.8]]);
+    assert.equal(studio.store.project(p.id).data.productionStale, false);
+  } finally { await studio.close(); rmSync(root, { recursive: true, force: true }); }
+});
+
+test('queued image review submits actual frame and cast references, records model verdicts and never generates replacement assets implicitly', async () => {
+  const root = mkdtempSync(join(tmpdir(), 'maistudio-review-')); const studio = new StudioService(root); let requests = 0; let verdict = 'pass';
+  const png = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+j04sAAAAASUVORK5CYII=', 'base64');
+  const framePath = join(root, 'frame.png'); const portraitPath = join(root, 'portrait.png'); writeFileSync(framePath, png); writeFileSync(portraitPath, png);
+  const server = createServer(async (request, response) => {
+    assert.equal(request.url, '/v1/chat/completions'); let body = ''; for await (const chunk of request) body += chunk;
+    assert.ok(body.includes('data:image/png;base64,')); requests++; response.setHeader('content-type', 'application/json');
+    response.end(JSON.stringify({ choices: [{ message: { content: JSON.stringify({ scene: { status: 'pass', reason: 'Scene matches the supplied prompt' }, face: { status: verdict, reason: verdict === 'pass' ? 'Identity matches the reference' : 'Identity differs from the supplied reference' }, outfit: { status: 'pass', reason: 'Outfit matches the reference' } }) } }] }));
+  });
+  await new Promise<void>(resolve => server.listen(0, '127.0.0.1', resolve)); const address = server.address(); assert.ok(address && typeof address !== 'string');
+  try {
+    const [frame, portrait] = await studio.importFiles([framePath, portraitPath]);
+    await studio.invoke('settings.save', { providers: { text: { baseUrl: `http://127.0.0.1:${address.port}/v1`, model: 'vision-fixture' } } });
+    const p = await studio.invoke<Project>('project.save', { name: 'Review', kind: 'film', data: { renderMode: 'slideshow', autoFix: false, characters: [{ id: 'mai', name: 'Mai', description: 'Áo xanh', assetId: portrait.id }], shots: [{ id: 'one', prompt: 'Mai bên hồ', duration: 0.2, assetId: frame.id, characterIds: ['mai'] }] } });
+    const run = async () => { const task = await studio.invoke<Task>('studio.run', { projectId: p.id, stage: 'check' }); for (let n = 0; n < 1000 && ['draft', 'queued', 'running'].includes(studio.store.task(task.id).status); n++) await delay(10); return studio.store.task(task.id); };
+    const first = await run(); assert.equal(first.status, 'succeeded', first.error); assert.equal(requests, 1); assert.equal(studio.store.assets().length, 2);
+    let reviews = studio.store.project(p.id).data.qualityReviews as Record<string, { image: { status: string; modelAssessed: boolean } }>;
+    assert.equal(reviews[`${p.id}/one`].image.status, 'pass'); assert.equal(reviews[`${p.id}/one`].image.modelAssessed, true);
+    verdict = 'fail'; await run(); reviews = studio.store.project(p.id).data.qualityReviews as typeof reviews;
+    assert.equal(reviews[`${p.id}/one`].image.status, 'fail'); assert.equal(studio.store.assets().length, 2, 'review-only must not bill a regeneration');
+  } finally { await studio.close(); server.closeAllConnections(); await new Promise<void>(resolve => server.close(() => resolve())); rmSync(root, { recursive: true, force: true }); }
+});
+
+test('automatic checks stop rendering on a failed visual verdict and resume the saved review without a second request', async () => {
+  const root = mkdtempSync(join(tmpdir(), 'maistudio-qc-gate-')); const studio = new StudioService(root); let requests = 0;
+  const file = join(root, 'frame.png'); writeFileSync(file, Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+j04sAAAAASUVORK5CYII=', 'base64'));
+  const server = createServer(async (req, res) => { for await (const _chunk of req) { /* drain */ } requests++; res.setHeader('content-type', 'application/json'); res.end(JSON.stringify({ choices: [{ message: { content: JSON.stringify({ scene: { status: 'fail', reason: 'Wrong scene' }, face: { status: 'not_applicable', reason: 'No people' }, outfit: { status: 'not_applicable', reason: 'No people' } }) } }] })); });
+  await new Promise<void>(resolve => server.listen(0, '127.0.0.1', resolve)); const address = server.address(); assert.ok(address && typeof address !== 'string');
+  try {
+    const [photo] = await studio.importFiles([file]); await studio.invoke('settings.save', { providers: { text: { baseUrl: `http://127.0.0.1:${address.port}/v1`, model: 'fixture' } } });
+    const p = await studio.invoke<Project>('project.save', { name: 'QC gate', kind: 'film', data: { autoChecks: true, renderMode: 'slideshow', width: 64, height: 64, shots: [{ id: 'one', prompt: 'A lake', assetId: photo.id, duration: 0.2 }] } });
+    const finish = async (task: Task) => { for (let n = 0; n < 1000 && ['draft', 'queued', 'running'].includes(studio.store.task(task.id).status); n++) await delay(10); return studio.store.task(task.id); };
+    const first = await finish(await studio.invoke<Task>('studio.run', { projectId: p.id })); assert.equal(first.status, 'waiting_input', first.error); assert.equal(requests, 1); assert.equal(studio.store.assets().some(asset => asset.mime.startsWith('video/')), false);
+    await studio.invoke('task.action', { action: 'retry', ids: [first.id] }); const again = await finish(first); assert.equal(again.status, 'waiting_input'); assert.equal(requests, 1, 'retry reuses the completed review');
+  } finally { await studio.close(); server.closeAllConnections(); await new Promise<void>(resolve => server.close(() => resolve())); rmSync(root, { recursive: true, force: true }); }
+});
+
+for (const stage of ['plan', 'check'] as const) test(`definitive HTTP 429 during ${stage} retries within the same checkpoint instead of becoming an unresolved acceptance`, async () => {
+  const root = mkdtempSync(join(tmpdir(), 'maistudio-text-throttle-')); const studio = new StudioService(root); let requests = 0;
+  const file = join(root, 'frame.png'); writeFileSync(file, Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+j04sAAAAASUVORK5CYII=', 'base64'));
+  const server = createServer(async (req, res) => { for await (const _chunk of req) { /* drain */ } requests++; res.setHeader('content-type', 'application/json'); if (requests === 1) { res.statusCode = 429; res.end('{"error":{"message":"rate limited"}}'); return; } const result = stage === 'plan' ? { characters: [], scenes: [], shots: [{ id: 'one', prompt: 'A cup', duration: 1 }] } : { scene: { status: 'pass', reason: 'Matches' }, face: { status: 'not_applicable', reason: 'No people' }, outfit: { status: 'not_applicable', reason: 'No people' } }; res.end(JSON.stringify({ choices: [{ message: { content: JSON.stringify(result) } }] })); });
+  await new Promise<void>(resolve => server.listen(0, '127.0.0.1', resolve)); const address = server.address(); assert.ok(address && typeof address !== 'string');
+  try {
+    const [photo] = await studio.importFiles([file]); await studio.invoke('settings.save', { providers: { text: { baseUrl: `http://127.0.0.1:${address.port}/v1`, model: 'fixture' } } });
+    const p = await studio.invoke<Project>('project.save', { name: 'Throttle', kind: 'affiliate', data: { product: { name: 'Cup' }, shots: [{ id: 'one', prompt: 'Cup', assetId: photo.id, duration: 1 }] } }); const task = await studio.invoke<Task>('studio.run', { projectId: p.id, stage });
+    for (let n = 0; n < 1000 && ['draft', 'queued', 'running'].includes(studio.store.task(task.id).status); n++) await delay(10);
+    const done = studio.store.task(task.id); assert.equal(done.status, 'succeeded', done.error); assert.equal(requests, 2); assert.equal(done.attempts, 2);
+  } finally { await studio.close(); server.closeAllConnections(); await new Promise<void>(resolve => server.close(() => resolve())); rmSync(root, { recursive: true, force: true }); }
+});
+
+test('story narration measures real sentence audio before building source-compatible cues and a mixed voice track', async () => {
+  const root = mkdtempSync(join(tmpdir(), 'maistudio-narration-')); const studio = new StudioService(root);
+  const first = join(root, 'first.wav'); const second = join(root, 'second.wav');
+  for (const [path, duration] of [[first, '1.25'], [second, '0.5']]) assert.equal(spawnSync(require('ffmpeg-static') as string, ['-v', 'error', '-f', 'lavfi', '-i', 'sine=frequency=500:sample_rate=16000', '-t', duration, path]).status, 0);
+  const { readFileSync } = await import('node:fs'); const lines: string[] = [];
+  const provider = createServer(async (request, response) => {
+    assert.equal(request.url, '/v1/audio/speech'); let body = ''; for await (const chunk of request) body += chunk;
+    const input = JSON.parse(body); lines.push(input.input); response.setHeader('content-type', 'audio/wav'); response.end(readFileSync(lines.length === 1 ? first : second));
+  });
+  await new Promise<void>(resolve => provider.listen(0, '127.0.0.1', resolve)); const address = provider.address(); assert.ok(address && typeof address !== 'string');
+  try {
+    await studio.invoke('settings.save', { providers: { voice: { baseUrl: `http://127.0.0.1:${address.port}/v1`, model: 'fixture' } } });
+    const p = await studio.invoke<Project>('project.save', { name: 'Narration', kind: 'srt', data: { script: 'CẢNH 1: Hồ\nXin chào. Mời anh', storyMode: true, renderMode: 'slideshow', voiceId: 'fixture' } });
+    const task = await studio.invoke<Task>('studio.run', { projectId: p.id, stage: 'speech' });
+    for (let n = 0; n < 1000 && ['draft', 'queued', 'running'].includes(studio.store.task(task.id).status); n++) await delay(10);
+    const done = studio.store.task(task.id); assert.equal(done.status, 'succeeded', done.error); assert.deepEqual(lines, ['Xin chào.', 'Mời anh']);
+    const data = studio.store.project(p.id).data;
+    const cues = await studio.invoke<Array<{ start: number; end: number; text: string }>>('srt.parse', { text: data.subtitle });
+    assert.deepEqual(cues.map(cue => [cue.start, cue.end, cue.text]), [[0.25, 1.5, 'Xin chào.'], [1.85, 2.35, 'Mời anh']]);
+    const voice = studio.store.asset(done.outputIds[0]); assert.ok(voice.mime.startsWith('audio/'));
+    const info = await new MediaTools().probe(studio.store.assetPath(voice.id)); assert.ok(Math.abs(info.duration - 2.9) < 0.02);
+    assert.ok(Array.isArray(data.visualGroups)); assert.equal(studio.store.assets().some(asset => asset.mime.startsWith('video/')), false);
+    const again = await studio.invoke<Task>('studio.run', { projectId: p.id, stage: 'speech' });
+    for (let n = 0; n < 1000 && ['draft', 'queued', 'running'].includes(studio.store.task(again.id).status); n++) await delay(10);
+    assert.equal(studio.store.task(again.id).status, 'succeeded'); assert.equal(lines.length, 2, 'unchanged narration reuses completed speech');
+    const planned = await studio.invoke<Project>('studio.plan', { projectId: p.id });
+    const image = join(root, 'frame.png'); writeFileSync(image, Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+j04sAAAAASUVORK5CYII=', 'base64'));
+    const [frame] = await studio.importFiles([image]);
+    await studio.invoke('project.save', { ...planned, data: { ...planned.data, width: 64, height: 64, shots: (planned.data.shots as Array<Record<string, unknown>>).map(shot => ({ ...shot, assetId: frame.id })) } });
+    const render = await studio.invoke<Task>('studio.run', { projectId: p.id, stage: 'render' });
+    for (let n = 0; n < 1000 && ['draft', 'queued', 'running'].includes(studio.store.task(render.id).status); n++) await delay(10);
+    const doneRender = studio.store.task(render.id); assert.equal(doneRender.status, 'succeeded', doneRender.error); assert.equal(lines.length, 2);
+    const video = await new MediaTools().probe(studio.store.assetPath(doneRender.outputIds[0])); assert.ok(video.hasAudio); assert.ok(Math.abs(video.duration - 2.85) < 0.08, 'visual groups use source grouping clock while audio cues remain fixed');
+  } finally { await studio.close(); provider.closeAllConnections(); await new Promise<void>(resolve => provider.close(() => resolve())); rmSync(root, { recursive: true, force: true }); }
+});
+
+test('source narration aligns supplied sentences across measured ASR spans and rejects timestamps outside the actual audio', async () => {
+  const root = mkdtempSync(join(tmpdir(), 'maistudio-source-clock-')); const studio = new StudioService(root); let invalid = false;
+  const wav = join(root, 'voice.wav'); assert.equal(spawnSync(require('ffmpeg-static') as string, ['-v', 'error', '-f', 'lavfi', '-i', 'sine=frequency=500:sample_rate=16000:duration=3', wav]).status, 0);
+  const server = createServer(async (req, res) => { for await (const _chunk of req) { /* drain */ } res.setHeader('content-type', 'application/json'); res.end(JSON.stringify({ text: 'Xin chào. Mời anh đến đây.', segments: [{ start: 0.2, end: invalid ? 8 : 2.7, text: 'Xin chào. Mời anh đến đây.' }] })); });
+  await new Promise<void>(resolve => server.listen(0, '127.0.0.1', resolve)); const address = server.address(); assert.ok(address && typeof address !== 'string');
+  try {
+    const [audio] = await studio.importFiles([wav]); await studio.invoke('settings.save', { providers: { asr: { baseUrl: `http://127.0.0.1:${address.port}/v1`, model: 'fixture' } } });
+    const run = async () => { const p = await studio.invoke<Project>('project.save', { name: 'Source clock', kind: 'srt', data: { storyMode: true, sourceAudioAssetId: audio.id, script: 'Xin chào. Mời anh đến đây.' } }); const task = await studio.invoke<Task>('studio.run', { projectId: p.id, stage: 'speech' }); for (let n = 0; n < 1000 && ['draft', 'queued', 'running'].includes(studio.store.task(task.id).status); n++) await delay(10); return { project: studio.store.project(p.id), task: studio.store.task(task.id) }; };
+    const good = await run(); assert.equal(good.task.status, 'succeeded', good.task.error); const cues = await studio.invoke<Array<{ start: number; end: number; text: string }>>('srt.parse', { text: good.project.data.subtitle }); assert.equal(cues.length, 2); assert.equal(cues[0].text, 'Xin chào.'); assert.equal(cues[1].text, 'Mời anh đến đây.'); assert.deepEqual(good.task.outputIds, [audio.id]);
+    invalid = true; const bad = await run(); assert.equal(bad.task.status, 'waiting_input'); assert.match(bad.task.error, /thời gian|timestamp|audio|mốc/i); assert.equal(bad.project.data.subtitle, undefined);
+  } finally { await studio.close(); server.closeAllConnections(); await new Promise<void>(resolve => server.close(() => resolve())); rmSync(root, { recursive: true, force: true }); }
+});
+
+test('queued AI planning calls the configured model, saves a real storyboard and preserves the previous plan on invalid model output', async () => {
+  const root = mkdtempSync(join(tmpdir(), 'maistudio-ai-plan-')); const studio = new StudioService(root); let requests = 0; let malformed = false;
+  const server = createServer(async (request, response) => {
+    let body = ''; for await (const chunk of request) body += chunk;
+    assert.equal(request.url, '/v1/chat/completions'); const input = JSON.parse(body); assert.equal(input.model, 'planner-fixture');
+    // Film planning is the multi-turn director recovered from MuseStudio (bible → scene → review); see tests/director.test.ts.
+    const prompt = String(input.messages[0].content); assert.ok(prompt.includes('JSON'));
+    const total = Number(/exactly (\d+) shots/.exec(prompt)?.[1]); const range = /shot IDs (\d+)–(\d+)/.exec(prompt);
+    const content = malformed ? '{broken'
+      : prompt.includes('planning a short film') ? JSON.stringify({ title: 'AI story', characters: [{ id: 'mai', name: 'Mai', look: 'Áo xanh', voice: 'Giọng Bắc trẻ' }], locations: [{ id: 'lake', name: 'Bên hồ' }], scenes: [{ id: 'lake', title: 'Bên hồ', location: 'lake', characters: ['mai'], a: 1, b: total }] })
+      : range ? JSON.stringify({ shots: Array.from({ length: Number(range[2]) - Number(range[1]) + 1 }, (_, i) => ({ id: Number(range[1]) + i, type: 'single', visual: 'Mai bước tới hồ', characters: ['mai'], lines: [{ speaker: 'mai', text: 'Xin chào.' }] })) })
+      : JSON.stringify({ shots: [], issues: [], fixed: 0 });
+    requests++; response.setHeader('content-type', 'application/json'); response.end(JSON.stringify({ choices: [{ message: { content } }] }));
+  });
+  await new Promise<void>(resolve => server.listen(0, '127.0.0.1', resolve)); const address = server.address(); assert.ok(address && typeof address !== 'string');
+  const finish = async (task: Task) => { for (let n = 0; n < 1000 && ['draft', 'queued', 'running'].includes(studio.store.task(task.id).status); n++) await delay(10); return studio.store.task(task.id); };
+  try {
+    await studio.invoke('settings.save', { providers: { text: { baseUrl: `http://127.0.0.1:${address.port}/v1`, model: 'planner-fixture' } } });
+    const p = await studio.invoke<Project>('project.save', { name: 'Idea', kind: 'film', data: { script: 'Mai bước ra hồ đón một ngày mới.' } });
+    const task = await finish(await studio.invoke<Task>('studio.run', { projectId: p.id, stage: 'plan' }));
+    assert.equal(task.status, 'succeeded', task.error); assert.equal(requests, 3, 'bible, one scene and the director review'); assert.equal(studio.store.assets().length, 0);
+    const data = studio.store.project(p.id).data; const shots = data.shots as Array<{ speaker: string; dialogue: string }>;
+    assert.equal(shots.length, 25, 'two-minute flow budget'); assert.equal(shots[0].speaker, 'mai'); assert.equal(shots[0].dialogue, 'Xin chào.');
+    assert.equal((data.planning as { source: string }).source, 'ai-api'); assert.equal(data.nativeAudio, true);
+    malformed = true; const invalid = await finish(await studio.invoke<Task>('studio.run', { projectId: p.id, stage: 'plan' }));
+    assert.equal(invalid.status, 'failed'); assert.deepEqual(studio.store.project(p.id).data, data); assert.equal(requests, 5, 'one bible request plus its format retry');
+    await studio.invoke('task.action', { action: 'retry', ids: [invalid.id] }); await finish(invalid); assert.equal(requests, 5, 'retry must not issue another paid planning request');
+  } finally { await studio.close(); server.closeAllConnections(); await new Promise<void>(resolve => server.close(() => resolve())); rmSync(root, { recursive: true, force: true }); }
+});
+
+test('affiliate planning sends selected product photos to the model and preserves their owned references', async () => {
+  const root = mkdtempSync(join(tmpdir(), 'maistudio-product-vision-')); const studio = new StudioService(root); let sawPhoto = false;
+  const file = join(root, 'product.png'); writeFileSync(file, Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+j04sAAAAASUVORK5CYII=', 'base64'));
+  const server = createServer(async (req, res) => { let body = ''; for await (const chunk of req) body += chunk; sawPhoto = body.includes('data:image/png;base64,'); res.setHeader('content-type', 'application/json'); res.end(JSON.stringify({ choices: [{ message: { content: JSON.stringify({ name: 'Cup', characters: [], scenes: [], shots: [{ id: 'one', prompt: 'Show the real cup', duration: 2 }] }) } }] })); });
+  await new Promise<void>(resolve => server.listen(0, '127.0.0.1', resolve)); const address = server.address(); assert.ok(address && typeof address !== 'string');
+  try {
+    const [photo] = await studio.importFiles([file]); await studio.invoke('settings.save', { providers: { text: { baseUrl: `http://127.0.0.1:${address.port}/v1`, model: 'fixture' } } });
+    const p = await studio.invoke<Project>('project.save', { name: 'Cup', kind: 'affiliate', data: { product: { name: 'Cup', price: 100 }, productAssetIds: [photo.id] } }); const task = await studio.invoke<Task>('studio.run', { projectId: p.id, stage: 'plan' });
+    for (let n = 0; n < 1000 && ['draft', 'queued', 'running'].includes(studio.store.task(task.id).status); n++) await delay(10);
+    assert.equal(studio.store.task(task.id).status, 'succeeded', studio.store.task(task.id).error); assert.equal(sawPhoto, true); assert.deepEqual(studio.store.project(p.id).data.productAssetIds, [photo.id]);
+    await assert.rejects(studio.invoke('project.save', { ...p, data: { ...p.data, productAssetIds: ['unowned'] } }), /asset|tệp/i);
+  } finally { await studio.close(); server.closeAllConnections(); await new Promise<void>(resolve => server.close(() => resolve())); rmSync(root, { recursive: true, force: true }); }
+});
+
+test('selected image stage saves reusable image assets and render-only never submits missing generation work', async () => {
+  const root = mkdtempSync(join(tmpdir(), 'maistudio-stages-')); const studio = new StudioService(root); let requests = 0;
+  const provider = createServer(async (request, response) => {
+    for await (const _chunk of request) { /* drain fixture */ }
+    requests++; response.setHeader('content-type', 'application/json'); response.end(JSON.stringify({ data: [{ b64_json: 'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+j04sAAAAASUVORK5CYII=' }] }));
+  });
+  await new Promise<void>(resolve => provider.listen(0, '127.0.0.1', resolve)); const address = provider.address(); assert.ok(address && typeof address !== 'string');
+  const finish = async (task: Task) => { for (let n = 0; n < 1000 && ['draft', 'queued', 'running'].includes(studio.store.task(task.id).status); n++) await delay(10); return studio.store.task(task.id); };
+  try {
+    await studio.invoke('settings.save', { providers: { image: { baseUrl: `http://127.0.0.1:${address.port}/v1`, model: 'fixture' } } });
+    const project = await studio.invoke<Project>('project.save', { name: 'stages', kind: 'film', data: { renderMode: 'slideshow', width: 64, height: 64, shots: [{ id: 'a', prompt: 'One', duration: 0.2 }, { id: 'b', prompt: 'Two', duration: 0.2 }] } });
+    const rendered = await finish(await studio.invoke<Task>('studio.run', { projectId: project.id, stage: 'render' }));
+    assert.equal(requests, 0, 'render-only must not generate missing assets'); assert.equal(rendered.status, 'failed');
+    const images = await finish(await studio.invoke<Task>('studio.run', { projectId: project.id, stage: 'images', shotIds: ['b'] }));
+    assert.equal(images.status, 'succeeded', images.error); assert.equal(requests, 1); assert.equal(images.outputIds.length, 1);
+    assert.ok(studio.store.asset(images.outputIds[0]).mime.startsWith('image/')); assert.equal(studio.store.assets().some(asset => asset.mime.startsWith('video/')), false);
+    const production = studio.store.project(project.id).data.production as { images: Record<string, string> };
+    assert.deepEqual(Object.keys(production.images), [`${project.id}/b`]); assert.equal(production.images[`${project.id}/b`], images.outputIds[0]);
+    const reused = await finish(await studio.invoke<Task>('studio.run', { projectId: project.id, stage: 'images', shotIds: ['b'] }));
+    assert.equal(reused.status, 'succeeded', reused.error); assert.equal(requests, 1, 'same image stage must reuse owned completed media');
+    await assert.rejects(studio.invoke('studio.run', { projectId: project.id, stage: 'images', shotIds: ['missing'] }), /shot|cảnh|không/i);
+    const single = await studio.invoke<Project>('project.save', { name: 'freshness', kind: 'film', data: { renderMode: 'slideshow', width: 64, height: 64, shots: [{ id: 'one', prompt: 'Original', duration: 0.2 }] } });
+    await finish(await studio.invoke<Task>('studio.run', { projectId: single.id, stage: 'images' }));
+    const saved = studio.store.project(single.id);
+    const edited = await studio.invoke<Project>('project.save', { ...saved, data: { ...saved.data, shots: [{ id: 'one', prompt: 'A different scene', duration: 0.2 }] } });
+    assert.equal(edited.data.productionStale, true, 'editing the plan must mark saved output stale');
+    const stale = await finish(await studio.invoke<Task>('studio.run', { projectId: single.id, stage: 'render' }));
+    assert.equal(stale.status, 'failed', 'render-only must not silently use a stale generated frame'); assert.equal(requests, 2);
+    const castProject = await studio.invoke<Project>('project.save', { name: 'cast', kind: 'film', data: { characters: [{ id: 'mai', name: 'Mai', description: 'Áo dài xanh, tóc đen' }] } });
+    const portraits = await finish(await studio.invoke<Task>('studio.run', { projectId: castProject.id, stage: 'characters' }));
+    assert.equal(portraits.status, 'succeeded', portraits.error); assert.equal(portraits.outputIds.length, 1); assert.equal(requests, 3);
+    const castData = studio.store.project(castProject.id).data;
+    assert.equal((castData.production as { characterImages: Record<string, string> }).characterImages.mai, portraits.outputIds[0]);
+    const again = await finish(await studio.invoke<Task>('studio.run', { projectId: castProject.id, stage: 'characters' }));
+    assert.equal(again.status, 'succeeded', again.error); assert.equal(requests, 3, 'completed character references are reused');
+  } finally { await studio.close(); provider.closeAllConnections(); await new Promise<void>(resolve => provider.close(() => resolve())); rmSync(root, { recursive: true, force: true }); }
+});
+
 function deferred() {
   let resolve!: () => void;
   const promise = new Promise<void>(done => { resolve = done; });
@@ -253,6 +596,13 @@ test('dubbing saves edited transcript into original timed cues rather than speak
   } finally { await studio.close(); rmSync(root, { recursive: true, force: true }); }
 });
 
+test('dubbing sidecar keeps the source clock when a legacy project contains an unused title card', async () => {
+  const root = mkdtempSync(join(tmpdir(), 'maistudio-dub-sidecar-')); const studio = new StudioService(root);
+  try {
+    const p = await studio.invoke<Project>('project.save', { name: 'Dub sidecar', kind: 'dub', data: { titleCard: 'Legacy unused card', subtitle: '1\n00:00:00,000 --> 00:00:00,300\nHello\n' } }); const asset = await studio.invoke<{ id: string }>('srt.export', { projectId: p.id }); const { readFileSync } = await import('node:fs'); const cues = await studio.invoke<Array<{ start: number; end: number }>>('srt.parse', { text: readFileSync(studio.store.assetPath(asset.id), 'utf8') }); assert.deepEqual(cues.map(cue => [cue.start, cue.end]), [[0, 0.3]]);
+  } finally { await studio.close(); rmSync(root, { recursive: true, force: true }); }
+});
+
 test('series renders each episode independently and exposes its editable film project', async () => {
   const root = mkdtempSync(join(tmpdir(), 'maistudio-series-')); const studio = new StudioService(root);
   try {
@@ -265,6 +615,34 @@ test('series renders each episode independently and exposes its editable film pr
     const finished = studio.store.task(task.id); assert.equal(finished.status, 'succeeded', finished.error);
     assert.equal(finished.outputIds.length, 2);
     assert.equal(studio.store.projects().filter(item => item.kind === 'film' && item.data.seriesParentId === project.id).length, 2);
+  } finally { await studio.close(); rmSync(root, { recursive: true, force: true }); }
+});
+
+test('series stages preserve episode plans and caches; shared cast edits mark films stale without replacing outputs', async () => {
+  const root = mkdtempSync(join(tmpdir(), 'maistudio-series-cache-')); const studio = new StudioService(root);
+  const png = join(root, 'frame.png'); writeFileSync(png, Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+j04sAAAAASUVORK5CYII=', 'base64'));
+  try {
+    const [asset] = await studio.importFiles([png]); const cast = [{ id: 'mai', name: 'Mai', description: 'Blue outfit', assetId: asset.id }];
+    const series = await studio.invoke<Project>('project.save', { name: 'Series', kind: 'series', data: { characters: cast, episodes: [{ id: 'ep1', name: 'Episode 1', script: 'Hello' }, { id: 'ep2', name: 'Episode 2', script: 'World' }] } });
+    const episode = await studio.invoke<Project>('project.save', { name: 'Edited film', kind: 'film', data: { seriesParentId: series.id, episodeId: 'ep1', characters: cast, script: 'Hello', shots: [{ id: 'edited', prompt: 'Custom edited shot', assetId: asset.id, duration: 0.2 }], production: { images: { saved: asset.id } }, outputIds: [asset.id] } });
+    const run = await studio.invoke<Task>('studio.run', { projectId: series.id, stage: 'images', shotIds: [`${series.id}/ep1/edited`] });
+    for (let n = 0; n < 1000 && ['draft', 'queued', 'running'].includes(studio.store.task(run.id).status); n++) await delay(10);
+    const done = studio.store.task(run.id); assert.equal(done.status, 'succeeded', done.error);
+    assert.equal((studio.store.project(episode.id).data.shots as Array<{ prompt: string }>)[0].prompt, 'Custom edited shot');
+    assert.equal((studio.store.project(episode.id).data.production as { images: Record<string, string> }).images.saved, asset.id);
+    assert.deepEqual(studio.store.project(episode.id).data.outputIds, [asset.id]);
+    await studio.invoke('project.save', { ...series, data: { ...series.data, characters: [{ ...cast[0], description: 'Red outfit' }] } });
+    const changed = studio.store.project(episode.id); assert.equal(changed.data.productionStale, true); assert.equal((changed.data.characters as typeof cast)[0].description, 'Blue outfit'); assert.deepEqual(changed.data.outputIds, [asset.id]);
+  } finally { await studio.close(); rmSync(root, { recursive: true, force: true }); }
+});
+
+test('editing one series episode marks only its existing film stale before any run', async () => {
+  const root = mkdtempSync(join(tmpdir(), 'maistudio-episode-dirty-')); const studio = new StudioService(root);
+  try {
+    const episodes = ['one', 'two'].map(id => ({ id, name: id, script: id })); const p = await studio.invoke<Project>('project.save', { name: 'Series', kind: 'series', data: { episodes } });
+    const films = episodes.map(episode => studio.store.saveProject({ name: episode.name, kind: 'film', data: { seriesParentId: p.id, episodeId: episode.id, script: episode.script, outputIds: ['historical'] } }));
+    await studio.invoke('project.save', { ...p, data: { ...p.data, episodes: episodes.map((episode, index) => index === 0 ? { ...episode, script: 'Updated story' } : episode) } });
+    assert.equal(studio.store.project(films[0].id).data.productionStale, true); assert.equal(studio.store.project(films[1].id).data.productionStale, undefined); assert.deepEqual(studio.store.project(films[0].id).data.outputIds, ['historical']);
   } finally { await studio.close(); rmSync(root, { recursive: true, force: true }); }
 });
 

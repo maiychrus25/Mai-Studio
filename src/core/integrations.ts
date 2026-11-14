@@ -2,13 +2,14 @@ import { createHash } from 'node:crypto';
 import { isIP } from 'node:net';
 import { setTimeout as delay } from 'node:timers/promises';
 import { open } from 'node:fs/promises';
-import { basename } from 'node:path';
+import { basename, isAbsolute } from 'node:path';
 
 export interface Connection { baseUrl: string; model?: string; apiKey?: string }
 export interface ShopeeCredentials { appId: string; secret: string }
 export interface IntegrationOptions { protocol?: 'openai' | 'voicetube'; shopee?: ShopeeCredentials }
 type Media = { url?: string; buffer?: Buffer; mime: string };
-type RequestOptions = { authorization?: string; binary?: boolean; anonymous?: boolean; cookie?: string; accept?: string; limit?: number };
+type RequestOptions = { authorization?: string; binary?: boolean; anonymous?: boolean; cookie?: string; accept?: string; limit?: number; multimodal?: boolean };
+type ContentPart = { type: 'text'; text: string } | { type: 'image_url'; image_url: { url: string } };
 const JSON_LIMIT = 8 * 1024 * 1024;
 const MEDIA_LIMIT = 32 * 1024 * 1024;
 const UPLOAD_LIMIT = 25 * 1024 * 1024;
@@ -116,7 +117,8 @@ export class IntegrationClient {
     if (body instanceof FormData) payload = body;
     else if (body !== undefined) {
       payload = JSON.stringify(body); headers['Content-Type'] = 'application/json';
-      if (Buffer.byteLength(payload) > JSON_LIMIT) throw new Error('Provider request too large');
+      // Only validated vision content gets space for the base64 expansion of its 25 MiB raw budget.
+      if (Buffer.byteLength(payload) > (options.multimodal ? JSON_LIMIT + 4 * Math.ceil(UPLOAD_LIMIT / 3) : JSON_LIMIT)) throw new Error('Provider request too large');
     }
     try {
       const response = await fetch(url, { method, headers, body: payload, redirect: 'error', signal: combined });
@@ -146,7 +148,10 @@ export class IntegrationClient {
     }
   }
   async json(method: string, path: string, body?: unknown, signal?: AbortSignal): Promise<unknown> {
-    const { buffer } = await this.request(method, path, body, signal);
+    return this.jsonRequest(method, path, body, signal);
+  }
+  private async jsonRequest(method: string, path: string, body: unknown, signal?: AbortSignal, options?: RequestOptions): Promise<unknown> {
+    const { buffer } = await this.request(method, path, body, signal, options);
     try { return JSON.parse(buffer.toString('utf8')) as unknown; } catch { throw new Error('Invalid provider JSON response'); }
   }
   async voices(signal?: AbortSignal): Promise<unknown[]> {
@@ -252,8 +257,8 @@ export class IntegrationClient {
     let value: unknown; try { value = JSON.parse(result.buffer.toString('utf8')); } catch { throw new Error('Invalid transcription response'); }
     return object(value);
   }
-  private async completion(messages: { role: string; content: string }[], signal?: AbortSignal): Promise<string> {
-    const value = object(await this.json('POST', '/chat/completions', { model: this.connection.model || 'gpt-4o-mini', messages }, signal));
+  private async completion(messages: { role: string; content: string | ContentPart[] }[], signal?: AbortSignal): Promise<string> {
+    const value = object(await this.jsonRequest('POST', '/chat/completions', { model: this.connection.model || 'gpt-4o-mini', messages }, signal, { multimodal: messages.some(message => Array.isArray(message.content)) }));
     if (!Array.isArray(value.choices) || !value.choices.length) throw new Error('Invalid text response choices');
     return text(object(object(value.choices[0]).message).content, 'response text', JSON_LIMIT);
   }
@@ -262,6 +267,26 @@ export class IntegrationClient {
   }
   async plan(prompt: string, signal?: AbortSignal): Promise<string> {
     return this.completion([{ role: 'user', content: text(prompt, 'prompt') }], signal);
+  }
+  /** https://developers.openai.com/api/docs/guides/images-vision
+   * Main process supplies owned local asset paths. Preserve provider output as text; caller validates
+   * any review schema. No local QC verdicts, URL fetches, or paid fallback/retry are generated here.
+   */
+  async reviewImages(prompt: string, paths: string[], signal?: AbortSignal): Promise<string> {
+    if (signal?.aborted) throw new Error('Provider request aborted');
+    text(prompt, 'prompt');
+    if (!Array.isArray(paths) || !paths.length || paths.length > 16) throw new Error('Image review requires 1–16 refs');
+    const refs = [...paths];
+    for (const path of refs) if (typeof path !== 'string' || !isAbsolute(path) || path.includes('\0')) throw new Error('Image refs require local absolute file paths, not URLs');
+    const content: ContentPart[] = [{ type: 'text', text: prompt }]; let total = 0;
+    for (const path of refs) {
+      if (signal?.aborted) throw new Error('Provider request aborted');
+      const data = await upload(path); total += data.length;
+      if (signal?.aborted) throw new Error('Provider request aborted');
+      if (total > UPLOAD_LIMIT) throw new Error('Total reference upload exceeds 25 MiB');
+      content.push({ type: 'image_url', image_url: { url: `data:${mediaMime(data, 'image')};base64,${data.toString('base64')}` } });
+    }
+    return this.completion([{ role: 'user', content }], signal);
   }
   async generateImage(prompt: string, options: { size?: string; refs?: string[] } = {}, signal?: AbortSignal): Promise<Media> {
     text(prompt, 'prompt');
@@ -303,7 +328,8 @@ export class IntegrationClient {
    * instance; reuse it for login/library/download/logout. A 64-hex connection.apiKey may supply a
    * keystore-owned session. Password/cookie never leave this class in results. buy returns the
    * original browser URL, not a purchase. download takes productId or public preview imageId,
-   * never a URL. Only observed inline master-prompt delivery is supported; attachments need review.
+   * never a URL. Original delivery explicitly rejects attachments; save_library labels other URLs
+   * as links, not signed asset downloads. No safe automated attachment contract was recovered.
    */
   async market(action: 'catalog' | 'login' | 'logout' | 'buy' | 'library' | 'download', input: Record<string, unknown>, signal?: AbortSignal): Promise<unknown> {
     if (!['catalog', 'login', 'logout', 'buy', 'library', 'download'].includes(action)) throw new Error('Unsupported Market action');

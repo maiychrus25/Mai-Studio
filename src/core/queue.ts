@@ -3,8 +3,20 @@ import { Store, redact } from './store';
 
 export class NeedsInputError extends Error { constructor(message: string) { super(message); this.name = 'NeedsInputError'; } }
 export class RetryableError extends Error { constructor(message: string, readonly delayMs = 500) { super(message); this.name = 'RetryableError'; } }
+export function hasPendingAdmission(checkpoint: Record<string, unknown>): boolean {
+  const pending: unknown[] = [checkpoint];
+  while (pending.length) {
+    const item = pending.pop(); if (!item || typeof item !== 'object') continue;
+    if (Array.isArray(item)) { pending.push(...item); continue; }
+    const node = item as Record<string, unknown>;
+    if (Array.isArray(node.outputIds) || typeof node.assetId === 'string' || typeof node.response === 'string' || typeof node.planText === 'string' || typeof node.textResult === 'string' || node.planApplied === true || typeof node.text === 'string' && (node.submitted === true || node.browser !== undefined)) continue;
+    if (node.remoteSubmitted === true || node.submitted === true) return true;
+    pending.push(...Object.values(node));
+  }
+  return false;
+}
 export class JobQueue {
-  private readonly running = new Map<string, { controller: AbortController; promise: Promise<void>; accountId: string; media: boolean }>();
+  private readonly running = new Map<string, { controller: AbortController; promise: Promise<void>; accountId: string; media: boolean; projectLease: string }>();
   private closed = false;
   private paused = false;
   private scheduled = false;
@@ -44,7 +56,7 @@ export class JobQueue {
     }
     this.changed(); await Promise.allSettled(pending); this.pump();
   }
-  private media(task: Task): boolean { return ['merge', 'slideshow', 'dub'].includes(task.kind); }
+  private media(task: Task): boolean { return ['merge', 'slideshow', 'dub', 'extract-audio'].includes(task.kind); }
   private pump(): void {
     if (this.scheduled || this.closed || this.paused) return;
     this.scheduled = true;
@@ -58,10 +70,13 @@ export class JobQueue {
         const media = this.media(task); const active = [...this.running.values()];
         if (active.filter(value => value.media === media).length >= (media ? this.limits.mediaConcurrency : this.limits.generationConcurrency)) continue;
         if (task.accountId && active.some(value => value.accountId === task.accountId)) continue;
+        const project = this.store.project(task.projectId);
+        const projectLease = ['pipeline', 'plan'].includes(task.kind) ? String(project.data.seriesParentId || project.id) : '';
+        if (projectLease && active.some(value => value.projectLease === projectLease)) continue;
         const controller = new AbortController();
         this.store.updateTask(task.id, { status: 'running', progress: 0, attempts: task.attempts + 1, message: 'Đang chạy' });
         const promise = this.execute(this.store.task(task.id), controller);
-        this.running.set(task.id, { controller, promise, accountId: task.accountId, media });
+        this.running.set(task.id, { controller, promise, accountId: task.accountId, media, projectLease });
       }
       if (Number.isFinite(nextWake)) this.wakeTimer = setTimeout(() => this.pump(), Math.max(1, nextWake - Date.now()));
       this.changed();

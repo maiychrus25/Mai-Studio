@@ -36,6 +36,20 @@ test('queue enforces global and per-account leases and persists completed progre
   } finally { await queue.close(); store.close(); rmSync(root, { recursive: true, force: true }); }
 });
 
+test('pipeline writers share one project lease across series and child films while independent films still run concurrently', async () => {
+  const root = mkdtempSync(join(tmpdir(), 'maistudio-project-lease-')); const store = new Store(root); let active = 0; let peak = 0; const families = new Set<string>();
+  const series = store.saveProject({ name: 'series', kind: 'series' }); const child = store.saveProject({ name: 'child', kind: 'film', data: { seriesParentId: series.id } }); const other = store.saveProject({ name: 'other', kind: 'film' });
+  const queue = new JobQueue(store, async task => {
+    const p = store.project(task.projectId); const family = String(p.data.seriesParentId || p.id); assert.equal(families.has(family), false, 'concurrent writers can overwrite production caches'); families.add(family); active++; peak = Math.max(peak, active);
+    await delay(25); active--; families.delete(family); return { outputIds: [] };
+  }, { generationConcurrency: 3, mediaConcurrency: 1 });
+  try {
+    const tasks = [series, child, other].flatMap(p => store.createTasks({ projectId: p.id, kind: 'pipeline', prompts: [p.name] })); queue.enqueue(tasks.map(task => task.id));
+    await until(() => tasks.every(task => ['succeeded', 'failed'].includes(store.task(task.id).status)));
+    assert.ok(tasks.every(task => store.task(task.id).status === 'succeeded')); assert.equal(peak, 2);
+  } finally { await queue.close(); store.close(); rmSync(root, { recursive: true, force: true }); }
+});
+
 test('global pause survives application restart and does not unexpectedly submit queued paid work', async () => {
   const root = mkdtempSync(join(tmpdir(), 'maistudio-paused-')); const store = new Store(root); let calls = 0;
   const queue = new JobQueue(store, async () => { calls++; return { outputIds: [] }; });

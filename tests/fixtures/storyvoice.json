@@ -1,0 +1,5880 @@
+{
+  "authority": "controlled-replay",
+  "scope": "Only four statically allowlisted pure functions; no module import, EXE, network or native calls",
+  "sourceSha256": {
+    "storyvoice": "e65e93ebbf206c969773ad9b317c4ecb999dfd5dff0200dafa00cc8581c0e482",
+    "srt": "3fa1f2c3faed29f670660f5cea8300e0f26b308aaa660bf48e29db4eacb0719b"
+  },
+  "split": [
+    {
+      "input": "CẢNH 2: Bên hồ\n[nhạc] Xin chào. Mời anh ngồi!",
+      "expected": [
+        "Xin chào.",
+        "Mời anh ngồi!"
+      ]
+    },
+    {
+      "input": "Chương 3\n“Xin chào.” Cô bé mỉm cười (nhẹ).",
+      "expected": [
+        "Xin chào.",
+        "Cô bé mỉm cười ."
+      ]
+    },
+    {
+      "input": "# Ghi chú\nA\nNgày xưa, có một cô bé…",
+      "expected": [
+        "Ngày xưa, có một cô bé…"
+      ]
+    },
+    {
+      "input": "INT. Nhà\nEXT. Phố\nCô bé bước đi.",
+      "expected": [
+        "Cô bé bước đi."
+      ]
+    },
+    {
+      "input": "phần 2\nCảnh ٣: Sáng\nHôm nay trời đẹp.",
+      "expected": [
+        "Hôm nay trời đẹp."
+      ]
+    },
+    {
+      "input": "Đây là đoạn kể\r\nTiếp theo; câu cuối?",
+      "expected": [
+        "Đây là đoạn kể",
+        "Tiếp theo; câu cuối?"
+      ]
+    },
+    {
+      "input": "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx",
+      "expected": [
+        "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
+      ]
+    },
+    {
+      "input": "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx",
+      "expected": [
+        "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx",
+        "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
+      ]
+    },
+    {
+      "input": "😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀",
+      "expected": [
+        "😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀",
+        "😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀"
+      ]
+    },
+    {
+      "input": "một câu rất dài, một câu rất dài, một câu rất dài, một câu rất dài, một câu rất dài, một câu rất dài, một câu rất dài, một câu rất dài, một câu rất dài, một câu rất dài, một câu rất dài, một câu rất dài, một câu rất dài, một câu rất dài, một câu rất dài, một câu rất dài, một câu rất dài, một câu rất dài, một câu rất dài, một câu rất dài, một câu rất dài, một câu rất dài, một câu rất dài, một câu rất dài, một câu rất dài, một câu rất dài, một câu rất dài, một câu rất dài, một câu rất dài, một câu rất dài, kết thúc.",
+      "expected": [
+        "một câu rất dài, một câu rất dài, một câu rất dài, một câu rất dài, một câu rất dài, một câu rất dài, một câu rất dài, một câu rất dài, một câu rất dài, một câu rất dài, một câu rất dài, một câu rất dài, một câu rất dài,",
+        "một câu rất dài, một câu rất dài, một câu rất dài, một câu rất dài, một câu rất dài, một câu rất dài, một câu rất dài, một câu rất dài, một câu rất dài, một câu rất dài, một câu rất dài, một câu rất dài, một câu rất dài,",
+        "một câu rất dài, một câu rất dài, một câu rất dài, một câu rất dài, kết thúc."
+      ]
+    },
+    {
+      "input": "  Côbé\u001cbước đi.  ",
+      "expected": [
+        "Cô bé bước đi."
+      ]
+    },
+    {
+      "input": "Chương 4: Câu chuyện\n(aChương 4: Câu chuyện\n(aChương 4: Câu chuyện\n(aChương 4: Câu chuyện\n(aChương 4: Câu chuyện\n(a",
+      "expected": [
+        "Chương 4: Câu chuyện",
+        "(aChương 4: Câu chuyện",
+        "(aChương 4: Câu chuyện",
+        "(aChương 4: Câu chuyện",
+        "(aChương 4: Câu chuyện",
+        "(a"
+      ]
+    }
+  ],
+  "timings": [
+    {
+      "lines": [
+        "Xin chào.",
+        "Mời anh"
+      ],
+      "durations": [
+        1.25,
+        0.5
+      ],
+      "expected": {
+        "cues": [
+          {
+            "i": 1,
+            "start": 0.25,
+            "end": 1.5,
+            "text": "Xin chào."
+          },
+          {
+            "i": 2,
+            "start": 1.85,
+            "end": 2.35,
+            "text": "Mời anh"
+          }
+        ],
+        "offsets": [
+          0.25,
+          1.85
+        ],
+        "total": 2.9
+      }
+    },
+    {
+      "lines": [
+        "A.",
+        "B;",
+        "C"
+      ],
+      "durations": [
+        0.3,
+        0.0625,
+        0.3005
+      ],
+      "expected": {
+        "cues": [
+          {
+            "i": 1,
+            "start": 0.25,
+            "end": 0.55,
+            "text": "A."
+          },
+          {
+            "i": 2,
+            "start": 0.9,
+            "end": 1.2,
+            "text": "B;"
+          },
+          {
+            "i": 3,
+            "start": 1.55,
+            "end": 1.85,
+            "text": "C"
+          }
+        ],
+        "offsets": [
+          0.25,
+          0.9,
+          1.55
+        ],
+        "total": 2.4
+      }
+    },
+    {
+      "lines": [
+        "Câu,",
+        "Kết!"
+      ],
+      "durations": [
+        1.4255,
+        2.6755
+      ],
+      "expected": {
+        "cues": [
+          {
+            "i": 1,
+            "start": 0.25,
+            "end": 1.675,
+            "text": "Câu,"
+          },
+          {
+            "i": 2,
+            "start": 1.825,
+            "end": 4.501,
+            "text": "Kết!"
+          }
+        ],
+        "offsets": [
+          0.25,
+          1.825
+        ],
+        "total": 5.251
+      }
+    },
+    {
+      "lines": [
+        "😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀!"
+      ],
+      "durations": [
+        0.1
+      ],
+      "expected": {
+        "cues": [
+          {
+            "i": 1,
+            "start": 0.25,
+            "end": 0.55,
+            "text": "😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀"
+          }
+        ],
+        "offsets": [
+          0.25
+        ],
+        "total": 1.3
+      }
+    },
+    {
+      "lines": [
+        "Một.",
+        "Một.",
+        "Một.",
+        "Một.",
+        "Một.",
+        "Một.",
+        "Một.",
+        "Một.",
+        "Một.",
+        "Một.",
+        "Một.",
+        "Một.",
+        "Một.",
+        "Một.",
+        "Một.",
+        "Một.",
+        "Một.",
+        "Một.",
+        "Một.",
+        "Một.",
+        "Một.",
+        "Một.",
+        "Một.",
+        "Một.",
+        "Một.",
+        "Một.",
+        "Một.",
+        "Một.",
+        "Một.",
+        "Một.",
+        "Một.",
+        "Một.",
+        "Một.",
+        "Một.",
+        "Một.",
+        "Một.",
+        "Một.",
+        "Một.",
+        "Một.",
+        "Một."
+      ],
+      "durations": [
+        0.3333,
+        0.3333,
+        0.3333,
+        0.3333,
+        0.3333,
+        0.3333,
+        0.3333,
+        0.3333,
+        0.3333,
+        0.3333,
+        0.3333,
+        0.3333,
+        0.3333,
+        0.3333,
+        0.3333,
+        0.3333,
+        0.3333,
+        0.3333,
+        0.3333,
+        0.3333,
+        0.3333,
+        0.3333,
+        0.3333,
+        0.3333,
+        0.3333,
+        0.3333,
+        0.3333,
+        0.3333,
+        0.3333,
+        0.3333,
+        0.3333,
+        0.3333,
+        0.3333,
+        0.3333,
+        0.3333,
+        0.3333,
+        0.3333,
+        0.3333,
+        0.3333,
+        0.3333
+      ],
+      "expected": {
+        "cues": [
+          {
+            "i": 1,
+            "start": 0.25,
+            "end": 0.583,
+            "text": "Một."
+          },
+          {
+            "i": 2,
+            "start": 0.933,
+            "end": 1.267,
+            "text": "Một."
+          },
+          {
+            "i": 3,
+            "start": 1.617,
+            "end": 1.95,
+            "text": "Một."
+          },
+          {
+            "i": 4,
+            "start": 2.3,
+            "end": 2.633,
+            "text": "Một."
+          },
+          {
+            "i": 5,
+            "start": 2.983,
+            "end": 3.317,
+            "text": "Một."
+          },
+          {
+            "i": 6,
+            "start": 3.667,
+            "end": 4.0,
+            "text": "Một."
+          },
+          {
+            "i": 7,
+            "start": 4.35,
+            "end": 4.683,
+            "text": "Một."
+          },
+          {
+            "i": 8,
+            "start": 5.033,
+            "end": 5.366,
+            "text": "Một."
+          },
+          {
+            "i": 9,
+            "start": 5.716,
+            "end": 6.05,
+            "text": "Một."
+          },
+          {
+            "i": 10,
+            "start": 6.4,
+            "end": 6.733,
+            "text": "Một."
+          },
+          {
+            "i": 11,
+            "start": 7.083,
+            "end": 7.416,
+            "text": "Một."
+          },
+          {
+            "i": 12,
+            "start": 7.766,
+            "end": 8.1,
+            "text": "Một."
+          },
+          {
+            "i": 13,
+            "start": 8.45,
+            "end": 8.783,
+            "text": "Một."
+          },
+          {
+            "i": 14,
+            "start": 9.133,
+            "end": 9.466,
+            "text": "Một."
+          },
+          {
+            "i": 15,
+            "start": 9.816,
+            "end": 10.149,
+            "text": "Một."
+          },
+          {
+            "i": 16,
+            "start": 10.499,
+            "end": 10.833,
+            "text": "Một."
+          },
+          {
+            "i": 17,
+            "start": 11.183,
+            "end": 11.516,
+            "text": "Một."
+          },
+          {
+            "i": 18,
+            "start": 11.866,
+            "end": 12.199,
+            "text": "Một."
+          },
+          {
+            "i": 19,
+            "start": 12.549,
+            "end": 12.883,
+            "text": "Một."
+          },
+          {
+            "i": 20,
+            "start": 13.233,
+            "end": 13.566,
+            "text": "Một."
+          },
+          {
+            "i": 21,
+            "start": 13.916,
+            "end": 14.249,
+            "text": "Một."
+          },
+          {
+            "i": 22,
+            "start": 14.599,
+            "end": 14.933,
+            "text": "Một."
+          },
+          {
+            "i": 23,
+            "start": 15.283,
+            "end": 15.616,
+            "text": "Một."
+          },
+          {
+            "i": 24,
+            "start": 15.966,
+            "end": 16.299,
+            "text": "Một."
+          },
+          {
+            "i": 25,
+            "start": 16.649,
+            "end": 16.982,
+            "text": "Một."
+          },
+          {
+            "i": 26,
+            "start": 17.332,
+            "end": 17.666,
+            "text": "Một."
+          },
+          {
+            "i": 27,
+            "start": 18.016,
+            "end": 18.349,
+            "text": "Một."
+          },
+          {
+            "i": 28,
+            "start": 18.699,
+            "end": 19.032,
+            "text": "Một."
+          },
+          {
+            "i": 29,
+            "start": 19.382,
+            "end": 19.716,
+            "text": "Một."
+          },
+          {
+            "i": 30,
+            "start": 20.066,
+            "end": 20.399,
+            "text": "Một."
+          },
+          {
+            "i": 31,
+            "start": 20.749,
+            "end": 21.082,
+            "text": "Một."
+          },
+          {
+            "i": 32,
+            "start": 21.432,
+            "end": 21.766,
+            "text": "Một."
+          },
+          {
+            "i": 33,
+            "start": 22.116,
+            "end": 22.449,
+            "text": "Một."
+          },
+          {
+            "i": 34,
+            "start": 22.799,
+            "end": 23.132,
+            "text": "Một."
+          },
+          {
+            "i": 35,
+            "start": 23.482,
+            "end": 23.815,
+            "text": "Một."
+          },
+          {
+            "i": 36,
+            "start": 24.165,
+            "end": 24.499,
+            "text": "Một."
+          },
+          {
+            "i": 37,
+            "start": 24.849,
+            "end": 25.182,
+            "text": "Một."
+          },
+          {
+            "i": 38,
+            "start": 25.532,
+            "end": 25.865,
+            "text": "Một."
+          },
+          {
+            "i": 39,
+            "start": 26.215,
+            "end": 26.549,
+            "text": "Một."
+          },
+          {
+            "i": 40,
+            "start": 26.899,
+            "end": 27.232,
+            "text": "Một."
+          }
+        ],
+        "offsets": [
+          0.25,
+          0.933,
+          1.617,
+          2.3,
+          2.983,
+          3.667,
+          4.35,
+          5.033,
+          5.716,
+          6.4,
+          7.083,
+          7.766,
+          8.45,
+          9.133,
+          9.816,
+          10.499,
+          11.183,
+          11.866,
+          12.549,
+          13.233,
+          13.916,
+          14.599,
+          15.283,
+          15.966,
+          16.649,
+          17.332,
+          18.016,
+          18.699,
+          19.382,
+          20.066,
+          20.749,
+          21.432,
+          22.116,
+          22.799,
+          23.482,
+          24.165,
+          24.849,
+          25.532,
+          26.215,
+          26.899
+        ],
+        "total": 27.982
+      }
+    }
+  ],
+  "groups": [
+    {
+      "cues": [
+        {
+          "i": 1,
+          "start": 0.25,
+          "end": 1.5,
+          "text": "Xin chào."
+        },
+        {
+          "i": 2,
+          "start": 1.85,
+          "end": 3,
+          "text": "Mời anh"
+        },
+        {
+          "i": 3,
+          "start": 4.5,
+          "end": 6,
+          "text": "Hẹn gặp lại."
+        },
+        {
+          "i": 4,
+          "start": 6.4,
+          "end": 6.9,
+          "text": "Tạm biệt!"
+        }
+      ],
+      "target": 2,
+      "expected": [
+        {
+          "id": 1,
+          "cue_from": 1,
+          "cue_to": 1,
+          "start": 0.0,
+          "text": "Xin chào.",
+          "end": 1.85
+        },
+        {
+          "id": 2,
+          "cue_from": 2,
+          "cue_to": 2,
+          "start": 1.85,
+          "text": "Mời anh",
+          "end": 4.5
+        },
+        {
+          "id": 3,
+          "cue_from": 3,
+          "cue_to": 4,
+          "start": 4.5,
+          "text": "Hẹn gặp lại. / Tạm biệt!",
+          "end": 7.4
+        }
+      ]
+    },
+    {
+      "cues": [
+        {
+          "i": 1,
+          "start": 0.25,
+          "end": 1.5,
+          "text": "Xin chào."
+        },
+        {
+          "i": 2,
+          "start": 1.85,
+          "end": 3,
+          "text": "Mời anh"
+        },
+        {
+          "i": 3,
+          "start": 4.5,
+          "end": 6,
+          "text": "Hẹn gặp lại."
+        },
+        {
+          "i": 4,
+          "start": 6.4,
+          "end": 6.9,
+          "text": "Tạm biệt!"
+        }
+      ],
+      "target": 3.2,
+      "expected": [
+        {
+          "id": 1,
+          "cue_from": 1,
+          "cue_to": 2,
+          "start": 0.0,
+          "text": "Xin chào. / Mời anh",
+          "end": 4.5
+        },
+        {
+          "id": 2,
+          "cue_from": 3,
+          "cue_to": 4,
+          "start": 4.5,
+          "text": "Hẹn gặp lại. / Tạm biệt!",
+          "end": 7.4
+        }
+      ]
+    },
+    {
+      "cues": [
+        {
+          "i": 1,
+          "start": 0.25,
+          "end": 1.5,
+          "text": "Xin chào."
+        },
+        {
+          "i": 2,
+          "start": 1.85,
+          "end": 3,
+          "text": "Mời anh"
+        },
+        {
+          "i": 3,
+          "start": 4.5,
+          "end": 6,
+          "text": "Hẹn gặp lại."
+        },
+        {
+          "i": 4,
+          "start": 6.4,
+          "end": 6.9,
+          "text": "Tạm biệt!"
+        }
+      ],
+      "target": 5,
+      "expected": [
+        {
+          "id": 1,
+          "cue_from": 1,
+          "cue_to": 2,
+          "start": 0.0,
+          "text": "Xin chào. / Mời anh",
+          "end": 4.5
+        },
+        {
+          "id": 2,
+          "cue_from": 3,
+          "cue_to": 4,
+          "start": 4.5,
+          "text": "Hẹn gặp lại. / Tạm biệt!",
+          "end": 7.4
+        }
+      ]
+    },
+    {
+      "cues": [
+        {
+          "i": 1,
+          "start": 0.25,
+          "end": 1.5,
+          "text": "Xin chào."
+        },
+        {
+          "i": 2,
+          "start": 1.85,
+          "end": 3,
+          "text": "Mời anh"
+        },
+        {
+          "i": 3,
+          "start": 4.5,
+          "end": 6,
+          "text": "Hẹn gặp lại."
+        },
+        {
+          "i": 4,
+          "start": 6.4,
+          "end": 6.9,
+          "text": "Tạm biệt!"
+        }
+      ],
+      "target": 20,
+      "expected": [
+        {
+          "id": 1,
+          "cue_from": 1,
+          "cue_to": 4,
+          "start": 0.0,
+          "text": "Xin chào. / Mời anh / Hẹn gặp lại. / Tạm biệt!",
+          "end": 7.4
+        }
+      ]
+    }
+  ],
+  "align": [
+    {
+      "name": "empty script",
+      "sentences": [],
+      "segs": [
+        {
+          "start": 0,
+          "end": 1
+        }
+      ],
+      "expected": []
+    },
+    {
+      "name": "blank script",
+      "sentences": [
+        "",
+        " \t"
+      ],
+      "segs": [
+        {
+          "start": 0,
+          "end": 1
+        }
+      ],
+      "expected": []
+    },
+    {
+      "name": "empty speech",
+      "sentences": [
+        "xin"
+      ],
+      "segs": [],
+      "expected": []
+    },
+    {
+      "name": "tiny audio extends minimum",
+      "sentences": [
+        "xin"
+      ],
+      "segs": [
+        {
+          "start": 0.1,
+          "end": 0.2
+        }
+      ],
+      "expected": [
+        {
+          "i": 1,
+          "start": 0.1,
+          "end": 0.7,
+          "text": "xin"
+        }
+      ]
+    },
+    {
+      "name": "original sentence whitespace retained",
+      "sentences": [
+        "  Xin chào.  ",
+        "\t",
+        " Mời anh  "
+      ],
+      "segs": [
+        {
+          "start": 1,
+          "end": 2
+        },
+        {
+          "start": 5,
+          "end": 7
+        }
+      ],
+      "expected": [
+        {
+          "i": 1,
+          "start": 1,
+          "end": 5,
+          "text": "  Xin chào.  "
+        },
+        {
+          "i": 2,
+          "start": 5,
+          "end": 7,
+          "text": " Mời anh  "
+        }
+      ]
+    },
+    {
+      "name": "fallback snaps inclusive half second",
+      "sentences": [
+        "Xin chào.",
+        "Mời anh."
+      ],
+      "segs": [
+        {
+          "start": 1,
+          "end": 2
+        },
+        {
+          "start": 5,
+          "end": 7
+        }
+      ],
+      "expected": [
+        {
+          "i": 1,
+          "start": 1,
+          "end": 5,
+          "text": "Xin chào."
+        },
+        {
+          "i": 2,
+          "start": 5,
+          "end": 7,
+          "text": "Mời anh."
+        }
+      ]
+    },
+    {
+      "name": "clock exact boundary stays previous end",
+      "sentences": [
+        "one",
+        "two",
+        "three"
+      ],
+      "segs": [
+        {
+          "start": 1,
+          "end": 2
+        },
+        {
+          "start": 5,
+          "end": 7
+        }
+      ],
+      "expected": [
+        {
+          "i": 1,
+          "start": 1,
+          "end": 2,
+          "text": "one"
+        },
+        {
+          "i": 2,
+          "start": 2,
+          "end": 6.0,
+          "text": "two"
+        },
+        {
+          "i": 3,
+          "start": 6.0,
+          "end": 7,
+          "text": "three"
+        }
+      ]
+    },
+    {
+      "name": "fallback unequal token weights",
+      "sentences": [
+        "xin",
+        "mot hai ba bon"
+      ],
+      "segs": [
+        {
+          "start": 0.5,
+          "end": 2
+        },
+        {
+          "start": 4,
+          "end": 8
+        }
+      ],
+      "expected": [
+        {
+          "i": 1,
+          "start": 0.5,
+          "end": 1.6,
+          "text": "xin"
+        },
+        {
+          "i": 2,
+          "start": 1.6,
+          "end": 8,
+          "text": "mot hai ba bon"
+        }
+      ]
+    },
+    {
+      "name": "codepoint fallback emoji weights",
+      "sentences": [
+        "😀😀😀😀😀😀😀😀😀😀😀😀😀",
+        "😀😀😀😀"
+      ],
+      "segs": [
+        {
+          "start": 0.0625,
+          "end": 1.0625
+        },
+        {
+          "start": 1.3,
+          "end": 2.1
+        }
+      ],
+      "expected": [
+        {
+          "i": 1,
+          "start": 0.062,
+          "end": 1.3,
+          "text": "😀😀😀😀😀😀😀😀😀😀😀😀😀"
+        },
+        {
+          "i": 2,
+          "start": 1.3,
+          "end": 2.1,
+          "text": "😀😀😀😀"
+        }
+      ]
+    },
+    {
+      "name": "punctuation only minimum weight",
+      "sentences": [
+        "???",
+        "!!!",
+        "…"
+      ],
+      "segs": [
+        {
+          "start": 0,
+          "end": 0.7
+        },
+        {
+          "start": 1.4,
+          "end": 2.1
+        }
+      ],
+      "expected": [
+        {
+          "i": 1,
+          "start": 0.0,
+          "end": 0.6,
+          "text": "???"
+        },
+        {
+          "i": 2,
+          "start": 0.6,
+          "end": 1.4,
+          "text": "!!!"
+        },
+        {
+          "i": 3,
+          "start": 1.4,
+          "end": 2.1,
+          "text": "…"
+        }
+      ]
+    },
+    {
+      "name": "empty ASR remains fallback",
+      "sentences": [
+        "Xin chào.",
+        "Mời anh."
+      ],
+      "segs": [
+        {
+          "start": 1,
+          "end": 2
+        },
+        {
+          "start": 5,
+          "end": 7
+        }
+      ],
+      "asrTexts": [
+        "",
+        " "
+      ],
+      "expected": [
+        {
+          "i": 1,
+          "start": 1,
+          "end": 5,
+          "text": "Xin chào."
+        },
+        {
+          "i": 2,
+          "start": 5,
+          "end": 7,
+          "text": "Mời anh."
+        }
+      ]
+    },
+    {
+      "name": "no matching ASR remains fallback",
+      "sentences": [
+        "Xin chào.",
+        "Mời anh."
+      ],
+      "segs": [
+        {
+          "start": 1,
+          "end": 2
+        },
+        {
+          "start": 5,
+          "end": 7
+        }
+      ],
+      "asrTexts": [
+        "unrelated text",
+        "different words"
+      ],
+      "expected": [
+        {
+          "i": 1,
+          "start": 1,
+          "end": 5,
+          "text": "Xin chào."
+        },
+        {
+          "i": 2,
+          "start": 5,
+          "end": 7,
+          "text": "Mời anh."
+        }
+      ]
+    },
+    {
+      "name": "accent and punctuation token normalization",
+      "sentences": [
+        "Đặng-chào, anh!",
+        "Một số 123"
+      ],
+      "segs": [
+        {
+          "start": 0,
+          "end": 1
+        },
+        {
+          "start": 1.7,
+          "end": 4
+        }
+      ],
+      "asrTexts": [
+        "dangchao ANH",
+        "mot so 123"
+      ],
+      "expected": [
+        {
+          "i": 1,
+          "start": 0.0,
+          "end": 1,
+          "text": "Đặng-chào, anh!"
+        },
+        {
+          "i": 2,
+          "start": 1.7,
+          "end": 4,
+          "text": "Một số 123"
+        }
+      ]
+    },
+    {
+      "name": "matched token centers not segment edges",
+      "sentences": [
+        "alpha beta gamma"
+      ],
+      "segs": [
+        {
+          "start": 1,
+          "end": 5
+        }
+      ],
+      "asrTexts": [
+        "alpha beta gamma"
+      ],
+      "expected": [
+        {
+          "i": 1,
+          "start": 1.667,
+          "end": 4.333,
+          "text": "alpha beta gamma"
+        }
+      ]
+    },
+    {
+      "name": "ASR zip shorter than speech",
+      "sentences": [
+        "xin chao",
+        "tam biet"
+      ],
+      "segs": [
+        {
+          "start": 0,
+          "end": 2
+        },
+        {
+          "start": 4,
+          "end": 6
+        }
+      ],
+      "asrTexts": [
+        "xin chao"
+      ],
+      "expected": [
+        {
+          "i": 1,
+          "start": 0.0,
+          "end": 1.5,
+          "text": "xin chao"
+        },
+        {
+          "i": 2,
+          "start": 1.5,
+          "end": 6,
+          "text": "tam biet"
+        }
+      ]
+    },
+    {
+      "name": "ASR zip ignores extra strings",
+      "sentences": [
+        "xin"
+      ],
+      "segs": [
+        {
+          "start": 0,
+          "end": 1
+        }
+      ],
+      "asrTexts": [
+        "xin",
+        "unexpected extra"
+      ],
+      "expected": [
+        {
+          "i": 1,
+          "start": 0.0,
+          "end": 1,
+          "text": "xin"
+        }
+      ]
+    },
+    {
+      "name": "anchors interpolate leading missing sentence",
+      "sentences": [
+        "missing start",
+        "alpha",
+        "beta"
+      ],
+      "segs": [
+        {
+          "start": 0,
+          "end": 1
+        },
+        {
+          "start": 3,
+          "end": 5
+        },
+        {
+          "start": 8,
+          "end": 10
+        }
+      ],
+      "asrTexts": [
+        "noise",
+        "alpha",
+        "beta"
+      ],
+      "expected": [
+        {
+          "i": 1,
+          "start": 0.0,
+          "end": 4.0,
+          "text": "missing start"
+        },
+        {
+          "i": 2,
+          "start": 4.0,
+          "end": 4.6,
+          "text": "alpha"
+        },
+        {
+          "i": 3,
+          "start": 9.0,
+          "end": 9.6,
+          "text": "beta"
+        }
+      ]
+    },
+    {
+      "name": "anchors interpolate middle missing sentence",
+      "sentences": [
+        "alpha",
+        "missing middle",
+        "omega"
+      ],
+      "segs": [
+        {
+          "start": 0,
+          "end": 2
+        },
+        {
+          "start": 4,
+          "end": 6
+        },
+        {
+          "start": 9,
+          "end": 11
+        }
+      ],
+      "asrTexts": [
+        "alpha",
+        "noise",
+        "omega"
+      ],
+      "expected": [
+        {
+          "i": 1,
+          "start": 1.0,
+          "end": 1.6,
+          "text": "alpha"
+        },
+        {
+          "i": 2,
+          "start": 1.6,
+          "end": 10.0,
+          "text": "missing middle"
+        },
+        {
+          "i": 3,
+          "start": 10.0,
+          "end": 10.6,
+          "text": "omega"
+        }
+      ]
+    },
+    {
+      "name": "anchors interpolate trailing missing sentence",
+      "sentences": [
+        "alpha",
+        "beta",
+        "missing tail"
+      ],
+      "segs": [
+        {
+          "start": 0,
+          "end": 2
+        },
+        {
+          "start": 4,
+          "end": 6
+        },
+        {
+          "start": 9,
+          "end": 11
+        }
+      ],
+      "asrTexts": [
+        "alpha",
+        "beta",
+        "noise"
+      ],
+      "expected": [
+        {
+          "i": 1,
+          "start": 1.0,
+          "end": 1.6,
+          "text": "alpha"
+        },
+        {
+          "i": 2,
+          "start": 5.0,
+          "end": 5.6,
+          "text": "beta"
+        },
+        {
+          "i": 3,
+          "start": 5.6,
+          "end": 11,
+          "text": "missing tail"
+        }
+      ]
+    },
+    {
+      "name": "long sentence truncates by codepoint",
+      "sentences": [
+        "😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀 word"
+      ],
+      "segs": [
+        {
+          "start": 0,
+          "end": 2
+        }
+      ],
+      "asrTexts": [
+        "word"
+      ],
+      "expected": [
+        {
+          "i": 1,
+          "start": 1.0,
+          "end": 1.6,
+          "text": "😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀"
+        }
+      ]
+    },
+    {
+      "name": "repeated token tie ordering",
+      "sentences": [
+        "a b a",
+        "b a b",
+        "a b"
+      ],
+      "segs": [
+        {
+          "start": 0,
+          "end": 2
+        },
+        {
+          "start": 3,
+          "end": 5
+        },
+        {
+          "start": 7,
+          "end": 9
+        }
+      ],
+      "asrTexts": [
+        "b a b",
+        "a b a",
+        "b a"
+      ],
+      "expected": [
+        {
+          "i": 1,
+          "start": 1.0,
+          "end": 3.333,
+          "text": "a b a"
+        },
+        {
+          "i": 2,
+          "start": 4.0,
+          "end": 7.5,
+          "text": "b a b"
+        },
+        {
+          "i": 3,
+          "start": 8.5,
+          "end": 9.1,
+          "text": "a b"
+        }
+      ]
+    },
+    {
+      "name": "Unicode numbers and underscores remain inside folded token",
+      "sentences": [
+        "ĐẶNG foo_bar ½ ١٢٣",
+        "cà-phê"
+      ],
+      "segs": [
+        {
+          "start": 0.1,
+          "end": 2.4
+        },
+        {
+          "start": 3.2,
+          "end": 6
+        }
+      ],
+      "asrTexts": [
+        "dang foobar ½ ١٢٣",
+        "caphe"
+      ],
+      "expected": [
+        {
+          "i": 1,
+          "start": 0.1,
+          "end": 2.4,
+          "text": "ĐẶNG foo_bar ½ ١٢٣"
+        },
+        {
+          "i": 2,
+          "start": 4.6,
+          "end": 5.2,
+          "text": "cà-phê"
+        }
+      ]
+    },
+    {
+      "name": "anchor threshold 3 sentences 1 matches",
+      "sentences": [
+        "word0",
+        "word1",
+        "word2"
+      ],
+      "segs": [
+        {
+          "start": 0.0,
+          "end": 1.3
+        },
+        {
+          "start": 1.7,
+          "end": 3.0
+        },
+        {
+          "start": 3.4,
+          "end": 4.7
+        }
+      ],
+      "asrTexts": [
+        "word0",
+        "noise",
+        "noise"
+      ],
+      "expected": [
+        {
+          "i": 1,
+          "start": 0.65,
+          "end": 1.25,
+          "text": "word0"
+        },
+        {
+          "i": 2,
+          "start": 1.25,
+          "end": 2.675,
+          "text": "word1"
+        },
+        {
+          "i": 3,
+          "start": 2.675,
+          "end": 4.7,
+          "text": "word2"
+        }
+      ]
+    },
+    {
+      "name": "anchor threshold 3 sentences 2 matches",
+      "sentences": [
+        "word0",
+        "word1",
+        "word2"
+      ],
+      "segs": [
+        {
+          "start": 0.0,
+          "end": 1.3
+        },
+        {
+          "start": 1.7,
+          "end": 3.0
+        },
+        {
+          "start": 3.4,
+          "end": 4.7
+        }
+      ],
+      "asrTexts": [
+        "word0",
+        "word1",
+        "noise"
+      ],
+      "expected": [
+        {
+          "i": 1,
+          "start": 0.65,
+          "end": 1.25,
+          "text": "word0"
+        },
+        {
+          "i": 2,
+          "start": 2.35,
+          "end": 2.95,
+          "text": "word1"
+        },
+        {
+          "i": 3,
+          "start": 2.95,
+          "end": 4.7,
+          "text": "word2"
+        }
+      ]
+    },
+    {
+      "name": "anchor threshold 4 sentences 1 matches",
+      "sentences": [
+        "word0",
+        "word1",
+        "word2",
+        "word3"
+      ],
+      "segs": [
+        {
+          "start": 0.0,
+          "end": 1.3
+        },
+        {
+          "start": 1.7,
+          "end": 3.0
+        },
+        {
+          "start": 3.4,
+          "end": 4.7
+        },
+        {
+          "start": 5.1,
+          "end": 6.3999999999999995
+        }
+      ],
+      "asrTexts": [
+        "word0",
+        "noise",
+        "noise",
+        "noise"
+      ],
+      "expected": [
+        {
+          "i": 1,
+          "start": 0.65,
+          "end": 1.25,
+          "text": "word0"
+        },
+        {
+          "i": 2,
+          "start": 1.25,
+          "end": 2.567,
+          "text": "word1"
+        },
+        {
+          "i": 3,
+          "start": 2.567,
+          "end": 4.483,
+          "text": "word2"
+        },
+        {
+          "i": 4,
+          "start": 4.483,
+          "end": 6.4,
+          "text": "word3"
+        }
+      ]
+    },
+    {
+      "name": "anchor threshold 4 sentences 2 matches",
+      "sentences": [
+        "word0",
+        "word1",
+        "word2",
+        "word3"
+      ],
+      "segs": [
+        {
+          "start": 0.0,
+          "end": 1.3
+        },
+        {
+          "start": 1.7,
+          "end": 3.0
+        },
+        {
+          "start": 3.4,
+          "end": 4.7
+        },
+        {
+          "start": 5.1,
+          "end": 6.3999999999999995
+        }
+      ],
+      "asrTexts": [
+        "word0",
+        "word1",
+        "noise",
+        "noise"
+      ],
+      "expected": [
+        {
+          "i": 1,
+          "start": 0.65,
+          "end": 1.25,
+          "text": "word0"
+        },
+        {
+          "i": 2,
+          "start": 2.35,
+          "end": 2.95,
+          "text": "word1"
+        },
+        {
+          "i": 3,
+          "start": 2.95,
+          "end": 4.375,
+          "text": "word2"
+        },
+        {
+          "i": 4,
+          "start": 4.375,
+          "end": 6.4,
+          "text": "word3"
+        }
+      ]
+    },
+    {
+      "name": "anchor threshold 7 sentences 1 matches",
+      "sentences": [
+        "word0",
+        "word1",
+        "word2",
+        "word3",
+        "word4",
+        "word5",
+        "word6"
+      ],
+      "segs": [
+        {
+          "start": 0.0,
+          "end": 1.3
+        },
+        {
+          "start": 1.7,
+          "end": 3.0
+        },
+        {
+          "start": 3.4,
+          "end": 4.7
+        },
+        {
+          "start": 5.1,
+          "end": 6.3999999999999995
+        },
+        {
+          "start": 6.8,
+          "end": 8.1
+        },
+        {
+          "start": 8.5,
+          "end": 9.8
+        },
+        {
+          "start": 10.2,
+          "end": 11.5
+        }
+      ],
+      "asrTexts": [
+        "word0",
+        "noise",
+        "noise",
+        "noise",
+        "noise",
+        "noise",
+        "noise"
+      ],
+      "expected": [
+        {
+          "i": 1,
+          "start": 0.65,
+          "end": 1.25,
+          "text": "word0"
+        },
+        {
+          "i": 2,
+          "start": 1.25,
+          "end": 2.458,
+          "text": "word1"
+        },
+        {
+          "i": 3,
+          "start": 2.458,
+          "end": 4.267,
+          "text": "word2"
+        },
+        {
+          "i": 4,
+          "start": 4.267,
+          "end": 6.075,
+          "text": "word3"
+        },
+        {
+          "i": 5,
+          "start": 6.075,
+          "end": 7.883,
+          "text": "word4"
+        },
+        {
+          "i": 6,
+          "start": 7.883,
+          "end": 9.692,
+          "text": "word5"
+        },
+        {
+          "i": 7,
+          "start": 9.692,
+          "end": 11.5,
+          "text": "word6"
+        }
+      ]
+    },
+    {
+      "name": "anchor threshold 7 sentences 2 matches",
+      "sentences": [
+        "word0",
+        "word1",
+        "word2",
+        "word3",
+        "word4",
+        "word5",
+        "word6"
+      ],
+      "segs": [
+        {
+          "start": 0.0,
+          "end": 1.3
+        },
+        {
+          "start": 1.7,
+          "end": 3.0
+        },
+        {
+          "start": 3.4,
+          "end": 4.7
+        },
+        {
+          "start": 5.1,
+          "end": 6.3999999999999995
+        },
+        {
+          "start": 6.8,
+          "end": 8.1
+        },
+        {
+          "start": 8.5,
+          "end": 9.8
+        },
+        {
+          "start": 10.2,
+          "end": 11.5
+        }
+      ],
+      "asrTexts": [
+        "word0",
+        "word1",
+        "noise",
+        "noise",
+        "noise",
+        "noise",
+        "noise"
+      ],
+      "expected": [
+        {
+          "i": 1,
+          "start": 0.65,
+          "end": 1.25,
+          "text": "word0"
+        },
+        {
+          "i": 2,
+          "start": 2.35,
+          "end": 2.95,
+          "text": "word1"
+        },
+        {
+          "i": 3,
+          "start": 2.95,
+          "end": 4.18,
+          "text": "word2"
+        },
+        {
+          "i": 4,
+          "start": 4.18,
+          "end": 6.01,
+          "text": "word3"
+        },
+        {
+          "i": 5,
+          "start": 6.01,
+          "end": 7.84,
+          "text": "word4"
+        },
+        {
+          "i": 6,
+          "start": 7.84,
+          "end": 9.67,
+          "text": "word5"
+        },
+        {
+          "i": 7,
+          "start": 9.67,
+          "end": 11.5,
+          "text": "word6"
+        }
+      ]
+    },
+    {
+      "name": "anchor threshold 8 sentences 1 matches",
+      "sentences": [
+        "word0",
+        "word1",
+        "word2",
+        "word3",
+        "word4",
+        "word5",
+        "word6",
+        "word7"
+      ],
+      "segs": [
+        {
+          "start": 0.0,
+          "end": 1.3
+        },
+        {
+          "start": 1.7,
+          "end": 3.0
+        },
+        {
+          "start": 3.4,
+          "end": 4.7
+        },
+        {
+          "start": 5.1,
+          "end": 6.3999999999999995
+        },
+        {
+          "start": 6.8,
+          "end": 8.1
+        },
+        {
+          "start": 8.5,
+          "end": 9.8
+        },
+        {
+          "start": 10.2,
+          "end": 11.5
+        },
+        {
+          "start": 11.9,
+          "end": 13.200000000000001
+        }
+      ],
+      "asrTexts": [
+        "word0",
+        "noise",
+        "noise",
+        "noise",
+        "noise",
+        "noise",
+        "noise",
+        "noise"
+      ],
+      "expected": [
+        {
+          "i": 1,
+          "start": 0.0,
+          "end": 1.3,
+          "text": "word0"
+        },
+        {
+          "i": 2,
+          "start": 1.7,
+          "end": 3.0,
+          "text": "word1"
+        },
+        {
+          "i": 3,
+          "start": 3.4,
+          "end": 4.7,
+          "text": "word2"
+        },
+        {
+          "i": 4,
+          "start": 5.1,
+          "end": 6.4,
+          "text": "word3"
+        },
+        {
+          "i": 5,
+          "start": 6.8,
+          "end": 8.1,
+          "text": "word4"
+        },
+        {
+          "i": 6,
+          "start": 8.5,
+          "end": 9.8,
+          "text": "word5"
+        },
+        {
+          "i": 7,
+          "start": 10.2,
+          "end": 11.5,
+          "text": "word6"
+        },
+        {
+          "i": 8,
+          "start": 11.9,
+          "end": 13.2,
+          "text": "word7"
+        }
+      ]
+    },
+    {
+      "name": "anchor threshold 8 sentences 2 matches",
+      "sentences": [
+        "word0",
+        "word1",
+        "word2",
+        "word3",
+        "word4",
+        "word5",
+        "word6",
+        "word7"
+      ],
+      "segs": [
+        {
+          "start": 0.0,
+          "end": 1.3
+        },
+        {
+          "start": 1.7,
+          "end": 3.0
+        },
+        {
+          "start": 3.4,
+          "end": 4.7
+        },
+        {
+          "start": 5.1,
+          "end": 6.3999999999999995
+        },
+        {
+          "start": 6.8,
+          "end": 8.1
+        },
+        {
+          "start": 8.5,
+          "end": 9.8
+        },
+        {
+          "start": 10.2,
+          "end": 11.5
+        },
+        {
+          "start": 11.9,
+          "end": 13.200000000000001
+        }
+      ],
+      "asrTexts": [
+        "word0",
+        "word1",
+        "noise",
+        "noise",
+        "noise",
+        "noise",
+        "noise",
+        "noise"
+      ],
+      "expected": [
+        {
+          "i": 1,
+          "start": 0.65,
+          "end": 1.25,
+          "text": "word0"
+        },
+        {
+          "i": 2,
+          "start": 2.35,
+          "end": 2.95,
+          "text": "word1"
+        },
+        {
+          "i": 3,
+          "start": 2.95,
+          "end": 4.158,
+          "text": "word2"
+        },
+        {
+          "i": 4,
+          "start": 4.158,
+          "end": 5.967,
+          "text": "word3"
+        },
+        {
+          "i": 5,
+          "start": 5.967,
+          "end": 7.775,
+          "text": "word4"
+        },
+        {
+          "i": 6,
+          "start": 7.775,
+          "end": 9.583,
+          "text": "word5"
+        },
+        {
+          "i": 7,
+          "start": 9.583,
+          "end": 11.392,
+          "text": "word6"
+        },
+        {
+          "i": 8,
+          "start": 11.392,
+          "end": 13.2,
+          "text": "word7"
+        }
+      ]
+    },
+    {
+      "name": "anchor threshold 9 sentences 1 matches",
+      "sentences": [
+        "word0",
+        "word1",
+        "word2",
+        "word3",
+        "word4",
+        "word5",
+        "word6",
+        "word7",
+        "word8"
+      ],
+      "segs": [
+        {
+          "start": 0.0,
+          "end": 1.3
+        },
+        {
+          "start": 1.7,
+          "end": 3.0
+        },
+        {
+          "start": 3.4,
+          "end": 4.7
+        },
+        {
+          "start": 5.1,
+          "end": 6.3999999999999995
+        },
+        {
+          "start": 6.8,
+          "end": 8.1
+        },
+        {
+          "start": 8.5,
+          "end": 9.8
+        },
+        {
+          "start": 10.2,
+          "end": 11.5
+        },
+        {
+          "start": 11.9,
+          "end": 13.200000000000001
+        },
+        {
+          "start": 13.6,
+          "end": 14.9
+        }
+      ],
+      "asrTexts": [
+        "word0",
+        "noise",
+        "noise",
+        "noise",
+        "noise",
+        "noise",
+        "noise",
+        "noise",
+        "noise"
+      ],
+      "expected": [
+        {
+          "i": 1,
+          "start": 0.0,
+          "end": 1.3,
+          "text": "word0"
+        },
+        {
+          "i": 2,
+          "start": 1.7,
+          "end": 3.0,
+          "text": "word1"
+        },
+        {
+          "i": 3,
+          "start": 3.4,
+          "end": 4.7,
+          "text": "word2"
+        },
+        {
+          "i": 4,
+          "start": 5.1,
+          "end": 6.4,
+          "text": "word3"
+        },
+        {
+          "i": 5,
+          "start": 6.8,
+          "end": 8.1,
+          "text": "word4"
+        },
+        {
+          "i": 6,
+          "start": 8.5,
+          "end": 9.8,
+          "text": "word5"
+        },
+        {
+          "i": 7,
+          "start": 10.2,
+          "end": 11.5,
+          "text": "word6"
+        },
+        {
+          "i": 8,
+          "start": 11.9,
+          "end": 13.2,
+          "text": "word7"
+        },
+        {
+          "i": 9,
+          "start": 13.6,
+          "end": 14.9,
+          "text": "word8"
+        }
+      ]
+    },
+    {
+      "name": "anchor threshold 9 sentences 2 matches",
+      "sentences": [
+        "word0",
+        "word1",
+        "word2",
+        "word3",
+        "word4",
+        "word5",
+        "word6",
+        "word7",
+        "word8"
+      ],
+      "segs": [
+        {
+          "start": 0.0,
+          "end": 1.3
+        },
+        {
+          "start": 1.7,
+          "end": 3.0
+        },
+        {
+          "start": 3.4,
+          "end": 4.7
+        },
+        {
+          "start": 5.1,
+          "end": 6.3999999999999995
+        },
+        {
+          "start": 6.8,
+          "end": 8.1
+        },
+        {
+          "start": 8.5,
+          "end": 9.8
+        },
+        {
+          "start": 10.2,
+          "end": 11.5
+        },
+        {
+          "start": 11.9,
+          "end": 13.200000000000001
+        },
+        {
+          "start": 13.6,
+          "end": 14.9
+        }
+      ],
+      "asrTexts": [
+        "word0",
+        "word1",
+        "noise",
+        "noise",
+        "noise",
+        "noise",
+        "noise",
+        "noise",
+        "noise"
+      ],
+      "expected": [
+        {
+          "i": 1,
+          "start": 0.65,
+          "end": 1.25,
+          "text": "word0"
+        },
+        {
+          "i": 2,
+          "start": 2.35,
+          "end": 2.95,
+          "text": "word1"
+        },
+        {
+          "i": 3,
+          "start": 2.95,
+          "end": 4.143,
+          "text": "word2"
+        },
+        {
+          "i": 4,
+          "start": 4.143,
+          "end": 5.936,
+          "text": "word3"
+        },
+        {
+          "i": 5,
+          "start": 5.936,
+          "end": 7.729,
+          "text": "word4"
+        },
+        {
+          "i": 6,
+          "start": 7.729,
+          "end": 9.521,
+          "text": "word5"
+        },
+        {
+          "i": 7,
+          "start": 9.521,
+          "end": 11.314,
+          "text": "word6"
+        },
+        {
+          "i": 8,
+          "start": 11.314,
+          "end": 13.2,
+          "text": "word7"
+        },
+        {
+          "i": 9,
+          "start": 13.6,
+          "end": 14.9,
+          "text": "word8"
+        }
+      ]
+    },
+    {
+      "name": "repeated tokens with autojunk disabled",
+      "sentences": [
+        "xin xin xin xin xin xin xin xin xin xin xin xin xin xin xin xin xin xin xin xin xin xin xin xin xin xin xin xin xin xin xin xin xin xin xin xin xin xin xin xin xin xin xin xin xin xin xin xin xin xin xin xin xin xin xin xin xin xin xin xin xin xin xin xin xin xin xin xin xin xin xin xin xin xin xin xin xin xin xin xin xin xin xin xin xin xin xin xin xin xin xin xin xin xin xin xin xin xin xin xin xin xin xin xin xin xin xin xin xin xin xin xin xin xin xin xin xin xin xin xin ",
+        "xin xin xin xin xin xin xin xin xin xin xin xin xin xin xin xin xin xin xin xin xin xin xin xin xin xin xin xin xin xin xin xin xin xin xin xin xin xin xin xin xin xin xin xin xin xin xin xin xin xin xin xin xin xin xin xin xin xin xin xin xin xin xin xin xin xin xin xin xin xin xin xin xin xin xin xin xin xin xin xin xin xin xin xin xin xin xin xin xin xin xin xin xin xin xin xin xin xin xin xin xin xin xin xin xin xin xin xin xin xin xin xin xin xin xin xin xin xin xin xin ",
+        "chao"
+      ],
+      "segs": [
+        {
+          "start": 0.25,
+          "end": 12
+        },
+        {
+          "start": 14,
+          "end": 27
+        },
+        {
+          "start": 30,
+          "end": 31
+        }
+      ],
+      "asrTexts": [
+        "xin xin xin xin xin xin xin xin xin xin xin xin xin xin xin xin xin xin xin xin xin xin xin xin xin xin xin xin xin xin xin xin xin xin xin xin xin xin xin xin xin xin xin xin xin xin xin xin xin xin xin xin xin xin xin xin xin xin xin xin xin xin xin xin xin xin xin xin xin xin xin xin xin xin xin xin xin xin xin xin xin xin xin xin xin xin xin xin xin xin xin xin xin xin xin xin xin xin xin xin xin xin xin xin xin xin xin xin xin xin xin xin xin xin xin xin xin xin xin xin ",
+        "xin xin xin xin xin xin xin xin xin xin xin xin xin xin xin xin xin xin xin xin xin xin xin xin xin xin xin xin xin xin xin xin xin xin xin xin xin xin xin xin xin xin xin xin xin xin xin xin xin xin xin xin xin xin xin xin xin xin xin xin xin xin xin xin xin xin xin xin xin xin xin xin xin xin xin xin xin xin xin xin xin xin xin xin xin xin xin xin xin xin xin xin xin xin xin xin xin xin xin xin xin xin xin xin xin xin xin xin xin xin xin xin xin xin xin xin xin xin xin xin ",
+        "chao"
+      ],
+      "expected": [
+        {
+          "i": 1,
+          "start": 0.25,
+          "end": 12,
+          "text": "xin xin xin xin xin xin xin xin xin xin xin xin xin xin xin xin xin xin xin xin xin xin xin xin xin xin xin xin xin xin xin xin xin xin xin xin xin xin xin xin xin xin xin xin xin xin xin xin xin xin xin xin xin xin xin xin xin xin xin xin xin xin xin xin xin xin xin xin xin xin xin xin xin xin xin "
+        },
+        {
+          "i": 2,
+          "start": 14,
+          "end": 27,
+          "text": "xin xin xin xin xin xin xin xin xin xin xin xin xin xin xin xin xin xin xin xin xin xin xin xin xin xin xin xin xin xin xin xin xin xin xin xin xin xin xin xin xin xin xin xin xin xin xin xin xin xin xin xin xin xin xin xin xin xin xin xin xin xin xin xin xin xin xin xin xin xin xin xin xin xin xin "
+        },
+        {
+          "i": 3,
+          "start": 30,
+          "end": 31,
+          "text": "chao"
+        }
+      ]
+    },
+    {
+      "name": "tiny fractional millisecond boundaries",
+      "sentences": [
+        "a",
+        "b",
+        "c"
+      ],
+      "segs": [
+        {
+          "start": 0.0625,
+          "end": 0.6875
+        },
+        {
+          "start": 1.0005,
+          "end": 1.6015
+        },
+        {
+          "start": 2.0005,
+          "end": 2.6005
+        }
+      ],
+      "asrTexts": [
+        "a",
+        "b",
+        "c"
+      ],
+      "expected": [
+        {
+          "i": 1,
+          "start": 0.062,
+          "end": 0.688,
+          "text": "a"
+        },
+        {
+          "i": 2,
+          "start": 1.0,
+          "end": 1.601,
+          "text": "b"
+        },
+        {
+          "i": 3,
+          "start": 2.001,
+          "end": 2.601,
+          "text": "c"
+        }
+      ]
+    },
+    {
+      "name": "seeded source replay 0",
+      "sentences": [
+        "bạn xin chào đây bạn",
+        "abc-def 123 abc-def",
+        "bạn 😀",
+        "123 đây abc-def",
+        "abc-def",
+        "xin abc-def xin",
+        "chào 123 123 chào 123"
+      ],
+      "segs": [
+        {
+          "start": 1.7,
+          "end": 2.1
+        },
+        {
+          "start": 2.1,
+          "end": 3.6
+        },
+        {
+          "start": 3.7,
+          "end": 4.5
+        },
+        {
+          "start": 5.0,
+          "end": 5.1
+        },
+        {
+          "start": 6.8,
+          "end": 8.3
+        },
+        {
+          "start": 8.8,
+          "end": 8.9
+        },
+        {
+          "start": 10.6,
+          "end": 11.0
+        },
+        {
+          "start": 11.0,
+          "end": 14.0
+        },
+        {
+          "start": 14.0,
+          "end": 14.8
+        }
+      ],
+      "expected": [
+        {
+          "i": 1,
+          "start": 1.7,
+          "end": 3.6,
+          "text": "bạn xin chào đây bạn"
+        },
+        {
+          "i": 2,
+          "start": 3.7,
+          "end": 6.8,
+          "text": "abc-def 123 abc-def"
+        },
+        {
+          "i": 3,
+          "start": 6.8,
+          "end": 7.686,
+          "text": "bạn 😀"
+        },
+        {
+          "i": 4,
+          "start": 7.686,
+          "end": 11.0,
+          "text": "123 đây abc-def"
+        },
+        {
+          "i": 5,
+          "start": 11.0,
+          "end": 11.6,
+          "text": "abc-def"
+        },
+        {
+          "i": 6,
+          "start": 11.6,
+          "end": 12.752,
+          "text": "xin abc-def xin"
+        },
+        {
+          "i": 7,
+          "start": 12.752,
+          "end": 14.8,
+          "text": "chào 123 123 chào 123"
+        }
+      ]
+    },
+    {
+      "name": "seeded source replay 1",
+      "sentences": [
+        "abc-def bạn abc-def abc-def xin",
+        "bạn 😀",
+        "😀 đây đây abc-def",
+        "abc-def xin 123 abc-def bạn",
+        "đây",
+        "đây abc-def 😀 123 đây",
+        "xin bạn bạn 😀 abc-def",
+        "bạn 😀 abc-def chào 123 123",
+        "xin 123 abc-def đây"
+      ],
+      "segs": [
+        {
+          "start": 0.1,
+          "end": 0.9
+        },
+        {
+          "start": 1.0,
+          "end": 1.8
+        }
+      ],
+      "asrTexts": [
+        "đây abc-def 😀 123 đây",
+        "xin 123 abc-def đây"
+      ],
+      "expected": [
+        {
+          "i": 1,
+          "start": 0.1,
+          "end": 0.7,
+          "text": "abc-def bạn abc-def abc-def xin"
+        },
+        {
+          "i": 2,
+          "start": 0.7,
+          "end": 1.3,
+          "text": "bạn 😀"
+        },
+        {
+          "i": 3,
+          "start": 1.3,
+          "end": 1.9,
+          "text": "😀 đây đây abc-def"
+        },
+        {
+          "i": 4,
+          "start": 1.9,
+          "end": 2.5,
+          "text": "abc-def xin 123 abc-def bạn"
+        },
+        {
+          "i": 5,
+          "start": 2.5,
+          "end": 3.1,
+          "text": "đây"
+        },
+        {
+          "i": 6,
+          "start": 3.1,
+          "end": 3.7,
+          "text": "đây abc-def 😀 123 đây"
+        },
+        {
+          "i": 7,
+          "start": 3.7,
+          "end": 4.3,
+          "text": "xin bạn bạn 😀 abc-def"
+        },
+        {
+          "i": 8,
+          "start": 4.3,
+          "end": 4.9,
+          "text": "bạn 😀 abc-def chào 123 123"
+        },
+        {
+          "i": 9,
+          "start": 4.9,
+          "end": 5.5,
+          "text": "xin 123 abc-def đây"
+        }
+      ]
+    },
+    {
+      "name": "seeded source replay 2",
+      "sentences": [
+        "chào",
+        "bạn bạn",
+        "bạn chào đây",
+        "xin bạn abc-def abc-def đây xin",
+        "chào xin đây xin chào",
+        "đây đây xin xin chào",
+        "bạn xin",
+        "bạn 😀",
+        "đây 123 bạn abc-def 123 123",
+        "đây 😀 abc-def chào 123 bạn",
+        "chào",
+        "bạn xin"
+      ],
+      "segs": [
+        {
+          "start": 0,
+          "end": 0.8
+        },
+        {
+          "start": 2.5,
+          "end": 4.0
+        },
+        {
+          "start": 4.5,
+          "end": 4.6
+        },
+        {
+          "start": 4.6,
+          "end": 6.1
+        },
+        {
+          "start": 7.8,
+          "end": 7.8999999999999995
+        },
+        {
+          "start": 9.6,
+          "end": 12.6
+        },
+        {
+          "start": 13.1,
+          "end": 16.1
+        },
+        {
+          "start": 16.1,
+          "end": 16.5
+        },
+        {
+          "start": 18.2,
+          "end": 18.3
+        },
+        {
+          "start": 18.3,
+          "end": 19.1
+        },
+        {
+          "start": 19.6,
+          "end": 22.6
+        }
+      ],
+      "expected": [
+        {
+          "i": 1,
+          "start": 0.0,
+          "end": 0.6,
+          "text": "chào"
+        },
+        {
+          "i": 2,
+          "start": 0.6,
+          "end": 2.5,
+          "text": "bạn bạn"
+        },
+        {
+          "i": 3,
+          "start": 2.5,
+          "end": 3.9,
+          "text": "bạn chào đây"
+        },
+        {
+          "i": 4,
+          "start": 3.9,
+          "end": 9.6,
+          "text": "xin bạn abc-def abc-def đây xin"
+        },
+        {
+          "i": 5,
+          "start": 9.6,
+          "end": 11.833,
+          "text": "chào xin đây xin chào"
+        },
+        {
+          "i": 6,
+          "start": 11.833,
+          "end": 14.167,
+          "text": "đây đây xin xin chào"
+        },
+        {
+          "i": 7,
+          "start": 14.167,
+          "end": 14.9,
+          "text": "bạn xin"
+        },
+        {
+          "i": 8,
+          "start": 14.9,
+          "end": 15.5,
+          "text": "bạn 😀"
+        },
+        {
+          "i": 9,
+          "start": 15.5,
+          "end": 19.6,
+          "text": "đây 123 bạn abc-def 123 123"
+        },
+        {
+          "i": 10,
+          "start": 19.6,
+          "end": 21.5,
+          "text": "đây 😀 abc-def chào 123 bạn"
+        },
+        {
+          "i": 11,
+          "start": 21.5,
+          "end": 22.1,
+          "text": "chào"
+        },
+        {
+          "i": 12,
+          "start": 22.1,
+          "end": 22.7,
+          "text": "bạn xin"
+        }
+      ]
+    },
+    {
+      "name": "seeded source replay 3",
+      "sentences": [
+        "đây chào chào đây",
+        "đây abc-def đây",
+        "😀 chào 123",
+        "😀 xin abc-def abc-def bạn bạn",
+        "xin đây",
+        "😀 xin 😀 chào 😀 chào",
+        "chào abc-def 123",
+        "abc-def xin bạn đây đây",
+        "đây đây đây",
+        "đây abc-def abc-def",
+        "123 bạn xin abc-def 123 abc-def",
+        "chào"
+      ],
+      "segs": [
+        {
+          "start": 0.1,
+          "end": 0.9
+        }
+      ],
+      "asrTexts": [
+        "đây abc-def đây"
+      ],
+      "expected": [
+        {
+          "i": 1,
+          "start": 0.1,
+          "end": 0.7,
+          "text": "đây chào chào đây"
+        },
+        {
+          "i": 2,
+          "start": 0.7,
+          "end": 1.3,
+          "text": "đây abc-def đây"
+        },
+        {
+          "i": 3,
+          "start": 1.3,
+          "end": 1.9,
+          "text": "😀 chào 123"
+        },
+        {
+          "i": 4,
+          "start": 1.9,
+          "end": 2.5,
+          "text": "😀 xin abc-def abc-def bạn bạn"
+        },
+        {
+          "i": 5,
+          "start": 2.5,
+          "end": 3.1,
+          "text": "xin đây"
+        },
+        {
+          "i": 6,
+          "start": 3.1,
+          "end": 3.7,
+          "text": "😀 xin 😀 chào 😀 chào"
+        },
+        {
+          "i": 7,
+          "start": 3.7,
+          "end": 4.3,
+          "text": "chào abc-def 123"
+        },
+        {
+          "i": 8,
+          "start": 4.3,
+          "end": 4.9,
+          "text": "abc-def xin bạn đây đây"
+        },
+        {
+          "i": 9,
+          "start": 4.9,
+          "end": 5.5,
+          "text": "đây đây đây"
+        },
+        {
+          "i": 10,
+          "start": 5.5,
+          "end": 6.1,
+          "text": "đây abc-def abc-def"
+        },
+        {
+          "i": 11,
+          "start": 6.1,
+          "end": 6.7,
+          "text": "123 bạn xin abc-def 123 abc-def"
+        },
+        {
+          "i": 12,
+          "start": 6.7,
+          "end": 7.3,
+          "text": "chào"
+        }
+      ]
+    },
+    {
+      "name": "seeded source replay 4",
+      "sentences": [
+        "đây abc-def",
+        "abc-def chào đây",
+        "chào 123 123 xin đây",
+        "😀"
+      ],
+      "segs": [
+        {
+          "start": 0.1,
+          "end": 0.2
+        },
+        {
+          "start": 1.9,
+          "end": 2.7
+        },
+        {
+          "start": 4.4,
+          "end": 4.5
+        },
+        {
+          "start": 5.0,
+          "end": 5.1
+        },
+        {
+          "start": 6.8,
+          "end": 6.8999999999999995
+        },
+        {
+          "start": 6.999999999999999,
+          "end": 10.0
+        },
+        {
+          "start": 11.7,
+          "end": 13.2
+        },
+        {
+          "start": 13.2,
+          "end": 13.6
+        },
+        {
+          "start": 14.1,
+          "end": 17.1
+        },
+        {
+          "start": 18.8,
+          "end": 19.6
+        }
+      ],
+      "expected": [
+        {
+          "i": 1,
+          "start": 0.1,
+          "end": 7.6,
+          "text": "đây abc-def"
+        },
+        {
+          "i": 2,
+          "start": 7.6,
+          "end": 11.7,
+          "text": "abc-def chào đây"
+        },
+        {
+          "i": 3,
+          "start": 11.7,
+          "end": 17.0,
+          "text": "chào 123 123 xin đây"
+        },
+        {
+          "i": 4,
+          "start": 17.0,
+          "end": 19.6,
+          "text": "😀"
+        }
+      ]
+    },
+    {
+      "name": "seeded source replay 5",
+      "sentences": [
+        "123 bạn chào xin xin",
+        "bạn bạn",
+        "đây bạn",
+        "xin bạn",
+        "😀 chào abc-def đây",
+        "abc-def đây"
+      ],
+      "segs": [
+        {
+          "start": 0,
+          "end": 0.4
+        },
+        {
+          "start": 2.1,
+          "end": 2.9000000000000004
+        },
+        {
+          "start": 2.9000000000000004,
+          "end": 4.4
+        },
+        {
+          "start": 6.1000000000000005,
+          "end": 6.9
+        },
+        {
+          "start": 7.0,
+          "end": 10.0
+        },
+        {
+          "start": 10.0,
+          "end": 10.4
+        },
+        {
+          "start": 10.4,
+          "end": 10.5
+        },
+        {
+          "start": 10.5,
+          "end": 10.9
+        },
+        {
+          "start": 11.0,
+          "end": 11.4
+        },
+        {
+          "start": 11.9,
+          "end": 12.700000000000001
+        }
+      ],
+      "asrTexts": [
+        "",
+        "đây bạn",
+        "😀 chào abc-def đây",
+        "",
+        "đây bạn",
+        "đây bạn",
+        "",
+        "😀 chào abc-def đây",
+        "😀 chào abc-def đây",
+        "đây bạn"
+      ],
+      "expected": [
+        {
+          "i": 1,
+          "start": 0.0,
+          "end": 1.643,
+          "text": "123 bạn chào xin xin"
+        },
+        {
+          "i": 2,
+          "start": 2.1,
+          "end": 2.7,
+          "text": "bạn bạn"
+        },
+        {
+          "i": 3,
+          "start": 2.7,
+          "end": 3.3,
+          "text": "đây bạn"
+        },
+        {
+          "i": 4,
+          "start": 3.3,
+          "end": 3.9,
+          "text": "xin bạn"
+        },
+        {
+          "i": 5,
+          "start": 3.9,
+          "end": 4.5,
+          "text": "😀 chào abc-def đây"
+        },
+        {
+          "i": 6,
+          "start": 10.5,
+          "end": 11.1,
+          "text": "abc-def đây"
+        }
+      ]
+    },
+    {
+      "name": "seeded source replay 6",
+      "sentences": [
+        "😀 abc-def 😀 bạn",
+        "abc-def abc-def xin 😀",
+        "123 xin chào đây xin 123",
+        "123 xin đây",
+        "bạn 😀 bạn chào",
+        "bạn chào",
+        "bạn bạn bạn đây"
+      ],
+      "segs": [
+        {
+          "start": 0.5,
+          "end": 3.5
+        },
+        {
+          "start": 3.6,
+          "end": 3.7
+        },
+        {
+          "start": 3.8000000000000003,
+          "end": 5.300000000000001
+        },
+        {
+          "start": 5.300000000000001,
+          "end": 5.700000000000001
+        },
+        {
+          "start": 5.800000000000001,
+          "end": 6.6000000000000005
+        },
+        {
+          "start": 8.3,
+          "end": 8.700000000000001
+        },
+        {
+          "start": 10.4,
+          "end": 11.9
+        }
+      ],
+      "expected": [
+        {
+          "i": 1,
+          "start": 0.5,
+          "end": 1.17,
+          "text": "😀 abc-def 😀 bạn"
+        },
+        {
+          "i": 2,
+          "start": 1.17,
+          "end": 2.174,
+          "text": "abc-def abc-def xin 😀"
+        },
+        {
+          "i": 3,
+          "start": 2.174,
+          "end": 4.383,
+          "text": "123 xin chào đây xin 123"
+        },
+        {
+          "i": 4,
+          "start": 4.383,
+          "end": 5.3,
+          "text": "123 xin đây"
+        },
+        {
+          "i": 5,
+          "start": 5.3,
+          "end": 6.491,
+          "text": "bạn 😀 bạn chào"
+        },
+        {
+          "i": 6,
+          "start": 6.491,
+          "end": 10.4,
+          "text": "bạn chào"
+        },
+        {
+          "i": 7,
+          "start": 10.4,
+          "end": 11.9,
+          "text": "bạn bạn bạn đây"
+        }
+      ]
+    },
+    {
+      "name": "seeded source replay 7",
+      "sentences": [
+        "😀 123 123 đây",
+        "đây bạn bạn đây đây",
+        "đây chào 😀 123",
+        "abc-def abc-def"
+      ],
+      "segs": [
+        {
+          "start": 0.1,
+          "end": 3.1
+        },
+        {
+          "start": 3.6,
+          "end": 3.7
+        },
+        {
+          "start": 3.8000000000000003,
+          "end": 3.9000000000000004
+        },
+        {
+          "start": 3.9000000000000004,
+          "end": 4.0
+        },
+        {
+          "start": 4.5,
+          "end": 4.9
+        },
+        {
+          "start": 4.9,
+          "end": 7.9
+        },
+        {
+          "start": 8.0,
+          "end": 8.8
+        },
+        {
+          "start": 8.9,
+          "end": 11.9
+        },
+        {
+          "start": 11.9,
+          "end": 12.3
+        },
+        {
+          "start": 12.8,
+          "end": 12.9
+        }
+      ],
+      "asrTexts": [
+        "abc-def abc-def",
+        "đây bạn bạn đây đây",
+        "",
+        "abc-def abc-def",
+        "abc-def abc-def",
+        "",
+        "abc-def abc-def",
+        "đây bạn bạn đây đây",
+        "",
+        "abc-def abc-def"
+      ],
+      "expected": [
+        {
+          "i": 1,
+          "start": 0.1,
+          "end": 3.6,
+          "text": "😀 123 123 đây"
+        },
+        {
+          "i": 2,
+          "start": 3.6,
+          "end": 4.2,
+          "text": "đây bạn bạn đây đây"
+        },
+        {
+          "i": 3,
+          "start": 4.2,
+          "end": 4.8,
+          "text": "đây chào 😀 123"
+        },
+        {
+          "i": 4,
+          "start": 4.8,
+          "end": 5.4,
+          "text": "abc-def abc-def"
+        }
+      ]
+    },
+    {
+      "name": "seeded source replay 8",
+      "sentences": [
+        "xin",
+        "abc-def xin đây chào",
+        "chào xin abc-def 😀 123 abc-def",
+        "😀 bạn abc-def xin",
+        "bạn 123"
+      ],
+      "segs": [
+        {
+          "start": 0.1,
+          "end": 0.5
+        },
+        {
+          "start": 1.0,
+          "end": 1.8
+        },
+        {
+          "start": 1.8,
+          "end": 1.9000000000000001
+        },
+        {
+          "start": 2.4000000000000004,
+          "end": 3.2
+        },
+        {
+          "start": 4.9,
+          "end": 6.4
+        },
+        {
+          "start": 6.4,
+          "end": 7.2
+        },
+        {
+          "start": 7.2,
+          "end": 7.6000000000000005
+        },
+        {
+          "start": 7.7,
+          "end": 8.1
+        },
+        {
+          "start": 8.2,
+          "end": 9.7
+        },
+        {
+          "start": 9.799999999999999,
+          "end": 11.299999999999999
+        }
+      ],
+      "expected": [
+        {
+          "i": 1,
+          "start": 0.1,
+          "end": 1.0,
+          "text": "xin"
+        },
+        {
+          "i": 2,
+          "start": 1.0,
+          "end": 5.533,
+          "text": "abc-def xin đây chào"
+        },
+        {
+          "i": 3,
+          "start": 5.533,
+          "end": 8.1,
+          "text": "chào xin abc-def 😀 123 abc-def"
+        },
+        {
+          "i": 4,
+          "start": 8.2,
+          "end": 9.8,
+          "text": "😀 bạn abc-def xin"
+        },
+        {
+          "i": 5,
+          "start": 9.8,
+          "end": 11.3,
+          "text": "bạn 123"
+        }
+      ]
+    },
+    {
+      "name": "seeded source replay 9",
+      "sentences": [
+        "đây xin đây abc-def 123 😀",
+        "chào chào abc-def xin",
+        "😀 bạn đây",
+        "bạn 123 bạn abc-def"
+      ],
+      "segs": [
+        {
+          "start": 0.1,
+          "end": 0.2
+        },
+        {
+          "start": 0.2,
+          "end": 1.0
+        },
+        {
+          "start": 1.5,
+          "end": 4.5
+        },
+        {
+          "start": 4.5,
+          "end": 5.3
+        },
+        {
+          "start": 5.8,
+          "end": 5.8999999999999995
+        },
+        {
+          "start": 5.999999999999999,
+          "end": 6.099999999999999
+        },
+        {
+          "start": 6.599999999999999,
+          "end": 6.999999999999999
+        },
+        {
+          "start": 7.499999999999999,
+          "end": 7.599999999999999
+        },
+        {
+          "start": 9.299999999999999,
+          "end": 9.7
+        },
+        {
+          "start": 10.2,
+          "end": 10.6
+        }
+      ],
+      "asrTexts": [
+        "",
+        "😀 bạn đây",
+        "bạn 123 bạn abc-def",
+        "",
+        "",
+        "",
+        "noise",
+        "😀 bạn đây",
+        "bạn 123 bạn abc-def",
+        "😀 bạn đây"
+      ],
+      "expected": [
+        {
+          "i": 1,
+          "start": 0.1,
+          "end": 0.7,
+          "text": "đây xin đây abc-def 123 😀"
+        },
+        {
+          "i": 2,
+          "start": 0.7,
+          "end": 1.3,
+          "text": "chào chào abc-def xin"
+        },
+        {
+          "i": 3,
+          "start": 1.3,
+          "end": 1.9,
+          "text": "😀 bạn đây"
+        },
+        {
+          "i": 4,
+          "start": 1.9,
+          "end": 4.5,
+          "text": "bạn 123 bạn abc-def"
+        }
+      ]
+    },
+    {
+      "name": "seeded source replay 10",
+      "sentences": [
+        "bạn xin xin bạn bạn 123",
+        "xin đây đây 😀",
+        "abc-def 123 123 bạn chào đây"
+      ],
+      "segs": [
+        {
+          "start": 0,
+          "end": 0.1
+        },
+        {
+          "start": 0.2,
+          "end": 0.30000000000000004
+        },
+        {
+          "start": 0.8,
+          "end": 0.9
+        },
+        {
+          "start": 2.6,
+          "end": 2.7
+        },
+        {
+          "start": 2.8000000000000003,
+          "end": 4.300000000000001
+        },
+        {
+          "start": 4.4,
+          "end": 4.5
+        },
+        {
+          "start": 4.6,
+          "end": 5.0
+        },
+        {
+          "start": 5.0,
+          "end": 6.5
+        }
+      ],
+      "expected": [
+        {
+          "i": 1,
+          "start": 0.0,
+          "end": 4.3,
+          "text": "bạn xin xin bạn bạn 123"
+        },
+        {
+          "i": 2,
+          "start": 4.4,
+          "end": 5.0,
+          "text": "xin đây đây 😀"
+        },
+        {
+          "i": 3,
+          "start": 5.0,
+          "end": 6.5,
+          "text": "abc-def 123 123 bạn chào đây"
+        }
+      ]
+    },
+    {
+      "name": "seeded source replay 11",
+      "sentences": [
+        "bạn 123 😀 chào",
+        "bạn 😀 chào bạn chào",
+        "bạn",
+        "123 abc-def abc-def 123 xin",
+        "😀 đây chào 😀 xin chào"
+      ],
+      "segs": [
+        {
+          "start": 0.1,
+          "end": 0.2
+        },
+        {
+          "start": 0.7,
+          "end": 2.2
+        },
+        {
+          "start": 3.9000000000000004,
+          "end": 4.7
+        },
+        {
+          "start": 6.4,
+          "end": 7.2
+        },
+        {
+          "start": 7.7,
+          "end": 7.8
+        },
+        {
+          "start": 9.5,
+          "end": 10.3
+        },
+        {
+          "start": 10.8,
+          "end": 10.9
+        },
+        {
+          "start": 11.0,
+          "end": 11.1
+        },
+        {
+          "start": 12.799999999999999,
+          "end": 15.799999999999999
+        }
+      ],
+      "asrTexts": [
+        "bạn 😀 chào bạn chào",
+        "noise",
+        "bạn 😀 chào bạn chào",
+        "😀 đây chào 😀 xin chào",
+        "noise",
+        "123 abc-def abc-def 123 xin",
+        "bạn 123 😀 chào",
+        "noise",
+        "noise"
+      ],
+      "expected": [
+        {
+          "i": 1,
+          "start": 0.1,
+          "end": 0.7,
+          "text": "bạn 123 😀 chào"
+        },
+        {
+          "i": 2,
+          "start": 0.7,
+          "end": 1.3,
+          "text": "bạn 😀 chào bạn chào"
+        },
+        {
+          "i": 3,
+          "start": 3.9,
+          "end": 4.5,
+          "text": "bạn"
+        },
+        {
+          "i": 4,
+          "start": 9.5,
+          "end": 10.3,
+          "text": "123 abc-def abc-def 123 xin"
+        },
+        {
+          "i": 5,
+          "start": 10.8,
+          "end": 11.4,
+          "text": "😀 đây chào 😀 xin chào"
+        }
+      ]
+    },
+    {
+      "name": "seeded source replay 12",
+      "sentences": [
+        "xin chào chào",
+        "chào chào chào 123",
+        "chào abc-def 123 😀 bạn chào",
+        "xin đây 😀 bạn abc-def",
+        "đây bạn chào abc-def xin đây",
+        "đây 123 bạn",
+        "abc-def đây",
+        "bạn abc-def",
+        "xin 😀",
+        "xin bạn abc-def bạn bạn"
+      ],
+      "segs": [
+        {
+          "start": 1.7,
+          "end": 4.7
+        },
+        {
+          "start": 4.7,
+          "end": 4.8
+        },
+        {
+          "start": 5.3,
+          "end": 5.3999999999999995
+        },
+        {
+          "start": 7.1,
+          "end": 10.1
+        }
+      ],
+      "expected": [
+        {
+          "i": 1,
+          "start": 1.7,
+          "end": 2.3,
+          "text": "xin chào chào"
+        },
+        {
+          "i": 2,
+          "start": 2.3,
+          "end": 2.94,
+          "text": "chào chào chào 123"
+        },
+        {
+          "i": 3,
+          "start": 2.94,
+          "end": 3.826,
+          "text": "chào abc-def 123 😀 bạn chào"
+        },
+        {
+          "i": 4,
+          "start": 3.826,
+          "end": 4.7,
+          "text": "xin đây 😀 bạn abc-def"
+        },
+        {
+          "i": 5,
+          "start": 4.7,
+          "end": 7.797,
+          "text": "đây bạn chào abc-def xin đây"
+        },
+        {
+          "i": 6,
+          "start": 7.797,
+          "end": 8.397,
+          "text": "đây 123 bạn"
+        },
+        {
+          "i": 7,
+          "start": 8.397,
+          "end": 8.997,
+          "text": "abc-def đây"
+        },
+        {
+          "i": 8,
+          "start": 8.997,
+          "end": 9.597,
+          "text": "bạn abc-def"
+        },
+        {
+          "i": 9,
+          "start": 9.597,
+          "end": 10.197,
+          "text": "xin 😀"
+        },
+        {
+          "i": 10,
+          "start": 10.197,
+          "end": 10.797,
+          "text": "xin bạn abc-def bạn bạn"
+        }
+      ]
+    },
+    {
+      "name": "seeded source replay 13",
+      "sentences": [
+        "đây đây abc-def 123 xin 😀",
+        "bạn 😀 đây đây đây",
+        "xin 😀 123 đây bạn",
+        "chào chào abc-def 😀 abc-def",
+        "😀 chào"
+      ],
+      "segs": [
+        {
+          "start": 0,
+          "end": 0.4
+        },
+        {
+          "start": 0.5,
+          "end": 1.3
+        },
+        {
+          "start": 3.0,
+          "end": 3.8
+        },
+        {
+          "start": 3.9,
+          "end": 5.4
+        },
+        {
+          "start": 5.9,
+          "end": 7.4
+        },
+        {
+          "start": 7.5,
+          "end": 8.3
+        },
+        {
+          "start": 8.4,
+          "end": 9.200000000000001
+        },
+        {
+          "start": 9.200000000000001,
+          "end": 10.000000000000002
+        },
+        {
+          "start": 10.000000000000002,
+          "end": 11.500000000000002
+        },
+        {
+          "start": 11.500000000000002,
+          "end": 11.900000000000002
+        }
+      ],
+      "asrTexts": [
+        "chào chào abc-def 😀 abc-def",
+        "chào chào abc-def 😀 abc-def",
+        "đây đây abc-def 123 xin 😀",
+        "xin 😀 123 đây bạn",
+        "đây đây abc-def 123 xin 😀",
+        "bạn 😀 đây đây đây",
+        "xin 😀 123 đây bạn",
+        "😀 chào",
+        "chào chào abc-def 😀 abc-def",
+        "noise"
+      ],
+      "expected": [
+        {
+          "i": 1,
+          "start": 5.9,
+          "end": 7.4,
+          "text": "đây đây abc-def 123 xin 😀"
+        },
+        {
+          "i": 2,
+          "start": 7.5,
+          "end": 8.3,
+          "text": "bạn 😀 đây đây đây"
+        },
+        {
+          "i": 3,
+          "start": 8.4,
+          "end": 9.2,
+          "text": "xin 😀 123 đây bạn"
+        },
+        {
+          "i": 4,
+          "start": 9.2,
+          "end": 11.5,
+          "text": "chào chào abc-def 😀 abc-def"
+        },
+        {
+          "i": 5,
+          "start": 11.5,
+          "end": 12.1,
+          "text": "😀 chào"
+        }
+      ]
+    },
+    {
+      "name": "seeded source replay 14",
+      "sentences": [
+        "xin bạn 😀 abc-def xin 123",
+        "bạn bạn 123 đây",
+        "xin",
+        "123 123 😀 😀 chào abc-def",
+        "xin"
+      ],
+      "segs": [
+        {
+          "start": 1.7,
+          "end": 2.1
+        },
+        {
+          "start": 2.1,
+          "end": 5.1
+        }
+      ],
+      "expected": [
+        {
+          "i": 1,
+          "start": 1.7,
+          "end": 2.833,
+          "text": "xin bạn 😀 abc-def xin 123"
+        },
+        {
+          "i": 2,
+          "start": 2.833,
+          "end": 3.74,
+          "text": "bạn bạn 123 đây"
+        },
+        {
+          "i": 3,
+          "start": 3.74,
+          "end": 4.34,
+          "text": "xin"
+        },
+        {
+          "i": 4,
+          "start": 4.34,
+          "end": 4.94,
+          "text": "123 123 😀 😀 chào abc-def"
+        },
+        {
+          "i": 5,
+          "start": 4.94,
+          "end": 5.54,
+          "text": "xin"
+        }
+      ]
+    },
+    {
+      "name": "seeded source replay 15",
+      "sentences": [
+        "😀 bạn",
+        "123 xin xin abc-def",
+        "abc-def"
+      ],
+      "segs": [
+        {
+          "start": 1.7,
+          "end": 3.2
+        },
+        {
+          "start": 4.9,
+          "end": 5.7
+        },
+        {
+          "start": 6.2,
+          "end": 7.0
+        },
+        {
+          "start": 7.5,
+          "end": 7.9
+        }
+      ],
+      "asrTexts": [
+        "123 xin xin abc-def",
+        "123 xin xin abc-def",
+        "123 xin xin abc-def",
+        "noise"
+      ],
+      "expected": [
+        {
+          "i": 1,
+          "start": 1.7,
+          "end": 2.3,
+          "text": "😀 bạn"
+        },
+        {
+          "i": 2,
+          "start": 2.3,
+          "end": 3.2,
+          "text": "123 xin xin abc-def"
+        },
+        {
+          "i": 3,
+          "start": 5.6,
+          "end": 6.2,
+          "text": "abc-def"
+        }
+      ]
+    },
+    {
+      "name": "seeded source replay 16",
+      "sentences": [
+        "😀 😀 xin",
+        "chào abc-def 123 chào",
+        "bạn đây đây 😀 123",
+        "xin 123 😀 123 xin",
+        "chào bạn 😀 chào xin",
+        "xin 123",
+        "abc-def đây đây",
+        "đây xin bạn xin đây 😀",
+        "chào chào đây xin abc-def chào",
+        "😀 😀 đây bạn 😀 bạn",
+        "chào đây xin bạn",
+        "chào bạn đây 123 đây abc-def"
+      ],
+      "segs": [
+        {
+          "start": 0.5,
+          "end": 1.3
+        },
+        {
+          "start": 1.8,
+          "end": 2.2
+        },
+        {
+          "start": 2.3000000000000003,
+          "end": 2.4000000000000004
+        },
+        {
+          "start": 4.1000000000000005,
+          "end": 7.1000000000000005
+        },
+        {
+          "start": 7.1000000000000005,
+          "end": 7.2
+        },
+        {
+          "start": 8.9,
+          "end": 9.700000000000001
+        },
+        {
+          "start": 10.200000000000001,
+          "end": 13.200000000000001
+        },
+        {
+          "start": 14.9,
+          "end": 15.0
+        }
+      ],
+      "expected": [
+        {
+          "i": 1,
+          "start": 0.5,
+          "end": 1.1,
+          "text": "😀 😀 xin"
+        },
+        {
+          "i": 2,
+          "start": 1.1,
+          "end": 1.8,
+          "text": "chào abc-def 123 chào"
+        },
+        {
+          "i": 3,
+          "start": 1.8,
+          "end": 4.1,
+          "text": "bạn đây đây 😀 123"
+        },
+        {
+          "i": 4,
+          "start": 4.1,
+          "end": 5.146,
+          "text": "xin 123 😀 123 xin"
+        },
+        {
+          "i": 5,
+          "start": 5.146,
+          "end": 5.867,
+          "text": "chào bạn 😀 chào xin"
+        },
+        {
+          "i": 6,
+          "start": 5.867,
+          "end": 6.467,
+          "text": "xin 123"
+        },
+        {
+          "i": 7,
+          "start": 6.467,
+          "end": 7.1,
+          "text": "abc-def đây đây"
+        },
+        {
+          "i": 8,
+          "start": 7.1,
+          "end": 8.9,
+          "text": "đây xin bạn xin đây 😀"
+        },
+        {
+          "i": 9,
+          "start": 8.9,
+          "end": 10.954,
+          "text": "chào chào đây xin abc-def chào"
+        },
+        {
+          "i": 10,
+          "start": 10.954,
+          "end": 11.554,
+          "text": "😀 😀 đây bạn 😀 bạn"
+        },
+        {
+          "i": 11,
+          "start": 11.554,
+          "end": 12.217,
+          "text": "chào đây xin bạn"
+        },
+        {
+          "i": 12,
+          "start": 12.217,
+          "end": 15.0,
+          "text": "chào bạn đây 123 đây abc-def"
+        }
+      ]
+    },
+    {
+      "name": "seeded source replay 17",
+      "sentences": [
+        "xin bạn 😀",
+        "😀 xin abc-def 😀 😀",
+        "abc-def bạn",
+        "bạn bạn chào xin",
+        "đây đây"
+      ],
+      "segs": [
+        {
+          "start": 0.1,
+          "end": 3.1
+        },
+        {
+          "start": 3.6,
+          "end": 4.4
+        },
+        {
+          "start": 6.1000000000000005,
+          "end": 9.100000000000001
+        },
+        {
+          "start": 10.8,
+          "end": 11.600000000000001
+        },
+        {
+          "start": 13.3,
+          "end": 16.3
+        },
+        {
+          "start": 16.400000000000002,
+          "end": 17.200000000000003
+        },
+        {
+          "start": 17.300000000000004,
+          "end": 17.700000000000003
+        },
+        {
+          "start": 17.800000000000004,
+          "end": 19.300000000000004
+        },
+        {
+          "start": 19.400000000000006,
+          "end": 22.400000000000006
+        },
+        {
+          "start": 22.400000000000006,
+          "end": 23.200000000000006
+        },
+        {
+          "start": 23.700000000000006,
+          "end": 25.200000000000006
+        }
+      ],
+      "asrTexts": [
+        "xin bạn 😀",
+        "đây đây",
+        "😀 xin abc-def 😀 😀",
+        "đây đây",
+        "😀 xin abc-def 😀 😀",
+        "đây đây",
+        "",
+        "bạn bạn chào xin",
+        "xin bạn 😀",
+        "xin bạn 😀",
+        "noise"
+      ],
+      "expected": [
+        {
+          "i": 1,
+          "start": 0.85,
+          "end": 2.35,
+          "text": "xin bạn 😀"
+        },
+        {
+          "i": 2,
+          "start": 6.85,
+          "end": 8.35,
+          "text": "😀 xin abc-def 😀 😀"
+        },
+        {
+          "i": 3,
+          "start": 15.55,
+          "end": 16.15,
+          "text": "abc-def bạn"
+        },
+        {
+          "i": 4,
+          "start": 17.8,
+          "end": 19.3,
+          "text": "bạn bạn chào xin"
+        },
+        {
+          "i": 5,
+          "start": 19.4,
+          "end": 25.2,
+          "text": "đây đây"
+        }
+      ]
+    },
+    {
+      "name": "seeded source replay 18",
+      "sentences": [
+        "abc-def chào"
+      ],
+      "segs": [
+        {
+          "start": 0,
+          "end": 0.4
+        },
+        {
+          "start": 0.5,
+          "end": 3.5
+        },
+        {
+          "start": 3.5,
+          "end": 6.5
+        },
+        {
+          "start": 6.6,
+          "end": 7.3999999999999995
+        },
+        {
+          "start": 7.8999999999999995,
+          "end": 8.299999999999999
+        },
+        {
+          "start": 9.999999999999998,
+          "end": 12.999999999999998
+        },
+        {
+          "start": 14.699999999999998,
+          "end": 15.499999999999998
+        }
+      ],
+      "expected": [
+        {
+          "i": 1,
+          "start": 0.0,
+          "end": 15.5,
+          "text": "abc-def chào"
+        }
+      ]
+    },
+    {
+      "name": "seeded source replay 19",
+      "sentences": [
+        "bạn",
+        "đây xin"
+      ],
+      "segs": [
+        {
+          "start": 0,
+          "end": 3
+        },
+        {
+          "start": 4.7,
+          "end": 7.7
+        },
+        {
+          "start": 9.4,
+          "end": 10.200000000000001
+        },
+        {
+          "start": 10.700000000000001,
+          "end": 11.500000000000002
+        },
+        {
+          "start": 11.500000000000002,
+          "end": 14.500000000000002
+        },
+        {
+          "start": 14.500000000000002,
+          "end": 15.300000000000002
+        },
+        {
+          "start": 15.300000000000002,
+          "end": 15.700000000000003
+        },
+        {
+          "start": 15.800000000000002,
+          "end": 18.800000000000004
+        },
+        {
+          "start": 20.500000000000004,
+          "end": 22.000000000000004
+        },
+        {
+          "start": 22.100000000000005,
+          "end": 22.200000000000006
+        },
+        {
+          "start": 22.300000000000008,
+          "end": 23.800000000000008
+        }
+      ],
+      "asrTexts": [
+        "bạn",
+        "đây xin",
+        "",
+        "bạn",
+        "bạn",
+        "đây xin",
+        "bạn",
+        "noise",
+        "bạn",
+        "noise",
+        ""
+      ],
+      "expected": [
+        {
+          "i": 1,
+          "start": 1.5,
+          "end": 2.1,
+          "text": "bạn"
+        },
+        {
+          "i": 2,
+          "start": 5.45,
+          "end": 6.95,
+          "text": "đây xin"
+        }
+      ]
+    },
+    {
+      "name": "seeded source replay 20",
+      "sentences": [
+        "xin bạn xin abc-def xin",
+        "😀 chào xin đây",
+        "chào đây xin",
+        "đây abc-def 123 đây xin",
+        "bạn 123 xin 123",
+        "bạn đây",
+        "đây 123 😀 xin 123",
+        "bạn 123 😀",
+        "chào 😀 😀 123 abc-def",
+        "😀 abc-def"
+      ],
+      "segs": [
+        {
+          "start": 0.5,
+          "end": 3.5
+        },
+        {
+          "start": 5.2,
+          "end": 8.2
+        },
+        {
+          "start": 9.899999999999999,
+          "end": 11.399999999999999
+        },
+        {
+          "start": 13.099999999999998,
+          "end": 13.899999999999999
+        },
+        {
+          "start": 13.899999999999999,
+          "end": 14.7
+        },
+        {
+          "start": 15.2,
+          "end": 16.7
+        },
+        {
+          "start": 16.7,
+          "end": 17.5
+        }
+      ],
+      "expected": [
+        {
+          "i": 1,
+          "start": 0.5,
+          "end": 2.281,
+          "text": "xin bạn xin abc-def xin"
+        },
+        {
+          "i": 2,
+          "start": 2.281,
+          "end": 3.35,
+          "text": "😀 chào xin đây"
+        },
+        {
+          "i": 3,
+          "start": 3.35,
+          "end": 6.119,
+          "text": "chào đây xin"
+        },
+        {
+          "i": 4,
+          "start": 6.119,
+          "end": 7.9,
+          "text": "đây abc-def 123 đây xin"
+        },
+        {
+          "i": 5,
+          "start": 7.9,
+          "end": 11.025,
+          "text": "bạn 123 xin 123"
+        },
+        {
+          "i": 6,
+          "start": 11.025,
+          "end": 13.1,
+          "text": "bạn đây"
+        },
+        {
+          "i": 7,
+          "start": 13.1,
+          "end": 15.2,
+          "text": "đây 123 😀 xin 123"
+        },
+        {
+          "i": 8,
+          "start": 15.2,
+          "end": 16.075,
+          "text": "bạn 123 😀"
+        },
+        {
+          "i": 9,
+          "start": 16.075,
+          "end": 16.7,
+          "text": "chào 😀 😀 123 abc-def"
+        },
+        {
+          "i": 10,
+          "start": 16.7,
+          "end": 17.5,
+          "text": "😀 abc-def"
+        }
+      ]
+    },
+    {
+      "name": "seeded source replay 21",
+      "sentences": [
+        "😀 😀",
+        "123",
+        "abc-def",
+        "😀",
+        "123",
+        "😀 bạn chào xin xin đây",
+        "bạn 😀 😀"
+      ],
+      "segs": [
+        {
+          "start": 0,
+          "end": 3
+        },
+        {
+          "start": 3.5,
+          "end": 6.5
+        },
+        {
+          "start": 7.0,
+          "end": 7.8
+        },
+        {
+          "start": 7.8999999999999995,
+          "end": 9.399999999999999
+        }
+      ],
+      "asrTexts": [
+        "noise",
+        "",
+        "noise",
+        "😀 😀"
+      ],
+      "expected": [
+        {
+          "i": 1,
+          "start": 0.0,
+          "end": 0.755,
+          "text": "😀 😀"
+        },
+        {
+          "i": 2,
+          "start": 0.755,
+          "end": 1.509,
+          "text": "123"
+        },
+        {
+          "i": 3,
+          "start": 1.509,
+          "end": 2.264,
+          "text": "abc-def"
+        },
+        {
+          "i": 4,
+          "start": 2.264,
+          "end": 3.5,
+          "text": "😀"
+        },
+        {
+          "i": 5,
+          "start": 3.5,
+          "end": 4.273,
+          "text": "123"
+        },
+        {
+          "i": 6,
+          "start": 4.273,
+          "end": 8.645,
+          "text": "😀 bạn chào xin xin đây"
+        },
+        {
+          "i": 7,
+          "start": 8.645,
+          "end": 9.4,
+          "text": "bạn 😀 😀"
+        }
+      ]
+    },
+    {
+      "name": "seeded source replay 22",
+      "sentences": [
+        "đây chào abc-def 123 😀",
+        "xin xin bạn bạn đây",
+        "đây",
+        "đây bạn",
+        "chào abc-def 123 xin abc-def bạn",
+        "123 xin xin đây",
+        "xin 😀 😀",
+        "bạn"
+      ],
+      "segs": [
+        {
+          "start": 0.1,
+          "end": 0.9
+        },
+        {
+          "start": 2.6,
+          "end": 5.6
+        },
+        {
+          "start": 5.699999999999999,
+          "end": 5.799999999999999
+        },
+        {
+          "start": 7.499999999999999,
+          "end": 10.5
+        },
+        {
+          "start": 10.6,
+          "end": 13.6
+        }
+      ],
+      "expected": [
+        {
+          "i": 1,
+          "start": 0.1,
+          "end": 3.45,
+          "text": "đây chào abc-def 123 😀"
+        },
+        {
+          "i": 2,
+          "start": 3.45,
+          "end": 5.6,
+          "text": "xin xin bạn bạn đây"
+        },
+        {
+          "i": 3,
+          "start": 5.7,
+          "end": 7.5,
+          "text": "đây"
+        },
+        {
+          "i": 4,
+          "start": 7.5,
+          "end": 8.55,
+          "text": "đây bạn"
+        },
+        {
+          "i": 5,
+          "start": 8.55,
+          "end": 11.125,
+          "text": "chào abc-def 123 xin abc-def bạn"
+        },
+        {
+          "i": 6,
+          "start": 11.125,
+          "end": 12.775,
+          "text": "123 xin xin đây"
+        },
+        {
+          "i": 7,
+          "start": 12.775,
+          "end": 13.375,
+          "text": "xin 😀 😀"
+        },
+        {
+          "i": 8,
+          "start": 13.375,
+          "end": 13.975,
+          "text": "bạn"
+        }
+      ]
+    },
+    {
+      "name": "seeded source replay 23",
+      "sentences": [
+        "đây 123 đây",
+        "đây 😀 123 bạn",
+        "đây đây abc-def chào 123",
+        "chào xin",
+        "xin chào 123 😀 123",
+        "abc-def 😀 123",
+        "chào abc-def 😀 xin 😀 đây",
+        "123 😀 xin abc-def",
+        "chào"
+      ],
+      "segs": [
+        {
+          "start": 0,
+          "end": 1.5
+        },
+        {
+          "start": 3.2,
+          "end": 4.7
+        },
+        {
+          "start": 4.8,
+          "end": 6.3
+        },
+        {
+          "start": 6.3999999999999995,
+          "end": 7.8999999999999995
+        },
+        {
+          "start": 7.8999999999999995,
+          "end": 7.999999999999999
+        },
+        {
+          "start": 8.5,
+          "end": 10.0
+        },
+        {
+          "start": 11.7,
+          "end": 11.799999999999999
+        },
+        {
+          "start": 12.299999999999999,
+          "end": 12.399999999999999
+        },
+        {
+          "start": 12.399999999999999,
+          "end": 13.2
+        }
+      ],
+      "asrTexts": [
+        "123 😀 xin abc-def",
+        "",
+        "123 😀 xin abc-def",
+        "noise",
+        "đây 😀 123 bạn",
+        "",
+        "đây đây abc-def chào 123",
+        "đây đây abc-def chào 123",
+        "đây đây abc-def chào 123"
+      ],
+      "expected": [
+        {
+          "i": 1,
+          "start": 0.0,
+          "end": 0.6,
+          "text": "đây 123 đây"
+        },
+        {
+          "i": 2,
+          "start": 7.9,
+          "end": 8.5,
+          "text": "đây 😀 123 bạn"
+        },
+        {
+          "i": 3,
+          "start": 11.7,
+          "end": 12.3,
+          "text": "đây đây abc-def chào 123"
+        },
+        {
+          "i": 4,
+          "start": 12.3,
+          "end": 12.9,
+          "text": "chào xin"
+        },
+        {
+          "i": 5,
+          "start": 12.9,
+          "end": 13.5,
+          "text": "xin chào 123 😀 123"
+        },
+        {
+          "i": 6,
+          "start": 13.5,
+          "end": 14.1,
+          "text": "abc-def 😀 123"
+        },
+        {
+          "i": 7,
+          "start": 14.1,
+          "end": 14.7,
+          "text": "chào abc-def 😀 xin 😀 đây"
+        },
+        {
+          "i": 8,
+          "start": 14.7,
+          "end": 15.3,
+          "text": "123 😀 xin abc-def"
+        },
+        {
+          "i": 9,
+          "start": 15.3,
+          "end": 15.9,
+          "text": "chào"
+        }
+      ]
+    },
+    {
+      "name": "seeded source replay 24",
+      "sentences": [
+        "bạn chào 😀 123",
+        "123 bạn"
+      ],
+      "segs": [
+        {
+          "start": 1.7,
+          "end": 4.7
+        },
+        {
+          "start": 4.7,
+          "end": 4.8
+        }
+      ],
+      "expected": [
+        {
+          "i": 1,
+          "start": 1.7,
+          "end": 3.56,
+          "text": "bạn chào 😀 123"
+        },
+        {
+          "i": 2,
+          "start": 3.56,
+          "end": 4.8,
+          "text": "123 bạn"
+        }
+      ]
+    },
+    {
+      "name": "seeded source replay 25",
+      "sentences": [
+        "😀 bạn bạn đây",
+        "xin 123 xin abc-def chào đây",
+        "đây đây chào 123 😀 bạn",
+        "123 😀 😀 xin 😀",
+        "chào chào",
+        "đây chào 123 😀",
+        "chào"
+      ],
+      "segs": [
+        {
+          "start": 1.7,
+          "end": 2.1
+        },
+        {
+          "start": 2.6,
+          "end": 3.0
+        },
+        {
+          "start": 3.1,
+          "end": 6.1
+        },
+        {
+          "start": 6.1,
+          "end": 6.5
+        },
+        {
+          "start": 7.0,
+          "end": 8.5
+        },
+        {
+          "start": 9.0,
+          "end": 10.5
+        },
+        {
+          "start": 10.5,
+          "end": 12.0
+        },
+        {
+          "start": 12.0,
+          "end": 15.0
+        },
+        {
+          "start": 15.5,
+          "end": 15.9
+        },
+        {
+          "start": 16.4,
+          "end": 17.2
+        },
+        {
+          "start": 17.2,
+          "end": 18.7
+        }
+      ],
+      "asrTexts": [
+        "123 😀 😀 xin 😀",
+        "đây chào 123 😀",
+        "",
+        "😀 bạn bạn đây",
+        "123 😀 😀 xin 😀",
+        "noise",
+        "noise",
+        "chào",
+        "đây chào 123 😀",
+        "",
+        "xin 123 xin abc-def chào đây"
+      ],
+      "expected": [
+        {
+          "i": 1,
+          "start": 6.1,
+          "end": 6.7,
+          "text": "😀 bạn bạn đây"
+        },
+        {
+          "i": 2,
+          "start": 17.2,
+          "end": 18.575,
+          "text": "xin 123 xin abc-def chào đây"
+        },
+        {
+          "i": 3,
+          "start": 18.575,
+          "end": 19.175,
+          "text": "đây đây chào 123 😀 bạn"
+        },
+        {
+          "i": 4,
+          "start": 19.175,
+          "end": 19.775,
+          "text": "123 😀 😀 xin 😀"
+        },
+        {
+          "i": 5,
+          "start": 19.775,
+          "end": 20.375,
+          "text": "chào chào"
+        },
+        {
+          "i": 6,
+          "start": 20.375,
+          "end": 20.975,
+          "text": "đây chào 123 😀"
+        },
+        {
+          "i": 7,
+          "start": 20.975,
+          "end": 21.575,
+          "text": "chào"
+        }
+      ]
+    },
+    {
+      "name": "seeded source replay 26",
+      "sentences": [
+        "đây 😀 xin"
+      ],
+      "segs": [
+        {
+          "start": 0.5,
+          "end": 2.0
+        },
+        {
+          "start": 3.7,
+          "end": 5.2
+        },
+        {
+          "start": 5.2,
+          "end": 8.2
+        },
+        {
+          "start": 8.2,
+          "end": 11.2
+        },
+        {
+          "start": 11.7,
+          "end": 12.5
+        }
+      ],
+      "expected": [
+        {
+          "i": 1,
+          "start": 0.5,
+          "end": 12.5,
+          "text": "đây 😀 xin"
+        }
+      ]
+    },
+    {
+      "name": "seeded source replay 27",
+      "sentences": [
+        "abc-def đây",
+        "đây xin",
+        "bạn đây",
+        "chào",
+        "abc-def xin bạn chào 123",
+        "123 xin bạn",
+        "abc-def bạn 123",
+        "abc-def xin bạn abc-def 😀",
+        "chào 123 abc-def 😀 😀 bạn",
+        "đây xin",
+        "chào 123 bạn xin abc-def 123"
+      ],
+      "segs": [
+        {
+          "start": 0.1,
+          "end": 0.2
+        },
+        {
+          "start": 1.9,
+          "end": 4.9
+        },
+        {
+          "start": 6.6000000000000005,
+          "end": 6.7
+        },
+        {
+          "start": 6.8,
+          "end": 6.8999999999999995
+        },
+        {
+          "start": 6.999999999999999,
+          "end": 7.799999999999999
+        },
+        {
+          "start": 8.299999999999999,
+          "end": 8.7
+        },
+        {
+          "start": 9.2,
+          "end": 9.6
+        },
+        {
+          "start": 11.299999999999999,
+          "end": 12.799999999999999
+        },
+        {
+          "start": 14.499999999999998,
+          "end": 14.899999999999999
+        }
+      ],
+      "asrTexts": [
+        "abc-def xin bạn abc-def 😀",
+        "chào",
+        "chào 123 abc-def 😀 😀 bạn",
+        "đây xin",
+        "bạn đây",
+        "abc-def đây",
+        "abc-def đây",
+        "đây xin",
+        "đây xin"
+      ],
+      "expected": [
+        {
+          "i": 1,
+          "start": 0.1,
+          "end": 0.7,
+          "text": "abc-def đây"
+        },
+        {
+          "i": 2,
+          "start": 0.7,
+          "end": 1.3,
+          "text": "đây xin"
+        },
+        {
+          "i": 3,
+          "start": 1.3,
+          "end": 1.9,
+          "text": "bạn đây"
+        },
+        {
+          "i": 4,
+          "start": 1.9,
+          "end": 2.5,
+          "text": "chào"
+        },
+        {
+          "i": 5,
+          "start": 2.5,
+          "end": 3.1,
+          "text": "abc-def xin bạn chào 123"
+        },
+        {
+          "i": 6,
+          "start": 3.1,
+          "end": 3.7,
+          "text": "123 xin bạn"
+        },
+        {
+          "i": 7,
+          "start": 3.7,
+          "end": 4.3,
+          "text": "abc-def bạn 123"
+        },
+        {
+          "i": 8,
+          "start": 4.3,
+          "end": 4.9,
+          "text": "abc-def xin bạn abc-def 😀"
+        },
+        {
+          "i": 9,
+          "start": 6.6,
+          "end": 7.2,
+          "text": "chào 123 abc-def 😀 😀 bạn"
+        },
+        {
+          "i": 10,
+          "start": 7.2,
+          "end": 7.8,
+          "text": "đây xin"
+        },
+        {
+          "i": 11,
+          "start": 7.8,
+          "end": 12.8,
+          "text": "chào 123 bạn xin abc-def 123"
+        }
+      ]
+    },
+    {
+      "name": "seeded source replay 28",
+      "sentences": [
+        "xin bạn bạn",
+        "xin chào",
+        "123 xin abc-def",
+        "chào",
+        "😀 bạn 123 chào 123 đây",
+        "123",
+        "chào bạn abc-def đây",
+        "123 đây abc-def",
+        "123"
+      ],
+      "segs": [
+        {
+          "start": 1.7,
+          "end": 4.7
+        },
+        {
+          "start": 6.4,
+          "end": 6.800000000000001
+        },
+        {
+          "start": 8.5,
+          "end": 8.6
+        },
+        {
+          "start": 10.299999999999999,
+          "end": 10.399999999999999
+        },
+        {
+          "start": 10.899999999999999,
+          "end": 11.7
+        },
+        {
+          "start": 11.799999999999999,
+          "end": 14.799999999999999
+        },
+        {
+          "start": 16.5,
+          "end": 17.3
+        },
+        {
+          "start": 17.8,
+          "end": 19.3
+        },
+        {
+          "start": 19.8,
+          "end": 21.3
+        },
+        {
+          "start": 21.400000000000002,
+          "end": 22.200000000000003
+        },
+        {
+          "start": 23.900000000000002,
+          "end": 26.900000000000002
+        },
+        {
+          "start": 26.900000000000002,
+          "end": 27.700000000000003
+        }
+      ],
+      "expected": [
+        {
+          "i": 1,
+          "start": 1.7,
+          "end": 3.761,
+          "text": "xin bạn bạn"
+        },
+        {
+          "i": 2,
+          "start": 3.761,
+          "end": 8.5,
+          "text": "xin chào"
+        },
+        {
+          "i": 3,
+          "start": 8.5,
+          "end": 12.896,
+          "text": "123 xin abc-def"
+        },
+        {
+          "i": 4,
+          "start": 12.896,
+          "end": 13.583,
+          "text": "chào"
+        },
+        {
+          "i": 5,
+          "start": 13.583,
+          "end": 19.217,
+          "text": "😀 bạn 123 chào 123 đây"
+        },
+        {
+          "i": 6,
+          "start": 19.217,
+          "end": 20.404,
+          "text": "123"
+        },
+        {
+          "i": 7,
+          "start": 20.404,
+          "end": 24.952,
+          "text": "chào bạn abc-def đây"
+        },
+        {
+          "i": 8,
+          "start": 24.952,
+          "end": 26.9,
+          "text": "123 đây abc-def"
+        },
+        {
+          "i": 9,
+          "start": 26.9,
+          "end": 27.7,
+          "text": "123"
+        }
+      ]
+    },
+    {
+      "name": "seeded source replay 29",
+      "sentences": [
+        "đây 😀 đây chào",
+        "chào chào 123 😀",
+        "123 chào abc-def",
+        "123 😀 bạn",
+        "chào chào đây",
+        "123 chào xin 😀"
+      ],
+      "segs": [
+        {
+          "start": 1.7,
+          "end": 3.2
+        },
+        {
+          "start": 3.7,
+          "end": 5.2
+        },
+        {
+          "start": 6.9,
+          "end": 7.300000000000001
+        },
+        {
+          "start": 7.300000000000001,
+          "end": 7.700000000000001
+        },
+        {
+          "start": 9.4,
+          "end": 10.9
+        }
+      ],
+      "asrTexts": [
+        "chào chào đây",
+        "đây 😀 đây chào",
+        "đây 😀 đây chào",
+        "chào chào đây",
+        "chào chào đây"
+      ],
+      "expected": [
+        {
+          "i": 1,
+          "start": 6.9,
+          "end": 7.5,
+          "text": "đây 😀 đây chào"
+        },
+        {
+          "i": 2,
+          "start": 7.5,
+          "end": 8.1,
+          "text": "chào chào 123 😀"
+        },
+        {
+          "i": 3,
+          "start": 8.1,
+          "end": 8.79,
+          "text": "123 chào abc-def"
+        },
+        {
+          "i": 4,
+          "start": 8.79,
+          "end": 9.4,
+          "text": "123 😀 bạn"
+        },
+        {
+          "i": 5,
+          "start": 9.4,
+          "end": 10.65,
+          "text": "chào chào đây"
+        },
+        {
+          "i": 6,
+          "start": 10.65,
+          "end": 11.25,
+          "text": "123 chào xin 😀"
+        }
+      ]
+    },
+    {
+      "name": "seeded source replay 30",
+      "sentences": [
+        "bạn 123",
+        "đây abc-def xin"
+      ],
+      "segs": [
+        {
+          "start": 0.1,
+          "end": 3.1
+        },
+        {
+          "start": 3.6,
+          "end": 4.0
+        },
+        {
+          "start": 5.7,
+          "end": 6.1000000000000005
+        },
+        {
+          "start": 6.2,
+          "end": 7.0
+        }
+      ],
+      "expected": [
+        {
+          "i": 1,
+          "start": 0.1,
+          "end": 1.94,
+          "text": "bạn 123"
+        },
+        {
+          "i": 2,
+          "start": 1.94,
+          "end": 7.0,
+          "text": "đây abc-def xin"
+        }
+      ]
+    },
+    {
+      "name": "seeded source replay 31",
+      "sentences": [
+        "123"
+      ],
+      "segs": [
+        {
+          "start": 1.7,
+          "end": 2.5
+        },
+        {
+          "start": 4.2,
+          "end": 4.6000000000000005
+        },
+        {
+          "start": 4.7,
+          "end": 7.7
+        },
+        {
+          "start": 9.4,
+          "end": 9.8
+        }
+      ],
+      "asrTexts": [
+        "123",
+        "noise",
+        "noise",
+        ""
+      ],
+      "expected": [
+        {
+          "i": 1,
+          "start": 1.7,
+          "end": 2.5,
+          "text": "123"
+        }
+      ]
+    },
+    {
+      "name": "seeded source replay 32",
+      "sentences": [
+        "bạn đây",
+        "chào",
+        "abc-def xin 😀 😀"
+      ],
+      "segs": [
+        {
+          "start": 0.1,
+          "end": 3.1
+        },
+        {
+          "start": 3.6,
+          "end": 4.4
+        },
+        {
+          "start": 4.9,
+          "end": 5.7
+        },
+        {
+          "start": 5.7,
+          "end": 6.5
+        },
+        {
+          "start": 6.6,
+          "end": 9.6
+        }
+      ],
+      "expected": [
+        {
+          "i": 1,
+          "start": 0.1,
+          "end": 3.6,
+          "text": "bạn đây"
+        },
+        {
+          "i": 2,
+          "start": 3.6,
+          "end": 5.7,
+          "text": "chào"
+        },
+        {
+          "i": 3,
+          "start": 5.7,
+          "end": 9.6,
+          "text": "abc-def xin 😀 😀"
+        }
+      ]
+    },
+    {
+      "name": "seeded source replay 33",
+      "sentences": [
+        "chào đây xin đây",
+        "😀 xin abc-def",
+        "đây bạn chào abc-def bạn abc-def",
+        "123 chào chào chào bạn 😀",
+        "đây đây chào chào đây 123",
+        "bạn bạn chào đây abc-def xin",
+        "abc-def",
+        "bạn 123 chào 123 chào 123",
+        "123"
+      ],
+      "segs": [
+        {
+          "start": 0,
+          "end": 3
+        },
+        {
+          "start": 3.5,
+          "end": 4.3
+        },
+        {
+          "start": 4.3999999999999995,
+          "end": 5.8999999999999995
+        },
+        {
+          "start": 6.3999999999999995,
+          "end": 7.8999999999999995
+        },
+        {
+          "start": 7.999999999999999,
+          "end": 8.1
+        },
+        {
+          "start": 8.2,
+          "end": 9.7
+        },
+        {
+          "start": 11.399999999999999,
+          "end": 11.799999999999999
+        },
+        {
+          "start": 11.799999999999999,
+          "end": 13.299999999999999
+        },
+        {
+          "start": 13.799999999999999,
+          "end": 15.299999999999999
+        },
+        {
+          "start": 15.399999999999999,
+          "end": 16.9
+        }
+      ],
+      "asrTexts": [
+        "",
+        "123 chào chào chào bạn 😀",
+        "bạn 123 chào 123 chào 123",
+        "123",
+        "đây đây chào chào đây 123",
+        "123",
+        "đây bạn chào abc-def bạn abc-def",
+        "123 chào chào chào bạn 😀",
+        "đây bạn chào abc-def bạn abc-def",
+        "😀 xin abc-def"
+      ],
+      "expected": [
+        {
+          "i": 1,
+          "start": 8.0,
+          "end": 8.6,
+          "text": "chào đây xin đây"
+        },
+        {
+          "i": 2,
+          "start": 8.6,
+          "end": 11.4,
+          "text": "😀 xin abc-def"
+        },
+        {
+          "i": 3,
+          "start": 11.4,
+          "end": 12.0,
+          "text": "đây bạn chào abc-def bạn abc-def"
+        },
+        {
+          "i": 4,
+          "start": 12.0,
+          "end": 13.3,
+          "text": "123 chào chào chào bạn 😀"
+        },
+        {
+          "i": 5,
+          "start": 13.8,
+          "end": 14.4,
+          "text": "đây đây chào chào đây 123"
+        },
+        {
+          "i": 6,
+          "start": 14.4,
+          "end": 15.3,
+          "text": "bạn bạn chào đây abc-def xin"
+        },
+        {
+          "i": 7,
+          "start": 16.525,
+          "end": 17.125,
+          "text": "abc-def"
+        },
+        {
+          "i": 8,
+          "start": 17.125,
+          "end": 17.725,
+          "text": "bạn 123 chào 123 chào 123"
+        },
+        {
+          "i": 9,
+          "start": 17.725,
+          "end": 18.325,
+          "text": "123"
+        }
+      ]
+    },
+    {
+      "name": "seeded source replay 34",
+      "sentences": [
+        "đây bạn",
+        "abc-def xin chào",
+        "đây chào xin xin abc-def đây",
+        "đây bạn 123 😀 đây",
+        "bạn đây abc-def đây",
+        "chào bạn 😀 bạn 123 😀",
+        "chào đây abc-def abc-def đây"
+      ],
+      "segs": [
+        {
+          "start": 0.5,
+          "end": 2.0
+        },
+        {
+          "start": 3.7,
+          "end": 4.1000000000000005
+        },
+        {
+          "start": 4.2,
+          "end": 4.3
+        },
+        {
+          "start": 4.3,
+          "end": 5.8
+        },
+        {
+          "start": 7.5,
+          "end": 7.6
+        },
+        {
+          "start": 8.1,
+          "end": 8.9
+        }
+      ],
+      "expected": [
+        {
+          "i": 1,
+          "start": 0.5,
+          "end": 1.1,
+          "text": "đây bạn"
+        },
+        {
+          "i": 2,
+          "start": 1.1,
+          "end": 1.7,
+          "text": "abc-def xin chào"
+        },
+        {
+          "i": 3,
+          "start": 1.7,
+          "end": 3.7,
+          "text": "đây chào xin xin abc-def đây"
+        },
+        {
+          "i": 4,
+          "start": 3.7,
+          "end": 4.3,
+          "text": "đây bạn 123 😀 đây"
+        },
+        {
+          "i": 5,
+          "start": 4.3,
+          "end": 5.286,
+          "text": "bạn đây abc-def đây"
+        },
+        {
+          "i": 6,
+          "start": 5.286,
+          "end": 8.1,
+          "text": "chào bạn 😀 bạn 123 😀"
+        },
+        {
+          "i": 7,
+          "start": 8.1,
+          "end": 8.9,
+          "text": "chào đây abc-def abc-def đây"
+        }
+      ]
+    },
+    {
+      "name": "seeded source replay 35",
+      "sentences": [
+        "abc-def abc-def bạn 😀",
+        "đây",
+        "bạn abc-def 123 😀 bạn đây",
+        "123 abc-def chào",
+        "xin đây chào"
+      ],
+      "segs": [
+        {
+          "start": 0,
+          "end": 1.5
+        },
+        {
+          "start": 1.6,
+          "end": 4.6
+        },
+        {
+          "start": 5.1,
+          "end": 5.199999999999999
+        },
+        {
+          "start": 6.8999999999999995,
+          "end": 6.999999999999999
+        },
+        {
+          "start": 6.999999999999999,
+          "end": 7.3999999999999995
+        },
+        {
+          "start": 7.499999999999999,
+          "end": 7.599999999999999
+        },
+        {
+          "start": 8.099999999999998,
+          "end": 9.599999999999998
+        }
+      ],
+      "asrTexts": [
+        "123 abc-def chào",
+        "123 abc-def chào",
+        "123 abc-def chào",
+        "đây",
+        "123 abc-def chào",
+        "",
+        "123 abc-def chào"
+      ],
+      "expected": [
+        {
+          "i": 1,
+          "start": 0.75,
+          "end": 3.1,
+          "text": "abc-def abc-def bạn 😀"
+        },
+        {
+          "i": 2,
+          "start": 3.1,
+          "end": 5.1,
+          "text": "đây"
+        },
+        {
+          "i": 3,
+          "start": 5.1,
+          "end": 7.0,
+          "text": "bạn abc-def 123 😀 bạn đây"
+        },
+        {
+          "i": 4,
+          "start": 7.0,
+          "end": 7.6,
+          "text": "123 abc-def chào"
+        },
+        {
+          "i": 5,
+          "start": 9.35,
+          "end": 9.95,
+          "text": "xin đây chào"
+        }
+      ]
+    },
+    {
+      "name": "seeded source replay 36",
+      "sentences": [
+        "xin 😀 đây 123 chào chào",
+        "bạn đây 123 123 123 chào",
+        "đây 😀 chào"
+      ],
+      "segs": [
+        {
+          "start": 0,
+          "end": 0.8
+        },
+        {
+          "start": 0.9,
+          "end": 2.4
+        },
+        {
+          "start": 4.1,
+          "end": 4.5
+        },
+        {
+          "start": 4.6,
+          "end": 7.6
+        },
+        {
+          "start": 9.299999999999999,
+          "end": 12.299999999999999
+        },
+        {
+          "start": 12.399999999999999,
+          "end": 13.2
+        },
+        {
+          "start": 13.7,
+          "end": 16.7
+        }
+      ],
+      "expected": [
+        {
+          "i": 1,
+          "start": 0.0,
+          "end": 6.708,
+          "text": "xin 😀 đây 123 chào chào"
+        },
+        {
+          "i": 2,
+          "start": 6.708,
+          "end": 14.777,
+          "text": "bạn đây 123 123 123 chào"
+        },
+        {
+          "i": 3,
+          "start": 14.777,
+          "end": 16.7,
+          "text": "đây 😀 chào"
+        }
+      ]
+    },
+    {
+      "name": "seeded source replay 37",
+      "sentences": [
+        "bạn đây 123 abc-def chào 123",
+        "123",
+        "bạn bạn xin abc-def",
+        "đây xin xin xin 😀",
+        "abc-def chào 😀 chào",
+        "chào chào 123 123",
+        "😀",
+        "chào bạn 123 abc-def bạn"
+      ],
+      "segs": [
+        {
+          "start": 0.5,
+          "end": 0.9
+        },
+        {
+          "start": 0.9,
+          "end": 1.7000000000000002
+        },
+        {
+          "start": 1.7000000000000002,
+          "end": 2.1
+        },
+        {
+          "start": 2.2,
+          "end": 2.3000000000000003
+        },
+        {
+          "start": 2.4000000000000004,
+          "end": 5.4
+        },
+        {
+          "start": 7.1000000000000005,
+          "end": 7.500000000000001
+        },
+        {
+          "start": 7.6000000000000005,
+          "end": 8.0
+        },
+        {
+          "start": 8.5,
+          "end": 11.5
+        },
+        {
+          "start": 11.6,
+          "end": 11.7
+        },
+        {
+          "start": 12.2,
+          "end": 13.0
+        }
+      ],
+      "asrTexts": [
+        "bạn đây 123 abc-def chào 123",
+        "chào bạn 123 abc-def bạn",
+        "abc-def chào 😀 chào",
+        "bạn bạn xin abc-def",
+        "noise",
+        "chào bạn 123 abc-def bạn",
+        "chào chào 123 123",
+        "đây xin xin xin 😀",
+        "noise",
+        ""
+      ],
+      "expected": [
+        {
+          "i": 1,
+          "start": 0.5,
+          "end": 1.1,
+          "text": "bạn đây 123 abc-def chào 123"
+        },
+        {
+          "i": 2,
+          "start": 1.1,
+          "end": 1.7,
+          "text": "123"
+        },
+        {
+          "i": 3,
+          "start": 1.7,
+          "end": 2.3,
+          "text": "bạn bạn xin abc-def"
+        },
+        {
+          "i": 4,
+          "start": 2.3,
+          "end": 2.9,
+          "text": "đây xin xin xin 😀"
+        },
+        {
+          "i": 5,
+          "start": 2.9,
+          "end": 3.5,
+          "text": "abc-def chào 😀 chào"
+        },
+        {
+          "i": 6,
+          "start": 3.5,
+          "end": 4.1,
+          "text": "chào chào 123 123"
+        },
+        {
+          "i": 7,
+          "start": 4.1,
+          "end": 4.7,
+          "text": "😀"
+        },
+        {
+          "i": 8,
+          "start": 4.7,
+          "end": 5.3,
+          "text": "chào bạn 123 abc-def bạn"
+        }
+      ]
+    },
+    {
+      "name": "seeded source replay 38",
+      "sentences": [
+        "😀 123 abc-def đây 😀 😀",
+        "chào chào 😀 xin bạn chào",
+        "chào",
+        "bạn xin",
+        "😀 abc-def đây bạn xin bạn",
+        "123",
+        "chào chào"
+      ],
+      "segs": [
+        {
+          "start": 0.5,
+          "end": 2.0
+        },
+        {
+          "start": 2.0,
+          "end": 2.4
+        },
+        {
+          "start": 2.5,
+          "end": 2.6
+        },
+        {
+          "start": 2.6,
+          "end": 3.0
+        },
+        {
+          "start": 3.0,
+          "end": 3.1
+        },
+        {
+          "start": 3.1,
+          "end": 6.1
+        },
+        {
+          "start": 7.8,
+          "end": 8.2
+        },
+        {
+          "start": 8.299999999999999,
+          "end": 8.399999999999999
+        },
+        {
+          "start": 8.899999999999999,
+          "end": 8.999999999999998
+        },
+        {
+          "start": 10.699999999999998,
+          "end": 11.499999999999998
+        }
+      ],
+      "expected": [
+        {
+          "i": 1,
+          "start": 0.5,
+          "end": 2.0,
+          "text": "😀 123 abc-def đây 😀 😀"
+        },
+        {
+          "i": 2,
+          "start": 2.0,
+          "end": 3.1,
+          "text": "chào chào 😀 xin bạn chào"
+        },
+        {
+          "i": 3,
+          "start": 3.1,
+          "end": 3.868,
+          "text": "chào"
+        },
+        {
+          "i": 4,
+          "start": 3.868,
+          "end": 4.595,
+          "text": "bạn xin"
+        },
+        {
+          "i": 5,
+          "start": 4.595,
+          "end": 8.2,
+          "text": "😀 abc-def đây bạn xin bạn"
+        },
+        {
+          "i": 6,
+          "start": 8.3,
+          "end": 10.7,
+          "text": "123"
+        },
+        {
+          "i": 7,
+          "start": 10.7,
+          "end": 11.5,
+          "text": "chào chào"
+        }
+      ]
+    },
+    {
+      "name": "seeded source replay 39",
+      "sentences": [
+        "đây abc-def",
+        "abc-def",
+        "chào 😀 123",
+        "chào abc-def đây 😀 chào",
+        "123 abc-def đây 123",
+        "xin đây",
+        "xin 😀 xin 😀 xin 😀",
+        "abc-def abc-def abc-def xin",
+        "abc-def 123 bạn đây"
+      ],
+      "segs": [
+        {
+          "start": 1.7,
+          "end": 3.2
+        },
+        {
+          "start": 3.7,
+          "end": 6.7
+        },
+        {
+          "start": 6.8,
+          "end": 7.6
+        }
+      ],
+      "asrTexts": [
+        "",
+        "abc-def 123 bạn đây",
+        "chào 😀 123"
+      ],
+      "expected": [
+        {
+          "i": 1,
+          "start": 1.7,
+          "end": 2.3,
+          "text": "đây abc-def"
+        },
+        {
+          "i": 2,
+          "start": 2.3,
+          "end": 2.9,
+          "text": "abc-def"
+        },
+        {
+          "i": 3,
+          "start": 2.9,
+          "end": 3.5,
+          "text": "chào 😀 123"
+        },
+        {
+          "i": 4,
+          "start": 3.5,
+          "end": 4.1,
+          "text": "chào abc-def đây 😀 chào"
+        },
+        {
+          "i": 5,
+          "start": 4.1,
+          "end": 4.85,
+          "text": "123 abc-def đây 123"
+        },
+        {
+          "i": 6,
+          "start": 4.85,
+          "end": 5.45,
+          "text": "xin đây"
+        },
+        {
+          "i": 7,
+          "start": 5.45,
+          "end": 6.05,
+          "text": "xin 😀 xin 😀 xin 😀"
+        },
+        {
+          "i": 8,
+          "start": 6.05,
+          "end": 6.7,
+          "text": "abc-def abc-def abc-def xin"
+        },
+        {
+          "i": 9,
+          "start": 6.8,
+          "end": 7.6,
+          "text": "abc-def 123 bạn đây"
+        }
+      ]
+    }
+  ],
+  "alignStress": [
+    {
+      "anchored": false,
+      "sentences": 1000,
+      "sha256": "62c6ef46985909645c5ec9493870396b158b821a20da9586b0ea2dfd4b2237aa"
+    },
+    {
+      "anchored": true,
+      "sentences": 1000,
+      "sha256": "a1a252a0b0985b2ea8a22926a0155372c68f0c7afab4b902be9dc7b90ce997c6"
+    }
+  ],
+  "alignReplay": {
+    "authority": "controlled-replay",
+    "sourceSha256": "e65e93ebbf206c969773ad9b317c4ecb999dfd5dff0200dafa00cc8581c0e482",
+    "allowlistedTopLevel": [
+      "_fold",
+      "_tokens",
+      "_speech_clock",
+      "align_script"
+    ],
+    "auditedCodeObjects": [
+      "_fold",
+      "_fold.<locals>.<genexpr>",
+      "_tokens",
+      "_tokens.<locals>.<genexpr>",
+      "_speech_clock",
+      "_speech_clock.<locals>.<genexpr>",
+      "_speech_clock.<locals>.__annotate__",
+      "_speech_clock.<locals>.at",
+      "align_script",
+      "align_script.<locals>.<genexpr>",
+      "align_script.<locals>.<genexpr>",
+      "align_script.<locals>.<genexpr>",
+      "align_script.<locals>.__annotate__",
+      "align_script.<locals>.snap",
+      "align_script.<locals>.snap.<locals>.<lambda>"
+    ],
+    "scope": "Only selected pure function objects and their statically allowlisted closures; restricted builtins plus stdlib unicodedata/difflib; no module import/execution, EXE, network, NumPy or native application code"
+  }
+}

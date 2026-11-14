@@ -49,6 +49,97 @@ test('OpenAI-compatible text, image, multipart ASR/refs and binary speech use ac
   });
 });
 
+test('vision review sends real local image bytes and MIME types with the original prompt and returns provider JSON as text', async () => {
+  const jpeg = Buffer.from('/9j/4AAQSkZJRgABAgAAAQABAAD//gAPTGF2YzYwLjMuMTAwAP/bAEMACAQEBAQEBQUFBQUFBgYGBgYGBgYGBgYGBgcHBwgICAcHBwYGBwcICAgICQkJCAgICAkJCgoKDAwLCw4ODhERFP/EAEwAAQEAAAAAAAAAAAAAAAAAAAAGAQEBAAAAAAAAAAAAAAAAAAAGBxABAAAAAAAAAAAAAAAAAAAAABEBAAAAAAAAAAAAAAAAAAAAAP/AABEIAAIAAgMBIgACEQADEQD/2gAMAwEAAhEDEQA/AIsAUX9//9k=', 'base64');
+  const prompt = 'Compare these references; return the observed face/outfit differences as JSON.';
+  const reply = JSON.stringify({ matches: false, differences: ['fixture provider observation'] });
+  let posts = 0;
+  await fixture(async (req, res) => {
+    posts++; assert.equal(req.method, 'POST'); assert.equal(req.url, '/v1/chat/completions');
+    assert.equal(req.headers.authorization, 'Bearer vision-fixture-key');
+    let raw = ''; for await (const chunk of req) raw += chunk;
+    const body = JSON.parse(raw); assert.equal(body.model, 'chosen-vision-model');
+    assert.equal(body.messages.length, 1); assert.equal(body.messages[0].role, 'user');
+    assert.deepEqual(body.messages[0].content, [
+      { type: 'text', text: prompt },
+      { type: 'image_url', image_url: { url: 'data:image/png;base64,' + png.toString('base64') } },
+      { type: 'image_url', image_url: { url: 'data:image/jpeg;base64,' + jpeg.toString('base64') } },
+    ]);
+    assert.ok(!raw.includes('reference-path'));
+    res.setHeader('Content-Type', 'application/json'); res.end(JSON.stringify({ choices: [{ message: { content: reply } }] }));
+  }, async base => {
+    const dir = await mkdtemp(join(tmpdir(), 'studio-vision-'));
+    try {
+      const paths = [join(dir, 'reference-path.wrong-extension'), join(dir, 'reference-path.jpg')];
+      await writeFile(paths[0], png); await writeFile(paths[1], jpeg);
+      const result = await new IntegrationClient({ baseUrl: base, apiKey: 'vision-fixture-key', model: 'chosen-vision-model' }).reviewImages(prompt, paths);
+      assert.equal(typeof result, 'string'); assert.equal(result, reply); assert.equal(posts, 1);
+    } finally { await rm(dir, { recursive: true, force: true }); }
+  });
+});
+
+test('vision accepts sixteen refs and the full 25 MiB raw-image budget without widening generic JSON requests', async () => {
+  const limit = 25 * 1024 * 1024; let posts = 0;
+  await fixture(async (req, res) => {
+    posts++; assert.equal(req.url, '/v1/chat/completions');
+    const chunks: Buffer[] = []; for await (const chunk of req) chunks.push(chunk);
+    const body = JSON.parse(Buffer.concat(chunks).toString()); const content = body.messages[0].content;
+    assert.equal(content.length, posts === 1 ? 17 : 2);
+    assert.equal(content.slice(1).reduce((sum: number, part: { image_url: { url: string } }) => sum + Buffer.from(part.image_url.url.split(',')[1], 'base64').length, 0), posts === 1 ? png.length * 16 : limit);
+    res.setHeader('Content-Type', 'application/json'); res.end(JSON.stringify({ choices: [{ message: { content: 'provider review' } }] }));
+  }, async base => {
+    const dir = await mkdtemp(join(tmpdir(), 'studio-vision-limit-'));
+    try {
+      const file = join(dir, 'ref.png'), large = join(dir, 'large.png');
+      await writeFile(file, png); await writeFile(large, Buffer.concat([png, Buffer.alloc(limit - png.length)]));
+      const client = new IntegrationClient({ baseUrl: base });
+      assert.equal(await client.reviewImages('Review', Array(16).fill(file)), 'provider review');
+      assert.equal(await client.reviewImages('Review', [large]), 'provider review');
+      await assert.rejects(client.reviewImages('Review', [large, file]), /25 MiB|reference upload/i);
+      await assert.rejects(client.json('POST', '/chat/completions', { raw: 'x'.repeat(9 * 1024 * 1024) }), /request too large/i);
+      assert.equal(posts, 2);
+    } finally { await rm(dir, { recursive: true, force: true }); }
+  });
+});
+
+test('vision rejects invalid refs, non-images, SVG, empty/oversized files and abort before any request', async () => {
+  let posts = 0;
+  await fixture((_req, res) => { posts++; res.setHeader('Content-Type', 'application/json'); res.end('{}'); }, async base => {
+    const dir = await mkdtemp(join(tmpdir(), 'studio-vision-invalid-'));
+    try {
+      const image = join(dir, 'ref.png'), svg = join(dir, 'ref.svg'), audio = join(dir, 'audio.wav'), empty = join(dir, 'empty'), huge = join(dir, 'huge');
+      await writeFile(image, png); await writeFile(svg, '<svg xmlns="http://www.w3.org/2000/svg"></svg>');
+      await writeFile(audio, 'RIFF----WAVE---------------------audio'); await writeFile(empty, '');
+      await writeFile(huge, Buffer.alloc(25 * 1024 * 1024 + 1));
+      const client = new IntegrationClient({ baseUrl: base });
+      for (const paths of [[], Array(17).fill(image), [svg], [audio], [empty], [huge], ['https://example.test/image.png'], ['data:image/png;base64,abc'], [null], [{ path: image }], 'not-an-array'] as unknown[]) await assert.rejects(client.reviewImages('Review', paths as string[]), /image|refs|path|upload|file/i);
+      const abort = new AbortController(); abort.abort();
+      await assert.rejects(client.reviewImages('Review', [image], abort.signal), /abort/i);
+      await assert.rejects(client.reviewImages('', [image]), /prompt/i);
+      assert.equal(posts, 0);
+    } finally { await rm(dir, { recursive: true, force: true }); }
+  });
+});
+
+test('vision reuses strict completion parsing and active abort never retries or fabricates a review', async () => {
+  let posts = 0, mode = 'blank', submitted: (() => void) | undefined;
+  await fixture(async (req, res) => {
+    posts++; for await (const _chunk of req) { /* consume the actual image request */ }
+    res.setHeader('Content-Type', 'application/json');
+    if (mode === 'hang') { res.write('{'); submitted?.(); return; }
+    res.end(JSON.stringify(mode === 'object' ? { choices: [{ message: { content: { ok: true } } }] } : mode === 'missing' ? {} : { choices: [{ message: { content: '' } }] }));
+  }, async base => {
+    const dir = await mkdtemp(join(tmpdir(), 'studio-vision-abort-'));
+    try {
+      const image = join(dir, 'ref.png'); await writeFile(image, png); const client = new IntegrationClient({ baseUrl: base });
+      for (const variant of ['blank', 'object', 'missing']) { mode = variant; await assert.rejects(client.reviewImages('Review', [image]), /text|response|choices/i); }
+      mode = 'hang'; const started = new Promise<void>(resolve => submitted = resolve), abort = new AbortController();
+      const running = client.reviewImages('Review', [image], abort.signal), rejected = assert.rejects(running, /abort/i);
+      await started; abort.abort(); await rejected; assert.equal(posts, 4);
+    } finally { await rm(dir, { recursive: true, force: true }); }
+  });
+});
+
 test('network trust boundary rejects redirects, path injection, malformed/empty/oversized responses and redacts errors', async () => {
   await fixture((req, res) => {
     res.setHeader('Content-Type', 'application/json');

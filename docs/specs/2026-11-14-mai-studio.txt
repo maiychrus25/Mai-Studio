@@ -181,3 +181,9 @@ Rà độc lập trước bàn giao: builder check không phát hiện câu hỏ
 15. GHI CHÚ SAU TRIỂN KHAI DEV — 14/11/2026
 
 Mã nguồn riêng tại /Users/maiychrus/Documents/mai-studio đã được tạo theo phê duyệt. Dùng node:sqlite đã kiểm trong Node của Electron thay better-sqlite3; nâng electron-updater 6.8.11 theo audit. Các module giữ dạng file gọn, không tạo toàn bộ directory/bảng dự kiến. Phần thân thiết kế trên giữ như lịch sử yêu cầu; trạng thái nghiệm thu thực, giới hạn và các mục chưa đủ parity được ghi trong SYSTEM_DOCUMENTATION.md và docs/reports/acceptance.md. Không coi bản dev này là hoàn tất toàn sản phẩm.
+
+16. GHI CHÚ SAU TRIỂN KHAI DEV 0.2.0-dev.1
+
+Đã nối AI/director nhiều lượt, narration theo audio đo thật, ASR/WeSpeaker CPU native, stage cache/force/quality gate, product vision và series recap. Dub tách speech/check/render, render không gọi TTS; fitVoice giữ toàn câu trong giới hạn tempo. FFmpeg đặt frame clock và chia block sidechain rõ ràng để chạy trên binary Linux đã pin. Hành vi và giới hạn cụ thể, kiểm thử theo OS và artifact nằm trong SYSTEM_DOCUMENTATION.md và checkpoint mới nhất của docs/reports/acceptance.md.
+
+Prompt recipe gốc được tải từ xa và hai module native chưa có đủ runtime evidence; prompt MaiStudio là triển khai độc lập. Chưa chứng nhận chất lượng bằng bản gốc, tự sửa media, teaser/credit/continuity, căn khẩu hình hoặc mọi dịch vụ live. Anh xác nhận có VPS Windows nhưng chưa cung cấp kết nối; đối chiếu runtime vẫn là phần nghiệm thu còn mở. Không thay đổi phần thân thiết kế lịch sử hoặc coi việc có test fixture là full parity.

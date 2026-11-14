@@ -1,8 +1,8 @@
 # MaiStudio — tài liệu hệ thống
 
-Phiên bản ứng dụng được khảo sát: `0.1.0`.
+Phiên bản ứng dụng được khảo sát: `0.2.0-dev.1`.
 
-Trạng thái: bản dev đã kiểm chứng local, đang nghiệm thu đóng gói; chưa phát hành, chưa chứng nhận full parity hoặc mọi nền tảng/provider. Anh đã duyệt thiết kế ngày 14/11/2026.
+Trạng thái: snapshot dev đang thực hiện functional parity P1–P5; có bằng chứng local theo từng phần, chưa phát hành, chưa chứng nhận full parity hoặc mọi nền tảng/provider. Các kết quả full-suite/stress/artifact của đợt mới do parent chốt riêng sau khi checkout ổn định. Anh đã duyệt thiết kế ngày 14/11/2026.
 
 ## Ranh giới và runtime
 
@@ -25,7 +25,7 @@ Mật khẩu/key dùng `src/core/vault.ts` và Electron safeStorage. Linux basic
 - Task: draft, queued, running, waiting_input, paused, succeeded, failed, cancelled, interrupted.
 - Một automation/profile tại một thời điểm, mặc định 2 generation và 1 media job; settings giới hạn 1–8 và 1–2.
 - Running khi mở lại app trở thành interrupted; không tự gửi lại paid request có remote admission không rõ. Checkpoint chứa URL/thread/asset ID và bước pipeline để tiếp tục.
-- Retry tự động chỉ dành cho lỗi được phân loại chắc chắn trước admission (hiện HTTP 429 của API ảnh), tối đa 2 lần với backoff; HTTP 5xx/timeout sau khi gửi giữ checkpoint để đối soát. Retry tay tạo budget mới nhưng không bỏ qua guard remote acceptance.
+- Retry tự động tối đa 2 lần với backoff cho HTTP 429 xác định của API ảnh và text/vision (gồm từng lượt director); chỉ xóa admission của đúng request bị từ chối. HTTP 5xx/timeout sau khi gửi giữ checkpoint để đối soát. Retry tay tạo budget mới nhưng không bỏ qua guard remote acceptance.
 - Mỗi prompt tối đa 32 KiB UTF-8, batch sau nhân count tối đa 1.000, tối đa 16 ref/task; count 1–16 được tách thành task độc lập.
 - Media import tối đa 2 GiB; output/provider download có trần riêng và không chạy shell interpolation.
 - Pause toàn queue được lưu qua lần mở lại. Hủy một task đã thành công không đổi kết quả thành cancelled. Xóa account có task đang chờ/chạy bị từ chối trước khi đóng browser.
@@ -35,27 +35,101 @@ Mật khẩu/key dùng `src/core/vault.ts` và Electron safeStorage. Linux basic
 <!-- docs-check: src/core/store.ts#MAX_PROMPT_BYTES = 32768 -->
 <!-- docs-check: src/core/store.ts#MAX_ASSET_BYTES = 2147483648 -->
 
-Media có trần 100 input, 1 giờ/clip, 6 giờ/timeline; 2 process tools tổng; probe 30 giây, render 15 phút. FFmpeg baseline CPU H.264/AAC. Cần regression riêng khi thay đổi giới hạn và runtime binary.
+Media ghép video/slideshow có trần 1.002 input (1.000 shot cộng thẻ đầu/cuối), mỗi lô tối đa 100 clip/ảnh; trên 100 thì dựng phân cấp, giữ start/gap/trim và chỉ áp overlay/subtitle/music/fade ở tầng cuối. Audio mix/dub vẫn tối đa 100 input/lần; narration chia lô trước khi ghép track hoàn chỉnh. Slot clip/ảnh tối đa 1 giờ, timeline/audio track tối đa 6 giờ; 2 process tools tổng; probe 30 giây, render 15 phút. FFmpeg baseline CPU H.264/AAC. Có trim end-exclusive, pad/crop giữa khung, fade hình/tiếng, PNG overlay, audio extraction và sidechain ducking khi có nhạc/foreground; Ken Burns chỉ bật cho slideshow khi chọn motion. Cần regression riêng khi thay đổi giới hạn và runtime binary.
 
-Cue SRT giữ start tuyệt đối, gồm khoảng trống đầu/giữa cue; video đệm đen và audio đệm im lặng, lượng tử hóa theo frame một lần để không cộng dồn sai số. Mỗi series tạo output riêng và film project sửa được cho từng tập. titleCard/endCard là chuỗi tùy chọn, mỗi thẻ 2 giây; narration/subtitle được dịch mốc khi có thẻ đầu. productOverlay dùng tên/giá/CTA đã nhập, có thể tắt; PNG overlay, nhạc nền và subtitle burn-in đi qua FFmpeg thật. Thẻ chữ cần Chrome/Chromium; text không vừa khung báo lỗi thay vì cắt chữ âm thầm.
+<!-- docs-check: src/core/media.ts#MAX_INPUTS = 100 -->
+<!-- docs-check: src/core/media.ts#MAX_SEQUENCE_INPUTS = 1002 -->
+<!-- docs-check: src/core/media.ts#MAX_DURATION = 21600 -->
 
-voice.transcribe trả text và subtitle khi provider cung cấp segments thật; không suy timestamp từ số chữ. whisper-1/custom timestamp endpoint dùng verbose_json/segment; GPT ASR biết trước không hỗ trợ timestamp giữ JSON, không gửi thêm request fallback có phí. Dubbing sửa/dịch transcript theo block cue, kiểm số block bằng cue và giữ timecode; lệch số block báo lỗi khi lưu. Speaker/face/outfit matching tự động chưa được chứng nhận.
+Cue SRT giữ start tuyệt đối, gồm khoảng trống đầu/giữa cue; video đệm đen và audio đệm im lặng, lượng tử hóa theo frame một lần để không cộng dồn sai số. Mỗi series tạo output riêng và film project sửa được cho từng tập. titleCard/endCard là chuỗi tùy chọn, mặc định legacy mỗi thẻ 2 giây; kế hoạch AI film mới đặt titleDuration 3 giây khi tự tạo titleCard. Narration/subtitle được dịch mốc theo thẻ đầu thực dùng. productOverlay dùng tên/giá/CTA đã nhập, có thể tắt; PNG overlay, nhạc nền và subtitle burn-in đi qua FFmpeg thật. Thẻ chữ cần Chrome/Chromium; text không vừa khung báo lỗi thay vì cắt chữ âm thầm.
+
+voice.transcribe dùng ASR provider nếu đã cấu hình, nếu không dùng local khi model sẵn sàng; chỉ xuất subtitle từ segments có mốc thực, không suy timestamp từ số chữ. whisper-1/custom timestamp endpoint dùng verbose_json/segment; GPT ASR biết trước không hỗ trợ timestamp giữ JSON, không gửi thêm request fallback có phí. Dubbing sửa/dịch transcript theo block cue, kiểm số block bằng cue và giữ timecode; lệch số block báo lỗi khi lưu. ASR offline, đối chiếu ảnh và speaker cohort mới được mô tả ở snapshot bên dưới; chất lượng nhận dạng/face/outfit trên dữ liệu thật chưa được chứng nhận.
+
+## Lập kế hoạch phim — đạo diễn nhiều lượt
+
+Dự án film có ý tưởng (`data.script`) được lập kế hoạch bằng `src/core/director.ts`, theo thứ tự bước khôi phục tĩnh từ MuseStudio 1.13.12 (`filmstudio.write_script`): ngân sách cục bộ (công thức `fmScenes`/`fmActs`) → bible (nhân vật, bối cảnh, cảnh với dải shot `a..b` liền mạch; dải lệch thì chia lại cục bộ và ghi lint) → từng cảnh một, lưu sau mỗi cảnh → hỏi lại đúng ID shot thiếu → đạo diễn soát chỉ sửa field đã đổi, ghi số shot sửa và hook → verify → máy quay mặc định theo loại shot (giữ máy quay chọn tay) → lint. Câu chữ prompt là bản viết mới; prompt/luật đạo diễn gốc nằm trên License Hub của MuseStudio và không được sao chép. Kết quả đi qua `toPlan` rồi `parsePlan`, nên mọi kiểm tra cũ (asset/voice bịa, cast có sẵn, độ dài field) vẫn áp dụng.
+
+Mỗi lượt có checkpoint riêng (`checkpoint.turns[lượt]`): lượt đã có câu trả lời được tái dùng, lượt đã gửi API mà chưa có kết quả thì chờ đối soát, lượt trình duyệt giữ trạng thái admission riêng của `completeText`. Trạng thái đạo diễn (`checkpoint.director`) cho phép retry viết nốt cảnh còn thiếu mà không hỏi lại Muse phần đã xong; kịch bản còn thiếu shot sau khi hỏi lại thì task chuyển `waiting_input`, không áp dụng kế hoạch cụt. Mỗi lần như vậy mở một vòng vá mới (`state.repair`, lượt `scene:<id>:missing:r<n>:<k>`), nên retry hỏi lại Muse thật cho các shot còn thiếu thay vì phát lại câu trả lời rỗng đã lưu; sập giữa một vòng thì giữ nguyên ID lượt và dùng lại câu trả lời đã có. Cast khách nhập giữ nguyên ID/tên/mô tả. Phim vượt 1.000 shot dừng trước lượt tính phí đầu tiên. Dự án khóa theo cue SRT, lời đọc đo thật, `visualGroups` hoặc giữ nguyên kịch bản (`keepScript`) vẫn dùng một lượt `planningPrompt`, vì số shot đã cố định. Checkpoint toàn task vẫn chịu trần 1 MiB của store; phim rất dài có thể chạm trần này và dừng an toàn.
+
+<!-- docs-check: src/core/director.ts#MAX_CAST = 12 -->
+<!-- docs-check: src/core/director.ts#MISSING_TRIES = 2 -->
+<!-- docs-check: src/core/director.ts#VERIFY_ROUNDS = 2 -->
+<!-- docs-check: src/core/director.ts#MAX_LINES = 2 -->
+
+## Functional parity dev — snapshot đang tích hợp (14/11/2026)
+
+Mục tiêu vẫn là F01–F14 “tốt bằng”, không coi fixture, tên tab hoặc cùng model là full parity. Bản đang mở/packaged 0.1.0 và các kết quả nghiệm thu cũ không tự đại diện cho source dev mới. Phần đạo diễn nhiều lượt ở trên được giữ nguyên từ thay đổi đồng thời; trạng thái ở đây không nhận quyền tác giả hoặc xác nhận toàn bộ đoạn code đó đã được review cuối.
+
+### Stage, cache và chống gửi trùng
+
+`studio.run` nhận stage `plan|music|characters|images|videos|speech|check|render|all`, mặc định `all`; selected `shotIds` dành cho images/videos/speech/check. `studio.plan` tiếp tục là nhập/tách thủ công, có `planning.source=manual`, không tự trở thành AI. Stage plan là job xếp hàng thật, dùng text provider cấu hình hoặc `BrowserManager.completeText` theo đúng profile. Prompt và JSON schema trong `src/core/planning.ts`/`src/core/director.ts` là implementation do MaiStudio viết; thứ tự/field quan sát được lấy từ artifact. Prompt/luật đầy đủ gốc gọi `/v1/recipe` trên License Hub MuseStudio, chưa được khôi phục hoặc kiểm chứng live; không gọi schema mới là “recipe gốc”.
+
+Kết quả AI phải qua giới hạn JSON/cast/scenes/shots/ref/voice trước khi lưu. Input đổi trong lúc chạy thì giữ output ở task để review, không ghi đè bản sửa mới. `project.data.production` giữ bản đồ characterImages/images/videos/speech, music/narration và fingerprints; asset chỉ dùng lại khi còn tồn tại và khớp input thực (prompt, refs, ratio, metadata step). Fingerprint ảnh nhân vật gồm cả character và style. Khi resume, frame mới hợp lệ trong production được ưu tiên hơn checkpoint cũ đã xong; downstream signature cũ được bỏ khi an toàn. `workingHash` ghi nhận các cập nhật nội bộ của workflow, không bỏ qua chỉnh sửa bên ngoài.
+
+`force` phải là boolean, chỉ nhận ở music/characters/images/videos/speech. Force bỏ việc dùng lại cache project cho lượt tạo mới; retry cùng task vẫn giữ checkpoint/asset đã hoàn thành, explicit asset do người dùng chọn vẫn được tôn trọng. Force không xóa admission chưa rõ kết quả. Chữ ký input đổi trong lúc provider còn xử lý đưa job về `waiting_input`; không submit lại mù.
+
+`hasPendingAdmission` duyệt checkpoint lồng nhau để chặn lượt mới chồng lấn ở cùng project/series family; kiểm cả `studio.run` và retry qua `task.action`. Render-only là ngoại lệ không gọi provider. Pipeline/plan cùng family có project lease, phim độc lập vẫn được chạy song song theo concurrency. Response/asset đã lưu được tái dùng; request đã gửi nhưng không rõ kết quả phải đối soát và tiếp tục task cũ. Chưa có quy trình UI đối soát tổng quát đã nghiệm thu; xóa task/DB hoặc force không được tài liệu này coi là bằng chứng remote chưa nhận việc. Review cũ đã hoàn tất không tự chặn generation mới.
+
+### Story voice: audio trước, hình ảnh sau
+
+`src/core/story.ts` giữ thuật toán split/timing/group và `alignScript`; `tests/fixtures/storyvoice.json` tách metadata replay của các pure function có allowlist/SHA khỏi bằng chứng tĩnh ban đầu. 21 fixture split/timing/group cũ được giữ; bổ sung 74 alignment fixture và hai digest đầy đủ cho 1.000 câu fallback/anchor. Đây là controlled pure-function replay, không chạy module gốc/EXE/provider và không chứng nhận ứng dụng Windows.
+
+Story TTS tạo từng câu qua provider thật, ghi admission trước POST, giữ câu xong khi retry, đo duration bằng media probe rồi tạo cue (lead-in 0.25; gap câu 0.35/clause 0.15; duration tối thiểu 0.3 giây). Ghép WAV theo offsets thật, có tail, rồi mới gom cue thành visual groups và lập kế hoạch hình ảnh. Visual groups có thể ít hơn cue; cue/SRT vẫn giữ timestamp độc lập. Các test HTTP/WAV đo thật đã có; live voice quality/chi phí vẫn chưa nghiệm thu.
+
+Source audio/video giữ đúng asset nguồn: dùng ASR có timestamp cấu hình hoặc VAD/periodicity local → `OfflineAsr.transcribeParts` trên các khoảng nói đo được. Nếu có script, `alignScript` căn theo speech clock, token anchors nếu đủ, snap 0.5 giây và cue tối thiểu 0.6 giây; không bắt số câu script bằng số ASR segment. Không biến thời điểm phát token thành word timestamps; không giả transcript. Cue tối thiểu có thể vượt cuối audio theo thuật toán gốc. Nhánh source alignment đã có fixture/helper và ca test service; xác nhận integration cuối cùng của parent còn chờ. Cache narration ràng buộc script/source/voice/language/shotSeconds; thay lời kể thì đánh dấu cần lập lại hình ảnh, giữ output cũ để review.
+
+Giới hạn port của alignScript: tối đa 1.000 câu/span/ASR string, 4.096 token mỗi phía, 32 KiB mỗi string và 1 MiB mỗi tập string; speech spans phải hữu hạn, có thứ tự, không overlap, kết thúc trong timeline 6 giờ. Đây là kiểm input của MaiStudio, không gắn nhãn validation gốc từ EXE. ASR local có trần riêng 30 phút như bên dưới.
+
+### ASR và speaker offline: model pin, native CPU worker
+
+`src/core/offline-asr.ts`/`src/core/asr-worker.ts` dùng `sherpa-onnx-node@2.0.1` và gói native chính thức theo OS/architecture. Không yêu cầu người dùng cài Python/NumPy, không dùng lại PYD Windows. Hai model giữ đúng tên/hash từ contract đã trích:
+
+| Model tải | Payload pin | Kiểm toàn vẹn và nơi lưu |
+| --- | ---: | --- |
+| Zipformer VI int8 `sherpa-onnx-zipformer-vi-int8-2025-04-20.tar.bz2` | 60.181.038 bytes | 4 member encoder/decoder/joiner/tokens kiểm SHA-256 riêng theo ASR_MODEL.files; userData/models/sherpa-onnx-zipformer-vi-int8-2025-04-20 |
+| WeSpeaker `wespeaker_en_voxceleb_resnet34.onnx` | 26.534.365 bytes | SHA-256 `5ef208a9da1453335308a6b6f4e6dfbd7e183a38b604de0a57664f45d257fe94`; userData/models/voice-id |
+
+Tổng payload download 86.715.403 bytes (~86.7 MB thập phân), không phải dung lượng cài đặt/peak disk/RAM. Không commit weights. Model preparation là job `model-prepare` qua `voice.offline.prepare` trong Settings, có progress/cancel, không nhận URL model tùy ý. Tải HTTPS tới host chính thức/allowlist redirect, pin số byte; member tar đọc theo tên cố định, staging riêng và kiểm SHA trước khi promote. `ready()` cache stat fingerprint nhưng worker kiểm lại hash model cần dùng. Cần tar/FFmpeg khả dụng và unpack worker cùng native package khỏi ASAR.
+
+Worker CPU 2 thread, decode chunk 20 giây, 16 kHz mono; tối đa 30 phút/57.600.000 bytes PCM, 1.000 khoảng nói có thứ tự không overlap. Stdin 128 KiB; stdout 3 MiB; stderr 64 KiB; timeout worker 5 phút, cancel dừng cây process. Mỗi embedding cần ít nhất 0.8 giây, trả 256 chiều normalized. Chỉ một offline speech job hoạt động trong process; lỗi thiếu model/native không phải kết quả pass. Digital silence bị loại, nhưng chưa loại được mọi hallucination ASR.
+
+<!-- docs-check: src/core/offline-asr.ts#ASR_MAX_PCM_BYTES = 57600000 -->
+<!-- docs-check: src/core/offline-asr.ts#MAX_MODEL_BYTES = 83886080 -->
+<!-- docs-check: src/core/offline-asr.ts#MAX_TEXT_BYTES = 1048576 -->
+
+Có báo cáo native chạy thật trên macOS ARM64 với host Node 24.22.1 và Electron 41.5.1/Node 24.15: chữ Việt, measured parts, 256D embedding, silence/cancel/stat invalidation. Đây là binary Electron chạy worker, chưa phải nghiệm thu app.asar/native trên mọi OS. Sherpa frontend/chunking/pooling là implementation portable mới: cùng weights không chứng minh tương đương số học/độ chính xác với Python gốc, cũng không chứng minh danh tính người nói ngoài cohort.
+
+### Nhạc, QA và series — phần có code và phần đang chờ
+
+Music stage gửi mô tả + lời yêu cầu instrumental tới Muse browser, nhận audio mới của đúng thread, probe stream rồi lưu musicId/production.music với fingerprint prompt. Cache hoặc audio người dùng nhập được dùng lại phù hợp; force tạo lại vẫn giữ admission guards. `musicMode=auto` chạy stage này trong all; thiếu account/stream hợp lệ báo lỗi. Fixture Chrome/HTTP/FFmpeg xác nhận đường đi này, chưa gọi job nhạc live tính phí.
+
+Image review gửi **bytes ảnh thật** (frame đầu, ref nhân vật tiếp theo) qua text-provider vision; giới hạn 16 ảnh/25 MiB raw. Kết quả scene/face/outfit có pass/fail/unknown/not_applicable và lý do; thiếu ref/provider không tự pass. Speech review đọc clip thật, đo acoustic spans, nhận transcript thật nếu có, so nội dung và tách speaker cohort từ speech crop/WeSpeaker; pitch không được coi là danh tính. Kernel `compareSpeakers` dùng leave-one-out centroid/margin/cross-speaker và số peer thực; review có fingerprints/checkpoint theo asset/prompt/provider, merge vào production mới nhất thay vì phục hồi snapshot cũ.
+
+Các thay đổi cohort, silent-shot QA, stale-review invalidation và commit/retry guards đang được agent hoàn thiện/kiểm integration trong `tests/review.test.ts`; không coi có code/test mới là đã nghiệm thu toàn bộ. `autoChecks=true` ở kế hoạch AI film mới chạy gate trước render của all; verdict fail/unknown dừng `waiting_input`, không tự tạo lại media. Legacy không đặt flag vẫn giữ hành vi cũ. Độ chính xác face/outfit/voice thực và cohort calibration còn mở.
+
+Series giữ project film/edited shots/production đã có của từng tập, chỉ chạy tập/shot được chọn, không thay outputIds bằng kết quả stage dở. Đổi characters/style/bible/ratio/musicId/musicMode ở series đánh dấu child `productionStale`, không thay media đã render. `src/core/series.ts` đã có createRecap và test FFmpeg (tối đa 3 clip cuối phù hợp, tail <=4.5 giây/clip, fade 0.3/0.4; đầu vào do caller chọn). **Wiring recap vào pipeline series, chọn cửa sổ thoại QA đúng như gốc, teaser/credit và continuity live vẫn pending**; helper path-only hiện dùng clip tail, không tự chứng minh source-parity recap.
+
+CSV/JSON batch ở `src/core/products.ts` giữ facts/giá/field gốc, parser có quoting/BOM/Unicode và chống prototype/NUL; provenance import được lưu. Tối đa 1.000 sản phẩm, 32 KiB/record, 8 MiB/source. Import link/scraping có quyền, Market attachments/entitlement và claim review vẫn là nghiệm thu riêng.
+
+<!-- docs-check: src/core/products.ts#MAX_PRODUCTS = 1000 -->
+<!-- docs-check: src/core/products.ts#MAX_PRODUCT_BYTES = 32768 -->
+<!-- docs-check: src/core/products.ts#MAX_SOURCE_BYTES = 8388608 -->
 
 ## Ma trận chức năng — trạng thái dev
 
 | Nhóm | Mã hiện có | Điều kiện nghiệm thu còn lại |
 |---|---|---|
 | F01 Studio/projects | Project/task CRUD, batch/count, refs, filter/selection, run/cancel/retry; 2 vòng 1.000 task | live provider |
-| F02 generation | Muse browser adapter, API ảnh/edit, thread/download/checkpoint | tài khoản Muse thật, video/image-to-video live và DOM thay đổi |
+| F02 generation | Muse text/image/video/music browser adapter, API ảnh/edit, thread/download/admission checkpoints | tài khoản Muse thật, video/image-to-video live và DOM thay đổi |
 | F03 accounts/proxy | Persistent profiles, native browser, proxy configuration/test, isolation | Linux/Windows desktop, HTTP/SOCKS thật |
 | F04 queue | SQLite lifecycle, bounded concurrency, cancel/restart checkpoint, pause bền, tải 1.000 task/vòng | hard-kill/power loss và disk pressure thực |
 | F05 library | Import, preview, export/open/delete, asset provenance | UI/render codec theo OS |
-| F06 hậu kỳ | Slideshow, merge, normalize, music/audio/subtitle/dub CPU | media dài và codec thực trên OS khác |
-| F07 SRT/story | Parse/export cue, shot editor, voice/ASR/text endpoints | live narrator/ASR quality, giữ cue khi đổi giọng |
-| F08 film | Shot/cast/scripts, image/video/speech checkpoints, title/end card, subtitle, nhạc | live multi-shot, quality/consistency review |
-| F09 series | Episode editor/common cast, shot từng tập, output/film từng tập | continuity thực, recap/credit và đánh dấu thay cast cần dựng lại |
-| F10 affiliate | Product facts/JSON/shot pipeline, signed Shopee query, product overlay/CTA | credential thật, batch import CSV/link scraping và claim review |
-| F11 dub/voice | Transcript/SRT/source/voice UI và TTS/mix/dub pipeline | live VoiceTube/ASR; speaker auto-detection/quality không được suy ra từ tên module |
+| F06 hậu kỳ | Merge/slideshow phân cấp, trim/crop/fade, ducking/Ken Burns tùy chọn, audio extraction/mix, subtitle/dub CPU | media dài/codec trên OS khác; full stress/artifact đợt mới |
+| F07 SRT/story | Narration theo duration WAV thật, source alignment, visual grouping giữ cue, ASR local/remote có timing đo thật | service integration cuối, live narrator/ASR quality |
+| F08 film | Đạo diễn nhiều lượt (bible → từng cảnh → vá shot thiếu → soát/verify → máy quay → lint, resume theo lượt), shot/cast/scripts, image/video/speech checkpoints, title/end card, subtitle, nhạc | live Muse nhiều lượt, use_script trong đạo diễn, quality/consistency review |
+| F09 series | Plan/cache/edited shots và output từng tập; shared/episode edits đánh dấu stale; recap nối từ raw clip, QA window và subtitle offset có kiểm thử CPU | Nhạc recap raw tách nhạc global; teaser/credit tự động và continuity thực còn nghiệm thu |
+| F10 affiliate | CSV/JSON batch facts/provenance, signed Shopee query, product overlay/CTA | credential thật, link/scraping có quyền và claim review |
+| F11 dub/voice | Speech cache theo cue; render/check không TTS; căn tempo có giới hạn, acoustic/ASR/Zipformer VI/WeSpeaker/cohort có kiểm thử local | VoiceTube/ASR live, căn từng cụm/khẩu hình và hiệu chuẩn giọng thật; local Dub check không xác minh nội dung bằng ASR |
 | F12 Market | Cookie session, catalog/library, master prompt/preview download, mở checkout nhà cung cấp | tài khoản có quyền, mua/tải thật và attachment delivery chưa hỗ trợ |
 | F13 Codex | CLI capability detection, private job workspace, schema/log/cancel/approve | CLI installed compatible và thao tác thật có review |
 | F14 license/update | Hub ký Ed25519, activate/trial/deactivate/revoke/config/update; signed artifact gate + Electron updater | feed/signing thực, update rollback, clock/revocation/offline window; chưa deploy |
@@ -82,10 +156,34 @@ Chuẩn bị cập nhật tạm dừng admission queue và khóa các command th
 
 Hai Dockerfile trong tools/ tách kiểm thử lõi Linux khỏi đóng gói desktop. Verification image dùng FFmpeg hệ thống trong container; distribution image tải Electron/FFmpeg native của Linux. Package homepage là about:blank trong bản dev vì chưa có website công khai của sản phẩm, không trỏ tới domain tự nhận quyền sở hữu. Xem báo cáo nghiệm thu trong docs/reports/ để biết artifact và coverage thực.
 
+Dockerfile đóng gói Linux mặc định dùng kiến trúc của Node trong image, không ép ARM64 trên image x64. Chọn build platform trước npm ci để Electron, FFmpeg và Sherpa optional package khớp nhau; không cross-copy addon ARM sang gói x64. Dockerfile verify lõi lịch sử chưa thay thế full suite/Xvfb và native packaged smoke của checkpoint 0.2.
+
 ## Ghi chú triển khai
 
 - Template AGENTS và file-creation checklist không tồn tại tại các đường dẫn global được cung cấp; AGENTS mới chỉ ghi delta dự án.
 - GitHub binary download lỗi DNS khi npm install. Local dùng lại Electron/FFmpeg đúng phiên bản đã có của MaiHub; dependency JavaScript và lockfile cài riêng. CI cài binary đúng runner bằng npm ci.
 - Không thay đổi repo automation-marketing hoặc các bản MuseStudio gốc. Chưa deploy, migrate dữ liệu thật, push hoặc phát hành.
 - Cập nhật trạng thái kiểm chứng bằng chứng thực sau mỗi vòng; không đổi cột chưa kiểm thành hoàn tất dựa vào source inspection.
+
+## Cập nhật hành vi của bản dev 0.2.0-dev.1
+
+Pipeline/plan giữ lease theo project và cả family series/film để tránh ghi đè cache; task ảnh độc lập vẫn chạy song song theo giới hạn cấu hình. ASR/embedding native có lease FIFO chung trong tiến trình, hủy được khi đang chờ; hai project không còn thất bại chỉ vì worker đang bận. Chuẩn bị model vẫn có busy guard riêng. Request đã gửi nhưng chưa rõ kết quả không được né bằng một task mới hoặc force; request trả 429 xác định dùng retry có giới hạn của đúng checkpoint.
+
+Plan AI bị đánh dấu cần cập nhật khi đổi script/phút/genre/ngôn ngữ/facts sản phẩm mà storyboard chưa được chỉnh. Chỉnh shots/scenes rõ ràng được xem là storyboard do người dùng quyết định. Bước ảnh/video/check/render dừng khi plan còn stale; all cập nhật plan trước khi tạo media. Style và styleText được đưa vào prompt frame/clip; fingerprint portrait tính cả hai. Đổi một episode đánh dấu đúng film liên quan stale; đổi cast/style chung đánh dấu các film trong series, giữ output cũ.
+
+Keep-script so sánh lời thoại có nhãn nhân vật đã khai báo hoặc nguyên văn script không nhãn; dấu hai chấm/URL trong câu không tự được xem là nhãn người nói. Director từ chối áp plan có nhiều speaker trong một shot thay vì bỏ thoại. Mọi bản sửa verify đều được merge; scene range phải phủ đúng budget. Parser reply chạy tuyến tính, tối đa 512 KiB. Prompt director vượt 32 KiB dừng cục bộ trước admission; chưa có chunking review dài. Trần thực thi vẫn 1.000 bước media, khác với trần 1.002 input của một lần ghép local; preflight ngân sách director tính số bước trước khi gọi provider.
+
+Ảnh sản phẩm được chọn bằng asset ID, tối đa 16 ảnh cùng refs khác; text provider có vision hoặc Muse nhận chính ảnh đó khi lập kế hoạch. Pipeline giữ refs qua bước ảnh/video. Frame review dùng mô tả cảnh, không thay bằng riêng lệnh camera/video. QC lưu asset/prompt/ref fingerprint, kết hợp metadata mới nhất khi commit; không gắn verdict cũ vào asset vừa tạo lại. Review-only không tự tạo lại media; autoChecks của all dừng ở fail/unknown. Chưa có vòng tự sửa media trả phí.
+
+Nguồn audio có script nhưng chưa có ASR/model vẫn có thể căn theo các khoảng nói đo thật và speech-clock fallback; không tạo heard words giả. Timestamp ASR vượt thời lượng audio thực bị từ chối. Phụ đề sau dựng tính title offset, giữ khoảng trống và gắn subtitleInputHash; native clock cũ không được export sau khi input đổi. production.render lưu asset và inputHash; productionStale chỉ được xóa khi output khớp nội dung hiện tại.
+
+Browser text giữ chính sách fail-closed: textBusy đã checkpoint không chứng minh một reply yên lặng đã hoàn tất sau khi app dừng, vì Stop/cancel cũng tạo cùng trạng thái. Chỉ nhận completion đã quan sát hoặc marker được kiểm chứng; mở thread để đối soát khi chưa rõ. Trường hợp này là giới hạn đã biết, không khẳng định tự khôi phục mọi reply hoàn tất trong lúc app đóng. Cần runtime Muse trên VPS để xác lập marker/selector và so kết quả thực với bản gốc.
+
+Dubbing chỉ chạy speech/check/render/all; UI không hiển thị các bước tạo ảnh/nhân vật/AI plan không áp dụng. Speech lưu audio theo cue/text/voice/provider fingerprint; selected chỉ chọn cue speech. Render dùng audio đã có, thiếu/stale thì dừng và không gửi TTS. Check local chỉ kiểm stream/thời lượng của output hiện tại, semantic vẫn unknown và không gọi TTS. ASR/dịch/voice library vẫn qua công cụ giọng riêng. Trước TTS phải có video thực, tối đa 100 cue trong thời lượng nguồn. Output giữ kích thước video nguồn; không tự chuyển sang canvas 1280×720.
+
+Dubbing bật fitVoice: đưa cả audio qua atempo trong biên gốc 0,85–1,15, đo WAV đã fit trước khi nhận vào slot. Vượt biên/không vừa thì waiting_input, giữ speech cache để chỉnh SRT rồi render lại không gọi TTS mới; không cắt đuôi để báo thành công. Đây là căn cả file, chưa phải căn từng cụm hoặc khẩu hình; tối đa ba lần hiệu chỉnh sai số cửa sổ FFmpeg là chính sách của MaiStudio. MediaTools.dub mặc định không bật fitVoice để giữ hành vi trim của các caller cũ.
+
+Render đặt output fps rõ ràng theo timeline để FFmpeg 7 không suy ra nhịp hình khác từ concat/timebase. Nhạc và sidechain được chia cùng block 1.024 sample trước sidechaincompress, giữ ducking hồi phục sau khoảng thoại trên binary Linux đi kèm. Không thay FFmpeg đã pin hoặc đóng gói thêm thư viện hệ thống để né khác biệt phiên bản; các kiểm thử mốc phân số, ghép phân cấp, fade và hủy vẫn giữ nguyên.
+
+Series recap là opt-in, tối đa 30 tập, lấy tối đa ba raw clip hợp lệ của tập ngay trước. Khi có QA hiện tại: lead 0,15s, tail 0,35s, tối thiểu 1,2s, tối đa 4,5s/clip; QA stale/fail không được thay bằng fallback. Thiếu QA có cảnh báo tail fallback; chỉ gắn nguyên câu khi span thoại được giữ trọn. Recap nối vào raw episode, cập nhật sidecar theo frame clock và cache riêng để retry không prepend hai lần; raw bị xóa thì dựng CPU lại. Audio recap là raw, không thêm lại nhạc global hoặc duplicate nhạc của episode; vì vậy chưa chứng nhận nhạc liên tục giống bản gốc.
 - macOS bản ad-hoc có thể chờ hộp thoại OS Keychain; stack SecItemCopyMatching đã xác nhận khi thử cold start. Smoke tự động dùng --use-mock-keychain trong userData tạm với key fixture, không chứng nhận quyền keystore thật hay lưu secret qua lần mở lại. Không thay đổi ACL/keychain của anh.
