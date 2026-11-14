@@ -1,6 +1,6 @@
 MAISTUDIO — THIẾT KẾ HỆ THỐNG TƯƠNG ĐƯƠNG MUSESTUDIO
 Ngày: 14/11/2026
-Trạng thái: Bản thiết kế đề xuất, chờ anh duyệt trước khi lập kế hoạch và viết product code.
+Trạng thái: Đã được anh duyệt ngày 14/11/2026; có bản dev kiểm chứng local, chưa hoàn tất nghiệm thu M5/full parity.
 Tên MaiStudio, ứng dụng độc lập và lựa chọn công nghệ là mặc định do em đề xuất; anh chưa xác nhận các lựa chọn này.
 
 1. MỤC TIÊU VÀ BẰNG CHỨNG
@@ -177,3 +177,7 @@ Schema compatible hoặc backup/restore đã thử; rollback app không tự rol
 Duyệt phạm vi F01–F14 và mặc định ứng dụng riêng Electron/TypeScript, tên tạm MaiStudio, thực hiện M1 -> M5. Thiếu credentials/provider access/signing không xóa tính năng khỏi mục tiêu; đó là điều kiện xác nhận khi đến integration/release. Một số hành vi bí mật trong native binary chỉ có thể tái hiện theo hành vi được quan sát, không cam kết giống từng chi tiết thuật toán.
 
 Rà độc lập trước bàn giao: builder check không phát hiện câu hỏi quan trọng còn thiếu để lập kế hoạch (14/11/2026). Đây là rà thiết kế, không phải chứng nhận code hoặc provider runtime.
+
+15. GHI CHÚ SAU TRIỂN KHAI DEV — 14/11/2026
+
+Mã nguồn riêng tại /Users/maiychrus/Documents/mai-studio đã được tạo theo phê duyệt. Dùng node:sqlite đã kiểm trong Node của Electron thay better-sqlite3; nâng electron-updater 6.8.11 theo audit. Các module giữ dạng file gọn, không tạo toàn bộ directory/bảng dự kiến. Phần thân thiết kế trên giữ như lịch sử yêu cầu; trạng thái nghiệm thu thực, giới hạn và các mục chưa đủ parity được ghi trong SYSTEM_DOCUMENTATION.md và docs/reports/acceptance.md. Không coi bản dev này là hoàn tất toàn sản phẩm.

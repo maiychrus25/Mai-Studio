@@ -1,7 +1,7 @@
 export type ProjectKind = 'studio' | 'srt' | 'film' | 'series' | 'affiliate' | 'dub';
 export type TaskStatus = 'draft' | 'queued' | 'running' | 'waiting_input' | 'paused' | 'succeeded' | 'failed' | 'cancelled' | 'interrupted';
 export type TaskKind = 'image' | 'video' | 'image-to-video' | 'merge' | 'slideshow' | 'dub' | 'speech' | 'pipeline';
-export interface Shot { id: string; prompt: string; duration: number; dialogue?: string; speaker?: string; assetId?: string; voiceId?: string }
+export interface Shot { id: string; prompt: string; duration: number; start?: number; dialogue?: string; speaker?: string; assetId?: string; voiceId?: string }
 export interface Character { id: string; name: string; description: string; assetId?: string; voiceId?: string }
 export interface Project { id: string; name: string; kind: ProjectKind; createdAt: number; updatedAt: number; data: Record<string, unknown> }
 export interface Task {
@@ -49,8 +49,9 @@ export interface TaskContext {
   checkpoint(value: Record<string, unknown>): void;
 }
 export interface TaskResult { outputIds: string[]; message?: string }
-export interface MediaInput { path: string; duration?: number; caption?: string }
+export interface MediaInput { path: string; duration?: number; start?: number; caption?: string }
 export interface MediaOptions {
   width?: number; height?: number; fps?: number; musicPath?: string; volume?: number; keepAudio?: boolean;
   subtitlePath?: string; title?: string;
+  overlayPath?: string;
 }

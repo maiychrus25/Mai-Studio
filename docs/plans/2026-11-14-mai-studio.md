@@ -79,4 +79,4 @@ Files: .github/workflows/build.yml; scripts/check-docs.js; scripts/stress.mjs; R
 
 ## Progress
 
-Plan written; implementation in progress. Completion and verification evidence is maintained in SYSTEM_DOCUMENTATION.md and docs/reports/.
+Dev implementation M1–M4 exists with actual local operations and contract fixtures; M5 is partial. Host and Linux verification, packaged runtime checks, independent diff review and measured stress results are recorded in SYSTEM_DOCUMENTATION.md and docs/reports/acceptance.md. Live provider access, advanced parity gaps, remaining OS/architecture checks and signed update/rollback acceptance remain open; the unchecked acceptance items above are not implied complete by a passing dev suite.
