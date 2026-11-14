@@ -1,0 +1,9 @@
+{
+  "compilerOptions": {
+    "target": "ES2023", "module": "CommonJS", "moduleResolution": "Node", "lib": ["ES2023", "DOM"],
+    "outDir": "dist", "rootDir": ".", "strict": true, "esModuleInterop": true,
+    "skipLibCheck": true, "noUnusedLocals": true, "noUnusedParameters": true,
+    "forceConsistentCasingInFileNames": true, "sourceMap": true
+  },
+  "include": ["electron/**/*.ts", "src/shared/**/*.ts", "src/core/**/*.ts", "services/**/*.ts", "tests/**/*.ts"]
+}

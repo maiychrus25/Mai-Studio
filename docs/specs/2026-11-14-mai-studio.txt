@@ -1,0 +1,179 @@
+MAISTUDIO — THIẾT KẾ HỆ THỐNG TƯƠNG ĐƯƠNG MUSESTUDIO
+Ngày: 14/11/2026
+Trạng thái: Bản thiết kế đề xuất, chờ anh duyệt trước khi lập kế hoạch và viết product code.
+Tên MaiStudio, ứng dụng độc lập và lựa chọn công nghệ là mặc định do em đề xuất; anh chưa xác nhận các lựa chọn này.
+
+1. MỤC TIÊU VÀ BẰNG CHỨNG
+
+Xây dựng ứng dụng desktop có mã nguồn bảo trì được, hỗ trợ Windows, macOS và Linux, bao phủ các nhóm chức năng quan sát được trong MuseStudio 1.13.12. Không yêu cầu người dùng cài Python hoặc sao chép DLL/PYD Windows sang hệ điều hành khác.
+
+Anh xác nhận chỉ có EXE, không có mã nguồn. Căn cứ thiết kế là report.txt, api-candidates.txt, bytecode-inventory.json và rea-evidence.json trong cùng thư mục. 123 chuỗi API và tên hàm là bằng chứng tĩnh; chúng không chứng minh mọi nhánh đang hoạt động, thuật toán gốc hoặc quyền truy cập dịch vụ ngoài. Từng mục dưới đây phải được nghiệm thu bằng hành vi thực tế trước khi ghi là tương đương.
+
+Kết quả cuối: mã nguồn TypeScript, kiểm thử, tài liệu hệ thống và bộ cài riêng theo OS/architecture. Đây là mục tiêu toàn sản phẩm; không coi giao diện giả, CRUD đơn thuần hoặc một demo tạo video là hoàn tất.
+
+2. PHẠM VI VÀ CÁCH XÂY
+
+Phương án được cân nhắc:
+A. Port nguyên Python/PyInstaller: tận dụng được module thuần Python nhưng lõi .pyd không có source, bytecode khó bảo trì và phải xử lý dependency riêng trên từng OS. Không chọn.
+B. Viết ứng dụng Electron/TypeScript độc lập: cùng ngôn ngữ cho UI/core, kế thừa kinh nghiệm SQLite/Playwright/FFmpeg/build của MaiHub, profile và dữ liệu tách riêng. Đề xuất chọn.
+C. Mở rộng MaiHub: tái sử dụng trực tiếp dịch vụ hiện có nhưng làm thay đổi sản phẩm marketing đang dùng và mở rộng phạm vi hồi quy. Không chọn làm mặc định; chỉ chuyển sang phương án này nếu anh yêu cầu.
+
+Ứng dụng mới đặt dự kiến tại /Users/maiychrus/Documents/mai-studio, repository riêng, nhánh phát triển feat/studio-foundation. Chưa tạo repository hoặc sửa runtime MaiHub trong bước thiết kế. Sau khi được duyệt, tạo AGENTS.md theo template hiện có, DESIGN.md, SYSTEM_DOCUMENTATION.md và kế hoạch trong docs/specs/, docs/plans/. Không sao chép các module CRM/ERP/kênh chat của MaiHub vào sản phẩm mới.
+
+3. NỀN TẢNG VÀ CÔNG NGHỆ
+
+- Electron + TypeScript; React/Vite cho renderer; Playwright cho browser automation; SQLite cho metadata; FFmpeg/ffprobe cho media; electron-builder/updater cho đóng gói và cập nhật.
+- Điểm khởi đầu đã kiểm trong repo MaiHub: Electron 41.5.1, React 18.3.1, TypeScript 5.9.3, Vite 6.4.2, Playwright Core 1.62.1, better-sqlite3 12.9.0, ffmpeg-static 5.3.0, electron-builder 26.8.1, electron-updater 6.8.3. Khi triển khai phải chốt lockfile và kiểm support/security của phiên bản tại thời điểm đó; không hiểu danh sách này là cam kết giữ bản cũ bất kể support.
+- Chọn thư viện hiện có trước; dependency mới phải có mục đích cụ thể và kiểm tra native binary tương ứng OS/architecture.
+- Build trên runner đúng nền tảng/architecture. Không lấy native dependency từ node_modules macOS để đóng gói Linux/Windows.
+
+Ma trận đích đề xuất:
+- macOS 14 trở lên, Apple Silicon và Intel: bộ cài DMG + ZIP riêng. Đây là baseline bảo thủ theo yêu cầu Playwright hiện hành; không hứa hỗ trợ macOS cũ chỉ vì Electron còn chạy được.
+- Linux: Ubuntu 22.04/24.04 và Debian 12/13, x64 và arm64; AppImage và DEB. X11 và Wayland có ca kiểm riêng; thiếu package hệ thống phải báo chẩn đoán cài đặt, không báo thành công giả.
+- Windows 11 x64, NSIS. Windows 10 và Windows arm64 không thuộc ma trận cam kết ban đầu vì cần kiểm riêng stack browser/automation; không tự hạ runtime để nhận hỗ trợ hệ cũ.
+- UI kiểm 1440x900 và 390x844 trên mỗi vòng stress; chiều rộng mobile là kiểm responsive, không có nghĩa phát hành app iOS/Android.
+
+4. KIẾN TRÚC
+
+Renderer React -> preload contextBridge -> IPC có kiểu/validation -> service nghiệp vụ -> SQLite, filesystem, browser/media worker, provider ngoài.
+
+Renderer không có Node access, không nhận API key gốc và không gọi shell. IPC kiểm sender, dữ liệu và file capability. UI không điều khiển browser profile bằng đường dẫn tùy ý.
+
+Thư viện và preview media dùng custom protocol giới hạn asset ID, hỗ trợ range; không mở server localhost mặc định. Các nhóm API tham khảo được chuyển thành domain IPC; không cam kết tương thích HTTP với sản phẩm gốc. Chỉ làm localhost Control API riêng nếu sau này có nhu cầu tự động hóa ngoài app được xác nhận.
+
+SQLite chỉ có một owner ghi; thao tác dài chạy ở worker/process riêng. Hàng đợi ghi transition/checkpoint trước khi phát sự kiện UI. Khi UI mở lại, đọc snapshot từ DB rồi nhận events; không phụ thuộc event đã bị lỡ.
+
+5. MA TRẬN CHỨC NĂNG VÀ NGHIỆM THU
+
+F01 — Dự án và Studio
+Tạo/đổi tên/xóa dự án; nhập nhiều prompt, tên, thứ tự, tỉ lệ, loại image/video/image-to-video, số lượng, ảnh tham chiếu. Chọn nhiều, lọc/tìm kiếm, preview, chạy lại lỗi, dừng, xóa có xác nhận. Mở lại app giữ đủ dữ liệu. Nghiệm thu: cùng input tạo đúng số task, giữ thứ tự, không mất prompt/ref khi sửa hoặc reload.
+
+F02 — Engine tạo ảnh/video
+Mỗi provider công bố capability. Muse browser adapter thao tác qua DOM/Playwright và phiên đăng nhập do người dùng tạo. Theo dõi đúng thread/message/result, nhận ảnh/video, lưu file hoàn chỉnh rồi mới đánh dấu done. Upload ref, image-to-video và resume từ remote job/thread đã nhận. Provider thiếu capability phải báo rõ. Không có chế độ giả làm thành công.
+
+F03 — Tài khoản, profile và proxy
+Thêm/đổi/xóa, mở để đăng nhập, kiểm phiên, gán HTTP/SOCKS proxy và kiểm kết nối. Profile tách directory/cookie; một profile chỉ có một automation lease. Điều phối theo tài khoản sẵn sàng, hạn mức/cooldown, hiển thị lý do chờ. Không tự vượt CAPTCHA/MFA/approval hoặc giới hạn dịch vụ; cần người dùng xử lý thì job chuyển waiting_input và có nút mở đúng profile.
+
+F04 — Hàng đợi và độ bền
+Trạng thái draft/queued/running/waiting_input/paused/succeeded/failed/cancelled/interrupted. Có runId/attemptId, lease, checkpoint, retry có giới hạn, timeout, cancel, pause/resume, thay đổi thứ tự và concurrency settings. Sau crash, running phải đối soát remote job/file/checkpoint trước; không tự submit lại công việc có thể tính phí. Nếu không xác định được remote acceptance, chờ người dùng đối soát thay vì retry mù.
+
+F05 — Thư viện
+Metadata, thumbnail, search/filter, preview lazy loading, mở thư mục, export và xóa có xác nhận. Output từ mọi studio vào cùng thư viện, giữ nguồn project/task. File đang được job dùng không bị xóa âm thầm. Preview không nạp đồng thời hàng trăm media player.
+
+F06 — Ghép và hậu kỳ
+Ghép theo STT, trim, resize/pad/crop theo aspect, fps/codec, ảnh bìa, nhạc nền, giữ/giảm âm gốc, volume/fade, subtitle burn-in hoặc xuất SRT. FFmpeg nhận argv không shell interpolation. Output ghi .part rồi atomic rename; lỗi/cancel không ghi đè output tốt. CPU H.264/AAC là baseline; hardware acceleration là tối ưu có capability check, không điều kiện để chức năng chạy.
+
+F07 — SRT Video và story voice
+Import/export SRT UTF-8; kiểm cue/order/timecode, sửa nội dung, chia shot, nhân vật/ref, sinh ảnh/video theo shot, tạo narration và dựng timeline khớp thời gian. Từ ý tưởng/story tạo bản kế hoạch sửa được trước khi chạy. Nghiệm thu: thời lượng/cue giữ đúng, Unicode/tiếng Việt tốt, lỗi một shot không làm mất shot đã hoàn tất.
+
+F08 — Làm phim
+Script editor, scene/shot, nhân vật/cast/ref, lời thoại/người nghe, giọng, nhạc, subtitle, title/end card; review kế hoạch rồi tạo asset và render. Job tiếp tục từ từng bước sau khi dừng/lỗi. Kiểm consistency bằng metadata/ref và kết quả người dùng review; không cam kết mô hình sinh ảnh luôn giữ khuôn mặt hoàn hảo.
+
+F09 — Series
+Quản lý nhiều tập với character bible/cast/style dùng chung; chỉnh nội dung từng tập, chạy có thứ tự hoặc theo cấu hình, mở film từng tập, ghép recap/title/credit khi được chọn. Đổi cast dùng chung không âm thầm thay asset tập đã render; đánh dấu cần dựng lại.
+
+F10 — Video Aff/Shopee
+Import link/CSV/JSON/paste dữ liệu sản phẩm, ảnh/tên/giá/thuộc tính; đọc dữ liệu qua Shopee affiliate API khi có quyền và nhập tay khi API không cung cấp. Script/storyboard, host/ref, shot, voice, caption, product overlay, nhạc, CTA/end card, batch và hàng đợi. Không tự bịa giá/claim. Chụp hoặc lấy dữ liệu trang chỉ trong phiên được người dùng mở và có log provenance; không bỏ qua cơ chế truy cập của nguồn.
+
+F11 — Lồng tiếng/voice
+Import video/audio, transcript có timestamp, speaker assignment, sửa/dịch lời thoại, voice library/favorites/sample, TTS từng dòng, căn thời lượng, mix/duck nguồn và export video/audio/subtitle. Adapter VoiceTube hoặc provider cấu hình được; API chưa có credential là unconfigured, không là completed. ASR và dịch phải có provider thực đã cấu hình; không nhận transcript giả làm kết quả. Voice matching/face/outfit/speech checks được thể hiện bằng bước kiểm chất lượng có trạng thái và khả năng review, không suy ra độ chính xác từ tên module trong EXE.
+
+F12 — Market
+Catalog, preview, đăng nhập/đăng xuất, quyền sở hữu, thao tác mua được xác nhận, thư viện nội dung đã mua và tải tài nguyên. Mặc định triển khai connector tới dịch vụ Market đã quan sát, giữ cơ chế account/entitlement của dịch vụ. Điều kiện nghiệm thu là tài khoản có quyền và contract hoạt động. Không tự giả lập wallet/purchase success hoặc coi catalog local là thay thế cho Market gốc. Nếu dịch vụ không cho client mới truy cập, mục này giữ trạng thái blocked_external; giải pháp Market riêng là thay đổi sản phẩm cần anh quyết định, không âm thầm đổi phạm vi.
+
+F13 — Codex AI
+Phát hiện CLI, trạng thái/version, tạo job plan/edit trong workspace riêng, JSON schema validate, log và cancel; review plan/artifact trước khi apply/approve. CLI argument array, không ghép command từ prompt. Không tự dùng cờ bypass approval; dữ liệu/prompt của job được coi là nội dung, không quyền shell. Xác nhận CLI contract đã cài trước khi ghim các flag.
+
+F14 — Cài đặt, bản quyền và cập nhật
+Tiếng Việt/Anh, light/dark/system, đường dẫn output, browser/concurrency/timeouts/provider credentials, log và diagnostics đã redacted. License status/activate/deactivate/trial được triển khai dưới authority của MaiStudio, tách key/identity của MuseStudio. Bản dev không chặn bằng license, không phải bypass license của app cũ.
+Để phát hành thương mại, có studio-hub riêng cho activation/trial/revocation và manifest/config ký Ed25519; private key chỉ ở hub, app giữ public key. Hub chạy dev/local trước; không triển khai server thật khi chưa được anh phê duyệt. Các license/trial không tự nhận key cũ nếu không có quyền và contract của server cũ.
+Updater dùng artifact đúng OS/architecture và manifest tin cậy, kiểm hash/signature, không thay app khi job đang ghi dữ liệu. macOS cần signing để auto-update chính thức. Bản dev test update qua feed riêng; không tự publish.
+
+6. ĐƯỜNG ĐI DỮ LIỆU VÀ DỊCH VỤ NGOÀI
+
+Mặc định lưu local, không upload cả thư mục/profile/secret. Người dùng chọn task nào thì provider chỉ nhận prompt/ref/media cần cho task đó. Account session/browser cookies chỉ ở profile tương ứng. Log không chứa token/cookie/authorization/password hoặc license key nguyên văn.
+
+Muse, VoiceTube, Shopee và Market là dịch vụ ngoài; có EXE không tự cấp API key, số dư, entitlement hay quota. Công việc không cần dịch vụ ngoài vẫn chạy local. Phần cần tích hợp phải có trạng thái unconfigured/needs_login/blocked_external rõ ràng và hướng dẫn thao tác cụ thể; không cắt chức năng đó khỏi ma trận full parity.
+
+Không tái sử dụng 12 .pyd của Windows. Không import profile/credential/database cũ tự động. Import dữ liệu cũ, nếu có, là công cụ đọc bản snapshot và tạo dữ liệu mới; không sửa file cũ. Chưa có snapshot dữ liệu nên không cam kết migration tương thích.
+
+7. PERSISTENCE VÀ GIỚI HẠN
+
+Các bảng dự kiến: projects, tasks, task_attempts, task_checkpoints, accounts, proxies, assets, settings, generation_usage, compositions, scenes, characters, episodes, subtitle_cues, voice_assignments, queue_entries, codex_jobs, market_cache, audit_events. Chỉ tách bảng khi có truy vấn/quan hệ cần thiết; dữ liệu cấu hình thưa dùng JSON đã validate.
+
+Thư mục qua Electron app.getPath('userData'); output do người dùng chọn bằng dialog. Profile path do app sinh từ ID, không nhận từ renderer. Dùng path APIs, Unicode, khoảng trắng và file permissions phù hợp OS. Secrets dùng OS keystore; Linux basic_text không được coi là mã hóa. Không có keystore thì chỉ cho giữ secret trong RAM phiên hiện tại và nêu rõ lý do; không silently lưu plaintext.
+
+Giới hạn ban đầu do em đề xuất để test được: tối đa 1 job/browser profile, 2 job generation tổng, 1 job FFmpeg tổng, có thể chỉnh generation 1–8 và FFmpeg 1–2; batch tối đa 1.000 task, prompt tối đa 32 KiB, refs tối đa 16/task. Media import kiểm magic/size, có kiểm disk space trước khi nhân bản file hoặc render. Những giới hạn này phải hiện trong UI và tài liệu, không vượt quota provider. Giới hạn upload cuối cùng lấy từ contract provider, không suy đoán từ EXE.
+
+DB schema dùng migration versioned, backup trước migration và thử restore; chỉ chạy trên data dev khi được phép. Không chạy migration dữ liệu đang dùng của anh ở bước xây dựng. Job output có checksum/metadata; downloader có timeout, giới hạn bytes, kiểm redirect và xác nhận MIME/signature phù hợp.
+
+8. UI/UX
+
+DESIGN.md riêng, dùng cùng nguyên tắc token light/dark, system fonts và native dialog đã có ở MaiHub, không kéo toàn bộ app cũ vào. Navigation: Studio, Library, SRT Video, Films, Series, Video Aff, Dubbing, Market, Accounts, Proxies, Codex, Settings.
+
+Studio gồm project selector, task list, composer và job inspector. Các studio nâng cao dùng danh sách dự án và editor scene/shot/line; không nhồi mọi cấu hình vào một form. Trạng thái queued/running/waiting/failed đi kèm chữ và lý do, không chỉ màu. Mỗi action có busy/disabled lý do, báo lỗi có retry khi retry an toàn. Hủy/xóa/apply/purchase có xác nhận theo hậu quả.
+
+Desktop có sidebar, mobile chuyển navigation drawer và panel tabs; bảng có scroll cục bộ nếu cần, trang không tràn ngang. Keyboard/focus, Escape, aria labels, empty/loading/error/unconfigured states và prefers-reduced-motion. Preview chỉ tải khi nhìn thấy, giảm bớt DOM khi danh sách lớn; không mất selection khi virtualize/filter.
+
+9. THỨ TỰ XÂY DỰNG — KHÔNG GIẢM PHẠM VI CUỐI
+
+M1 Foundation: standalone app, keystore/DB/file capability, accounts/proxy/browser, durable queue, settings, minimal Studio với một luồng generation thật, cross-platform runtime probe.
+M2 Production Studio: batch/retry/cancel/recovery, image-to-video, library/merge, CPU render, đúng profile và output proof.
+M3 Narrative media: SRT/story voice, films, series, dub/ASR/TTS, cast/ref, checkpoints và compositing.
+M4 Commerce/agents: Video Aff/Shopee, Market connector và Codex jobs; thử các API có quyền thật; hoàn thiện hub license/config/update ở dev.
+M5 Release parity: đối chiếu ma trận F01–F14, hoàn thành integrations còn blocked khi đủ quyền, test từng OS/architecture, sign/package/update-rollback, chốt tài liệu và artifact. Không gọi M1/M2 là bản đủ tính năng.
+
+Sau khi duyệt thiết kế, mỗi milestone có plan theo file/service/interface/test cụ thể, dùng chung types IPC; thực hiện theo thứ tự và kiểm từng phần. Không tạo hàng loạt scaffold trống cho các module chưa được triển khai.
+
+10. FILE BOUNDARIES DỰ KIẾN
+
+electron/main.ts, electron/preload.ts: desktop lifecycle và API capability.
+src/shared/studio.ts, src/shared/channels.ts: types/status/IPC contract.
+src/core/database/, src/core/queue/, src/core/accounts/: persistence và orchestration có unit tests.
+src/core/providers/muse/, voice/, shopee/, market/: các integration thật, contract fixtures và error mapping.
+src/core/media/: FFmpeg/ffprobe orchestration, subtitle/timeline/audio, atomic output.
+src/core/studios/: pipeline SRT/film/series/affiliate/dub dựa trên các bước đã có, không lặp engine.
+src/core/codex/, src/core/licensing/: bounded process jobs và activation/lease.
+src/ui/: shell, UI primitives, views theo nghiệp vụ; không có raw filesystem/shell.
+services/studio-hub/: license/config/update signing authority cho MaiStudio, riêng key và dữ liệu dev.
+scripts/: docs check, build/package và verification; Makefile gọi lệnh thật, không dùng echo để giả pass.
+docs/specs/, docs/plans/, SYSTEM_DOCUMENTATION.md, DESIGN.md: acceptance/contract/release/runtime docs.
+Đây là phân vùng thiết kế, chưa phải cam kết tạo mỗi directory/file nếu framework hoặc pattern hiện có giải quyết gọn hơn.
+
+11. KIỂM THỬ VÀ ĐIỀU KIỆN BÁO HOÀN THÀNH
+
+Unit: state transitions, cancel/timeout/retry, backoff, SRT/timecode, timeline, input validation, redaction và secrets.
+Integration: DB thật tạm, restart/crash/checkpoint, HTTP contract server/simulation, browser fixture DOM thay đổi/timeout/auth, FFmpeg thật và media output ffprobe kiểm tra. Failure injection gồm 401/403/409/429/5xx, mất mạng, hết disk, file thiếu/lock, browser đóng, stop khi đang download/render.
+Real provider: một ảnh, một video, image-to-video, batch, đúng profile, download proof; voice/ASR/Shopee/Market/Codex thử với tài khoản hợp lệ và ghi rõ dịch vụ nào đã thử. Không dùng simulation để kết luận provider live chạy được.
+Cross-platform: build và mở app, browser launch/login isolation, render CPU, file Unicode/space, secret store, cancel process tree, clean shutdown/reopen, installer và update đúng kiến trúc.
+
+Hai vòng stress trước mỗi bàn giao code:
+Vòng 1: 1.000 task local fixture, enqueue/reorder/filter/cancel đồng thời, crash/reopen; desktop 1440x900 + mobile 390x844, light/dark.
+Vòng 2: failure injection trong download/provider/FFmpeg, file lock/disk pressure, reconnect/retry; cùng desktop/mobile/light/dark. Remote stress giữ trong quota đã được cấp, không phát 1.000 job tính phí để thử UI.
+Đo và lưu: số job không mất/trùng submit, concurrency thực so với trần, memory baseline/peak, thời gian cancel/recovery, lỗi JS/console, ảnh render UI và chứng cứ không overflow/overlap. Không có số đo thì không ghi stress pass.
+
+make build: compile và bundle thực, chỉ in Build succeeded sau khi toàn bộ bước thành công.
+make test: toàn bộ unit/integration không skip/delete failing test.
+make lint: zero warnings; kiểm type và rule thực.
+node scripts/check-docs.js: version/contract/docs-check/path nhất quán.
+Review actual diff, regression theo những hành vi đã triển khai ở milestone trước, cập nhật SYSTEM_DOCUMENTATION cùng thay đổi. Chưa chạy được OS/provider nào phải liệt kê, không báo all-platform/full-parity pass.
+
+12. PHÁT HÀNH, ROLLBACK VÀ QUYỀN TRIỂN KHAI
+
+Dev change -> dev test -> build artifact -> review -> deploy artifact khi anh phê duyệt. Không push, publish, tạo paid cloud resource, sửa production, chạy migration data thật hay restart dịch vụ không liên quan trong phạm vi xây dựng local.
+
+Schema compatible hoặc backup/restore đã thử; rollback app không tự rollback schema một cách phá dữ liệu. Giữ build trước và snapshot dev riêng; không dùng Git revert đối với thay đổi của anh. Profile/outputs độc lập khỏi thư mục app để update/uninstall không làm mất tài sản người dùng.
+
+13. NGUỒN TÀI LIỆU ĐỐI CHIẾU
+
+- Report và REA Evidence của MuseStudio trong thư mục này.
+- MaiHub local: package.json; .github/workflows/build.yml; src/services/browser/automationLauncher.ts; ProfileJobQueue.ts; sandboxSupport.ts; src/services/video/VideoService.ts; RenderClient.ts; src/services/ai/aiImage.ts; DESIGN.md; scripts/check-docs.js.
+- Playwright platform/browser support: https://playwright.dev/docs/intro và https://playwright.dev/docs/browsers
+- Electron safeStorage/OS semantics: https://www.electronjs.org/docs/latest/api/safe-storage
+- Updater version-26 requirements, macOS signing và artifacts: https://www.electron.build/v26/docs/features/auto-update/
+
+14. QUYẾT ĐỊNH CẦN ANH DUYỆT
+
+Duyệt phạm vi F01–F14 và mặc định ứng dụng riêng Electron/TypeScript, tên tạm MaiStudio, thực hiện M1 -> M5. Thiếu credentials/provider access/signing không xóa tính năng khỏi mục tiêu; đó là điều kiện xác nhận khi đến integration/release. Một số hành vi bí mật trong native binary chỉ có thể tái hiện theo hành vi được quan sát, không cam kết giống từng chi tiết thuật toán.
+
+Rà độc lập trước bàn giao: builder check không phát hiện câu hỏi quan trọng còn thiếu để lập kế hoạch (14/11/2026). Đây là rà thiết kế, không phải chứng nhận code hoặc provider runtime.
