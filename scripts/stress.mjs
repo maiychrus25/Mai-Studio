@@ -33,7 +33,7 @@ let app;
 const failures = [];
 const metrics = { round, dataRoot, startedAt: new Date().toISOString(), peakProviderConcurrency: 0, requests: 0, ui: [] };
 try {
-  app = await electron.launch({ args: [root], env: environment, timeout: 45000 });
+  app = await electron.launch({ args: [root, ...(process.platform === 'darwin' ? ['--use-mock-keychain'] : [])], env: environment, timeout: 45000 });
   const page = await app.firstWindow();
   page.on('pageerror', error => failures.push(error.message));
   await page.waitForFunction(() => window.studio && document.querySelector('nav'), { timeout: 30000 });
@@ -130,7 +130,7 @@ try {
   assert.deepEqual(failures, [], 'renderer errors');
   const requestsBeforeReopen = requests;
   await app.close(); app = undefined;
-  app = await electron.launch({ args: [root], env: environment, timeout: 45000 });
+  app = await electron.launch({ args: [root, ...(process.platform === 'darwin' ? ['--use-mock-keychain'] : [])], env: environment, timeout: 45000 });
   const reopened = await app.firstWindow(); await reopened.waitForFunction(() => window.studio && document.querySelector('nav'));
   const after = await reopened.evaluate(() => window.studio.invoke('state'));
   assert.equal(after.tasks.length, 1000); assert.equal(after.assets.length, state.assets.length);

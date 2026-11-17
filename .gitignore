@@ -4,5 +4,17 @@ dist-ui/
 release/
 .superpowers/
 .env
+.env.*
+!.env.example
 *.log
 .DS_Store
+coverage/
+playwright-report/
+test-results/
+.worktrees/
+*.sqlite
+*.sqlite-*
+*.db
+*.db-*
+*.pem
+*.key

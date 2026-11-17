@@ -227,7 +227,9 @@ Chuẩn bị cập nhật tạm dừng admission queue và khóa các command th
 
 `scripts/stress.mjs` chạy 1.000 task/vòng qua renderer bridge/Electron thật và provider local, đo concurrency/status/memory, screenshot desktop/mobile/light/dark và reopen persistence. Báo cáo ở thư mục tạm hoặc MAISTUDIO_REPORT_DIR; không ghi dữ liệu debug vào source repo.
 
-`.github/workflows/build.yml` chuẩn bị runner macOS arm64/x64, Linux arm64/x64 và Windows x64. Chưa có quyền push/chạy workflow/publish, nên matrix cấu hình không đồng nghĩa artifacts trên OS khác đã chạy. Chỉ triển khai artifact build sẵn sau khi anh duyệt.
+`.github/workflows/build.yml` kiểm build/test/lint/docs trên pull request và push `main`, với quyền contents chỉ đọc và hủy lượt cũ cùng workflow/ref. Đóng gói là lựa chọn `package_artifacts` của workflow_dispatch, mặc định tắt; sau verify mới chạy runner macOS arm64/x64, Linux arm64/x64 và Windows x64. Không tự publish release/deploy. Matrix cấu hình không đồng nghĩa artifacts trên OS khác đã chạy. Chỉ triển khai artifact build sẵn sau khi anh duyệt.
+
+Ngày 17/11/2026 anh cho phép nối origin `https://github.com/maiychrus25/Mai-Studio.git`, đổi nhánh thành `main` và push lịch sử/dev checkpoint. Cấu trúc Electron/core/shared/UI/services/tests/scripts/tools/docs được giữ theo trách nhiệm hiện có; `CONTRIBUTING.md` ghi quy trình branch/commit/PR và `CHANGELOG.md` ghi thay đổi chưa phát hành. CI push xác minh mã nguồn, không thay thế nghiệm thu provider live. Stress runner macOS dùng `--use-mock-keychain` trong userData tạm để tránh chạm credential thật; hai vòng vẫn dùng Electron/provider fixture và kiểm desktop/mobile, light/dark, persistence/no-resubmit. Không có thay đổi IPC/schema hoặc dependency trong bước chuẩn hóa repo.
 
 Hai Dockerfile trong tools/ tách kiểm thử lõi Linux khỏi đóng gói desktop. Verification image dùng FFmpeg hệ thống trong container; distribution image tải Electron/FFmpeg native của Linux. Package homepage là about:blank trong bản dev vì chưa có website công khai của sản phẩm, không trỏ tới domain tự nhận quyền sở hữu. Xem báo cáo nghiệm thu trong docs/reports/ để biết artifact và coverage thực.
 
@@ -237,7 +239,7 @@ Dockerfile đóng gói Linux mặc định dùng kiến trúc của Node trong i
 
 - Template AGENTS và file-creation checklist không tồn tại tại các đường dẫn global được cung cấp; AGENTS mới chỉ ghi delta dự án.
 - GitHub binary download lỗi DNS khi npm install. Local dùng lại Electron/FFmpeg đúng phiên bản đã có của MaiHub; dependency JavaScript và lockfile cài riêng. CI cài binary đúng runner bằng npm ci.
-- Không thay đổi repo automation-marketing hoặc các bản MuseStudio gốc. Chưa deploy, migrate dữ liệu thật, push hoặc phát hành.
+- Không thay đổi repo automation-marketing hoặc các bản MuseStudio gốc. Các mốc dev trước ngày 17/11 chưa push; quyền push repo Mai-Studio được cấp riêng ngày 17/11. Không deploy, migrate dữ liệu thật hoặc phát hành trong bước đưa source lên GitHub.
 - Cập nhật trạng thái kiểm chứng bằng chứng thực sau mỗi vòng; không đổi cột chưa kiểm thành hoàn tất dựa vào source inspection.
 
 ## Cập nhật hành vi của bản dev 0.2.0-dev.1

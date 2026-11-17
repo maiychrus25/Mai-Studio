@@ -9,3 +9,4 @@
 - SQLite is provided by Node 24.15+; do not add a native database dependency without a concrete need.
 - Before completion run `make build`, `make test`, `make lint`, `node scripts/check-docs.js`, inspect the diff and perform two desktop/mobile stress rounds. Record provider/OS coverage honestly.
 - Update SYSTEM_DOCUMENTATION.md with behavioral changes. The global AGENTS template and file-creation checklist were absent at the configured paths during initialization; these are only project-specific deltas.
+- Follow CONTRIBUTING.md. Commit each verified, reviewable milestone with its related tests/docs and update CHANGELOG.md; do not accumulate completed work only in the working tree. GitHub publication does not imply permission to release or deploy.

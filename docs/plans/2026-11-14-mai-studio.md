@@ -191,3 +191,18 @@ Files: src/ui/AdvancedStudio.tsx, Workspace.tsx, Connections.tsx, Settings.tsx, 
 ### Documentation checkpoint — functional parity dev
 
 SYSTEM_DOCUMENTATION.md and docs/reports/acceptance.md now distinguish implementation, controlled source replay, native CPU smoke and missing runtime parity. P1/P3/P4 remain partial; P5 is open. Full-suite numbers from in-progress merges are not promoted to final pass. Preserve the concurrently authored director section and historical acceptance records. Account/VPS availability is confirmed, connection/runtime comparison and paid-call authorization are separate. New ASR native/model limits and per-process media/product limits have docs-check markers bound to current constants; constants and version were not changed by this documentation task.
+
+### Repository publication — 17/11/2026
+
+**Status: IMPLEMENTED AND LOCALLY VERIFIED —** source checkpoint `bdbdf3f` was pushed to the operator-supplied origin `https://github.com/maiychrus25/Mai-Studio.git` on `main`, and the remote commit matched locally. The repository guidance/CI contract is implemented with verification below; per-commit GitHub CI results remain the authority for hosted validation. This authorizes source publication and repository hygiene, not production deployment or a release.
+
+Bounded plan: preserve the existing 43-file product snapshot as a reviewed development checkpoint; keep the current source-directory boundaries; complete README/contribution/changelog/PR/formatting guidance; validate pushes and PRs with the existing CI, keeping desktop packaging a manual opt-in. Reuse the current build/test/docs/stress tools; do not add a runtime dependency or move working modules.
+
+- [x] Review and commit the existing product snapshot with its matching tests and system documentation.
+- [x] Add repository guidance, CI triggers/manual packaging, and macOS stress keychain isolation.
+- [x] Verify build/test/lint/docs and two desktop/mobile, light/dark stress rounds; review the final diff.
+- [x] Add the supplied origin, rename the branch to main, push without force, and compare the local and remote commit IDs. Record the actual CI result separately from local verification.
+
+Post-implementation evidence: macOS ARM64 full suite 407/407, build/lint/docs and actionlint passed. Shipped Electron stress round 1: 980 succeeded/20 cancelled; round 2: 883 succeeded/66 intentional fixture-429 failures/51 cancelled; peak concurrency 2, zero renderer errors, four desktop/mobile/light-dark screenshots each and no reopen resubmission. Logs/screenshots remain outside the repo under `/private/tmp/mai-studio-interface/`. A review P2 about stale speech-assessment UI when Affiliate dub is enabled is recorded in acceptance.md; publication does not certify that branch or full Muse parity.
+
+Rollback: each new change has its own Git commit; the historical three commits remain intact. Preserve the working tree and existing user data. A rejected push requires checking remote history, never automatic force-pushing.

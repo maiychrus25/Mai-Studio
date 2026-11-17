@@ -1,3 +1,24 @@
+## Repository checkpoint và publication — 17/11/2026
+
+**Trạng thái: checkpoint sản phẩm đã lưu và push; cấu trúc/quy trình repo đã kiểm dev.** Anh đã chỉ định repo GitHub Mai-Studio, nhánh main và yêu cầu push. Remote main xác nhận đúng source checkpoint `bdbdf3f`; kết quả CI của các commit tiếp theo theo dõi trong GitHub Actions, không suy ra từ kiểm local. Các báo cáo nghiệm thu trước đây vẫn là lịch sử; publication mã nguồn không phải phát hành hoặc chứng nhận full parity.
+
+Review read-only snapshot 43 file trước checkpoint không thấy Critical/P1 chặn bảo toàn bản dev. Có một P2 từ đường dữ liệu chưa tái hiện UI trong lượt review: khi bật Affiliate dub, `QualityResults` so speech.assetId với raw production.videos, trong khi core đánh giá asset đã lồng tiếng. UI có thể báo nhầm review vừa chạy là của clip trước. Ghi nhận để sửa trong nhiệm vụ chất lượng/UI; bước chuẩn hóa repo không đổi logic sản phẩm hoặc tuyên bố nhánh dub đã nghiệm thu đầy đủ.
+
+Thay đổi repo dùng lại cấu trúc hiện có, thêm hướng dẫn đóng góp/changelog/mẫu PR/editorconfig, bảo vệ file dữ liệu/secret bằng ignore, CI verify push main/PR và đóng gói thủ công opt-in. Stress runner macOS chỉ đổi sang mock keychain trong userData thử nghiệm, giữ assert desktop/mobile, light/dark, queue/cancel/reopen. Không thêm dependency hoặc đổi IPC/schema.
+
+```text
+make build: Build succeeded
+make test (macOS ARM64): 407 pass, 0 fail/cancelled/skipped
+make lint: exit 0, zero warnings
+docs-check: OK
+actionlint: exit 0
+Stress 1: PASS; 1000 tasks = 980 succeeded + 20 cancelled; peak 2
+Stress 2: PASS; 1000 tasks = 883 succeeded + 66 intentional fixture 429 failures + 51 cancelled; peak 2
+Each round: desktop/mobile, light/dark, 4 screenshots, 0 renderer errors, reopen without resubmission
+```
+
+Logs/ảnh mới ở `/private/tmp/mai-studio-interface/repository-stress/` và `repository-check-test.log` cùng thư mục cha; kiểm trực quan ảnh desktop/mobile của cả hai vòng. Vòng mới này là macOS ARM64, không ghi là chạy lại Linux/provider live. Kiểm ignore bằng 10 đường dẫn dữ liệu/secret/generated và source/tests hợp lệ, actionlint cho workflow, và rà mẫu credential trên lịch sử/source trước publication không ghi nhận mẫu khớp. Đây không thay thế audit bảo mật toàn diện.
+
 ## Giao diện kiểu Muse, âm thanh Affiliate và tài khoản — 17/11/2026
 
 **Trạng thái: UI/âm thanh đã triển khai và kiểm dev; spoken live, native comparison mới và full parity còn mở.** Ưu tiên vẫn Affiliate → Film → SRT. Screenshot UI nguồn là Muse 1.13.12; options/project/scene metadata và kiểm tài khoản là Muse 1.13.18, không gộp hai phiên bản làm một bằng chứng.

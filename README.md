@@ -1,14 +1,28 @@
 # MaiStudio
 
+[![Validate MaiStudio](https://github.com/maiychrus25/Mai-Studio/actions/workflows/build.yml/badge.svg?branch=main)](https://github.com/maiychrus25/Mai-Studio/actions/workflows/build.yml)
+
 Ứng dụng desktop sản xuất ảnh/video bằng TypeScript, Electron và FFmpeg cho macOS, Linux và Windows. Xây dựng từ thiết kế hành vi MuseStudio 1.13.12; không cần chạy EXE hoặc DLL/PYD Windows của sản phẩm gốc.
 
-Đây là bản phát triển. Mã tích hợp và kiểm thử local không đồng nghĩa tài khoản Muse/VoiceTube/Market/Shopee hoặc mọi hệ điều hành đã được nghiệm thu live. Xem `SYSTEM_DOCUMENTATION.md` và báo cáo trong docs/reports khi có.
+Đây là bản phát triển **0.2.0-dev.1**. Mã tích hợp và kiểm thử local không đồng nghĩa tài khoản Muse/VoiceTube/Market/Shopee hoặc mọi hệ điều hành đã được nghiệm thu live. Xem [tài liệu hệ thống](SYSTEM_DOCUMENTATION.md), [nghiệm thu](docs/reports/acceptance.md) và [giới hạn tương đương](docs/reports/parity.md).
+
+## Phạm vi hiện tại
+
+| Nhóm | Khả năng hiện có | Giới hạn kiểm chứng |
+| --- | --- | --- |
+| Dự án và thư viện | Lưu dự án, hàng đợi, hủy/thử lại, nhập/xem/xuất media | Cần ghi rõ OS và provider của từng lượt |
+| Shopee | Nhập facts, biến thể và ảnh từ capture được cấp quyền hoặc API đã cấu hình | Đã nhập thật một sản phẩm; không cam kết mọi layout/API live |
+| Affiliate | 11 kiểu nội dung, 3 chế độ host, review/sửa cảnh, caption/CTA và MP4/TXT | Có lượt Fashion/silent thật; chưa nghiệm thu mọi tổ hợp |
+| Media và âm thanh | Ghép/cắt, phụ đề, nhạc, ducking, lồng tiếng từ audio và provider được cấu hình | Không cam kết nhép miệng hoặc quyền TTS/video của bên thứ ba |
+| Film, Series, SRT | Engine, editor và kiểm thử cục bộ | Còn nghiệm thu chất lượng và so sánh live |
 
 ## Chạy local
 
 Yêu cầu Node 24.15 trở lên, npm, Chrome/Chromium. FFmpeg đi kèm dependency; có ffprobe hệ thống thì đọc metadata đầy đủ hơn, không có sẽ dùng FFmpeg fallback.
 
 ```sh
+git clone https://github.com/maiychrus25/Mai-Studio.git
+cd Mai-Studio
 npm ci
 make build
 npm start
@@ -26,7 +40,7 @@ App tự tạo dữ liệu tại Electron userData riêng. Khi kiểm thử, đ�
 
 Provider OpenAI-compatible dùng base URL bao gồm /v1. Model TTS/ASR/image/text phải đúng capability của endpoint anh sử dụng. Các provider là kết nối tùy chọn của app, không phải lời hứa về số dư, quyền dùng hoặc khả năng của bên thứ ba.
 
-ASR tiếng Việt và speaker embedding có thể chạy CPU local sau khi chuẩn bị model trong Cài đặt. App tải và kiểm SHA bộ model công khai (~86,7 MB payload), không cần Python; weights nằm ngoài thư mục ứng dụng. QC fail/unknown cần xem lại nội dung hoặc tạo lại media được chọn, không tự phát job trả phí để sửa. Series recap là tùy chọn; nhạc recap liên tục, teaser/credit/continuity và căn khẩu hình vẫn cần hoàn thiện/nghiệm thu.
+ASR tiếng Việt và speaker embedding có thể chạy CPU local sau khi chuẩn bị model trong Cài đặt. App tải và kiểm SHA bộ model công khai (~86,7 MB payload), không cần Python; weights nằm ngoài thư mục ứng dụng. Khi chạy toàn bộ/video, cảnh QC fail có thể được tự tạo lại trong giới hạn `qualityRetries` và phát sinh phí provider; kết quả unknown dừng để người dùng xem. Review-only/render không tự tạo lại media. Series recap là tùy chọn; nhạc recap liên tục, teaser/credit/continuity và căn khẩu hình vẫn cần hoàn thiện/nghiệm thu.
 
 ## Kiểm tra và đóng gói
 
@@ -40,11 +54,29 @@ node scripts/stress.mjs 2
 npm run package -- --mac dir --arm64
 ```
 
-Hai vòng stress chạy provider fixture cục bộ, 1.000 task/vòng và Electron thật; không gọi dịch vụ tính phí. Báo cáo/ảnh mặc định nằm trong thư mục tạm ngoài repo. Đặt MAISTUDIO_REPORT_DIR để chọn nơi giữ báo cáo.
+Hai vòng stress chạy provider fixture cục bộ, 1.000 task/vòng và Electron thật; không gọi dịch vụ tính phí. Mỗi vòng kiểm desktop/mobile, light/dark và mở lại không gửi trùng. macOS dùng mock keychain cho dữ liệu thử nghiệm, không chứng nhận Keychain thật. Linux không có display cần `xvfb-run -a` trước lệnh stress. Báo cáo/ảnh mặc định nằm trong thư mục tạm ngoài repo. Đặt MAISTUDIO_REPORT_DIR để chọn nơi giữ báo cáo.
 
-Workflow `.github/workflows/build.yml` chuẩn bị macOS Intel/Apple Silicon, Linux x64/arm64 và Windows x64. Workflow chưa được push/chạy hoặc phát hành. Build unsigned là artifact kiểm thử; phát hành macOS/update chính thức cần signing, public key và feed của anh.
+Workflow `.github/workflows/build.yml` kiểm build/test/lint/docs khi push `main` hoặc mở pull request. Chạy thủ công từ Actions, bật `package_artifacts` để đóng gói macOS Intel/Apple Silicon, Linux x64/arm64 và Windows x64 sau bước kiểm tra. Artifact unsigned dùng để kiểm thử; workflow không tự tạo release hoặc deploy. CI được cấu hình không có nghĩa mọi nền tảng đã được nghiệm thu; xem kết quả chạy thực tế trong Actions. Phát hành macOS/update chính thức cần signing, public key và feed của anh.
 
 macOS lần đầu có thể hỏi quyền truy cập Keychain; xử lý hộp thoại hệ điều hành để app tiếp tục. Bản dev ký ad-hoc chưa notarized. Linux AppImage cần executable permission và FUSE tương thích, hoặc cài DEB; cần Chrome/Chromium cho browser automation và thẻ chữ. Chi tiết coverage và tính năng chưa đủ parity nằm trong docs/reports/acceptance.md.
+
+## Cấu trúc dự án
+
+```text
+electron/       Desktop lifecycle, preload, IPC và media protocol
+src/core/       Workflow, queue, Store, provider/browser và media engine
+src/shared/     Types và validation contract dùng chung
+src/ui/         Giao diện React
+services/       Service độc lập, gồm license hub
+tests/          Unit/integration tests và fixture được kiểm soát
+scripts/        Docs check và stress Electron
+tools/          Container kiểm thử/đóng gói theo nền tảng
+docs/specs/     Đặc tả và phạm vi được duyệt
+docs/plans/     Kế hoạch triển khai
+docs/reports/   Bằng chứng nghiệm thu và giới hạn parity
+```
+
+Hướng dẫn phát triển, commit, pull request và kiểm tra ở [CONTRIBUTING.md](CONTRIBUTING.md). Các thay đổi được ghi trong [CHANGELOG.md](CHANGELOG.md); quy tắc thiết kế ở [DESIGN.md](DESIGN.md). Package dùng `UNLICENSED`; repo công khai không đồng nghĩa cấp giấy phép mã nguồn mở.
 
 ## License Hub riêng
 
