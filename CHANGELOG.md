@@ -22,6 +22,7 @@ This file records development changes. No production release is declared by a de
 - CI checks the existing hierarchical subtitle render before the full suite; a failure reports its pixel peak and actual FFmpeg version without relaxing the assertion.
 - Native installer CI follows the existing MaiHub build pattern: verification gate, separate platform runners, ad-hoc macOS signing, installer-only artifacts retained for 14 days, and explicit failure when upload outputs are missing.
 - H.264 rendering requests x264's CPU-independent decisions across native runners; CRF, frame clock, typography and audio settings are unchanged.
+- Manual development packaging runs alongside verification for earlier installer artifacts; acceptance still requires both verification and all native package jobs to pass.
 
 ### Verification and limits
 

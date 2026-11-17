@@ -226,4 +226,6 @@ Rollback is the scoped workflow/documentation commit; existing product commits a
 
 Pre-dispatch evidence: Build succeeded, lint/docs/actionlint exit0; round1 980 succeeded/20 cancelled; round2 881 succeeded/68 intentional fixture-429 failures/51 cancelled; each1000 tasks, peak2, zero renderer errors and desktop/mobile/light-dark assertions plus reopen/no-resubmit. Report path `/private/tmp/mai-studio-ci-packaging-20261117/stress/`. Fresh full `make test` is the mandatory hosted verify gate before any native package job.
 
+Time-priority update explicitly requested by the operator: manual native package jobs now run alongside verify to provide development installers sooner. This replaces the earlier sequential needs.verify order; the full suite is still required and the overall workflow must be green before acceptance. No Release/tag/deployment is added. Local407/407 and two post-encoder stress rounds are recorded in acceptance.md; installer availability is reported independently from verification.
+
 Rollback: each new change has its own Git commit; the historical three commits remain intact. Preserve the working tree and existing user data. A rejected push requires checking remote history, never automatic force-pushing.
