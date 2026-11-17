@@ -19,6 +19,8 @@ Each round: desktop/mobile, light/dark, 4 screenshots, 0 renderer errors, reopen
 
 Logs/ảnh mới ở `/private/tmp/mai-studio-interface/repository-stress/` và `repository-check-test.log` cùng thư mục cha; kiểm trực quan ảnh desktop/mobile của cả hai vòng. Vòng mới này là macOS ARM64, không ghi là chạy lại Linux/provider live. Kiểm ignore bằng 10 đường dẫn dữ liệu/secret/generated và source/tests hợp lệ, actionlint cho workflow, và rà mẫu credential trên lịch sử/source trước publication không ghi nhận mẫu khớp. Đây không thay thế audit bảo mật toàn diện.
 
+Lượt GitHub CI Linux x64 đầu tiên [44029368637](https://github.com/maiychrus25/Mai-Studio/actions/runs/44029368637) build/lint qua, full suite đạt 406/407: test slideshow 101 ảnh fail ở pixel chữ trắng của caption 160×120, không phải assertion thời lượng/chuyển động. Tái hiện có kiểm soát trên Linux ARM64: môi trường DejaVu cũ qua; cài Liberation khiến Arial chọn Liberation Sans và cùng assertion fail; ưu tiên DejaVu Sans bằng Fontconfig thì cùng test qua. CI bổ sung `fonts-dejavu-core`, `tools/ci-fonts.conf` và kiểm fc-match. Không sửa/bỏ assertion, không đổi font ứng dụng hay dependency runtime. Log RED/GREEN giữ riêng `ci-font-liberation-red.log`/`ci-font-dejavu-green.log` trong scratch trên; lần full suite hosted tiếp theo phải đọc kết quả thực trong Actions, không lấy lượt local thay thế.
+
 ## Giao diện kiểu Muse, âm thanh Affiliate và tài khoản — 17/11/2026
 
 **Trạng thái: UI/âm thanh đã triển khai và kiểm dev; spoken live, native comparison mới và full parity còn mở.** Ưu tiên vẫn Affiliate → Film → SRT. Screenshot UI nguồn là Muse 1.13.12; options/project/scene metadata và kiểm tài khoản là Muse 1.13.18, không gộp hai phiên bản làm một bằng chứng.

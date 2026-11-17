@@ -205,4 +205,6 @@ Bounded plan: preserve the existing 43-file product snapshot as a reviewed devel
 
 Post-implementation evidence: macOS ARM64 full suite 407/407, build/lint/docs and actionlint passed. Shipped Electron stress round 1: 980 succeeded/20 cancelled; round 2: 883 succeeded/66 intentional fixture-429 failures/51 cancelled; peak concurrency 2, zero renderer errors, four desktop/mobile/light-dark screenshots each and no reopen resubmission. Logs/screenshots remain outside the repo under `/private/tmp/mai-studio-interface/`. A review P2 about stale speech-assessment UI when Affiliate dub is enabled is recorded in acceptance.md; publication does not certify that branch or full Muse parity.
 
+Hosted CI follow-up: the first Linux x64 run reported406/407 due to a font-dependent small-caption pixel assertion. The unchanged test was reproduced RED with Liberation Sans and GREEN with DejaVu Sans in isolated Linux; CI now selects the prior QA font baseline through tools/ci-fonts.conf and checks fc-match before tests. No source/test assertion or packaging font selection changed. Follow-up hosted validation is tracked per commit in GitHub Actions.
+
 Rollback: each new change has its own Git commit; the historical three commits remain intact. Preserve the working tree and existing user data. A rejected push requires checking remote history, never automatic force-pushing.

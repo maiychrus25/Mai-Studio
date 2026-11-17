@@ -18,6 +18,8 @@ jobs:
   verify:
     runs-on: ubuntu-24.04
     timeout-minutes: 25
+    env:
+      FONTCONFIG_FILE: ${{ github.workspace }}/tools/ci-fonts.conf
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -25,6 +27,11 @@ jobs:
       - run: npm ci
       - run: sudo apt-get update && sudo apt-get install -y ffmpeg
       - run: npx playwright-core install --with-deps chromium
+      - name: Set subtitle font baseline
+        run: |
+          sudo apt-get install -y fonts-dejavu-core
+          fc-match Arial
+          node -e "const {execFileSync}=require('node:child_process'); require('node:assert/strict').equal(execFileSync('fc-match',['-f','%{family}','Arial'],{encoding:'utf8'}).trim(),'DejaVu Sans')"
       - run: make build
       - run: make lint
       - run: make test

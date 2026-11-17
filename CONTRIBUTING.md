@@ -55,4 +55,6 @@ Keep renderer actions behind the typed preload bridge. Preserve validation, canc
 
 GitHub Actions validates pull requests and pushes to `main`. Desktop packaging is a manual workflow option that runs after verification and creates unsigned test artifacts. CI does not publish a release or deploy the license hub. Installation, signing, publishing, and deployment remain separate authorized steps.
 
+Linux CI uses `fonts-dejavu-core` and `FONTCONFIG_FILE` pointing to `tools/ci-fonts.conf` for deterministic subtitle-image assertions. The configuration prefers DejaVu Sans for Arial while retaining system fallback fonts. To reproduce those visual checks on Linux, use the same font setup; application font selection outside CI is unchanged.
+
 The package is `UNLICENSED`. Publication of the repository does not grant an open-source license.

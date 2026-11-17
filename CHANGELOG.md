@@ -18,6 +18,7 @@ This file records development changes. No production release is declared by a de
 - Browser composer readiness, audio-menu download recovery, and provider-refusal handling without duplicate submission.
 - Repository documentation, contribution workflow, formatting defaults, and validation on pushes to `main`; desktop packaging is an explicit manual option.
 - macOS stress checks use a mock keychain in isolated test data.
+- Linux CI fixes its subtitle font baseline to DejaVu Sans while retaining system fallbacks; visual assertions and application font settings are unchanged.
 
 ### Verification and limits
 
