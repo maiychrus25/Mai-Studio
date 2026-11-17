@@ -21,6 +21,8 @@ Logs/ảnh mới ở `/private/tmp/mai-studio-interface/repository-stress/` và 
 
 Lượt GitHub CI Linux x64 đầu tiên [44029368637](https://github.com/maiychrus25/Mai-Studio/actions/runs/44029368637) build/lint qua, full suite đạt 406/407: test slideshow 101 ảnh fail ở pixel chữ trắng của caption 160×120, không phải assertion thời lượng/chuyển động. Tái hiện có kiểm soát trên Linux ARM64: môi trường DejaVu cũ qua; cài Liberation khiến Arial chọn Liberation Sans và cùng assertion fail; ưu tiên DejaVu Sans bằng Fontconfig thì cùng test qua. CI bổ sung `fonts-dejavu-core`, `tools/ci-fonts.conf` và kiểm fc-match. Không sửa/bỏ assertion, không đổi font ứng dụng hay dependency runtime. Log RED/GREEN giữ riêng `ci-font-liberation-red.log`/`ci-font-dejavu-green.log` trong scratch trên; lần full suite hosted tiếp theo phải đọc kết quả thực trong Actions, không lấy lượt local thay thế.
 
+Run tiếp theo [44031873818](https://github.com/maiychrus25/Mai-Studio/actions/runs/44031873818) của commit `f6553bc` không khởi động runner: job có 0 step, nguyên nhân điều kiện tài khoản/runner được ghi trong annotation của GitHub. Vì chưa chạy test nên không coi lượt này là xác nhận hoặc phủ định bản sửa font. Full CI Linux x64 sau sửa vẫn chưa nghiệm thu; cần khôi phục khả năng cấp runner rồi chạy lại. Local build/lint/docs/actionlint và test pixel RED→GREEN giữ kết quả đã ghi, source/assertions không đổi.
+
 ## Giao diện kiểu Muse, âm thanh Affiliate và tài khoản — 17/11/2026
 
 **Trạng thái: UI/âm thanh đã triển khai và kiểm dev; spoken live, native comparison mới và full parity còn mở.** Ưu tiên vẫn Affiliate → Film → SRT. Screenshot UI nguồn là Muse 1.13.12; options/project/scene metadata và kiểm tài khoản là Muse 1.13.18, không gộp hai phiên bản làm một bằng chứng.

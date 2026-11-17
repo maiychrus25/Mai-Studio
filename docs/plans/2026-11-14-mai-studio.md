@@ -207,4 +207,6 @@ Post-implementation evidence: macOS ARM64 full suite 407/407, build/lint/docs an
 
 Hosted CI follow-up: the first Linux x64 run reported406/407 due to a font-dependent small-caption pixel assertion. The unchanged test was reproduced RED with Liberation Sans and GREEN with DejaVu Sans in isolated Linux; CI now selects the prior QA font baseline through tools/ci-fonts.conf and checks fc-match before tests. No source/test assertion or packaging font selection changed. Follow-up hosted validation is tracked per commit in GitHub Actions.
 
+- [ ] Obtain the post-fix full Linux x64 CI result after hosted runner availability is restored. Run44031873818 for f6553bc never started a runner and had zero steps; its account/runner annotation is external to source validation. Do not report hosted CI green from local evidence.
+
 Rollback: each new change has its own Git commit; the historical three commits remain intact. Preserve the working tree and existing user data. A rejected push requires checking remote history, never automatic force-pushing.
