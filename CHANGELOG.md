@@ -20,6 +20,7 @@ This file records development changes. No production release is declared by a de
 - macOS stress checks use a mock keychain in isolated test data.
 - Linux CI fixes its subtitle font baseline to DejaVu Sans while retaining system fallbacks; visual assertions and application font settings are unchanged.
 - CI checks the existing hierarchical subtitle render before the full suite; a failure reports its pixel peak and actual FFmpeg version without relaxing the assertion.
+- Native installer CI follows the existing MaiHub build pattern: verification gate, separate platform runners, ad-hoc macOS signing, installer-only artifacts retained for 14 days, and explicit failure when upload outputs are missing.
 
 ### Verification and limits
 

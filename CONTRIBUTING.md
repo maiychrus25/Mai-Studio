@@ -53,7 +53,7 @@ Keep renderer actions behind the typed preload bridge. Preserve validation, canc
 
 ## CI and release
 
-GitHub Actions validates pull requests and pushes to `main`. Desktop packaging is a manual workflow option that runs after verification and creates unsigned test artifacts. CI does not publish a release or deploy the license hub. Installation, signing, publishing, and deployment remain separate authorized steps.
+GitHub Actions validates pull requests and pushes to `main`. The Build workflow's `package_artifacts` manual option runs after verification and creates test installers on native macOS ARM64/x64, Linux ARM64/x64, and Windows x64 runners. macOS uses ad-hoc signing; Windows has no signing certificate. Artifacts retain installer files and generated update metadata/blockmaps for 14 days, not unpacked application directories; missing files fail the upload step. CI does not publish a release or deploy the license hub. Installation, trusted signing, publishing, and deployment remain separate authorized steps.
 
 Linux CI uses `fonts-dejavu-core` and `FONTCONFIG_FILE` pointing to `tools/ci-fonts.conf` for deterministic subtitle-image assertions. The configuration prefers DejaVu Sans for Arial while retaining system fallback fonts. To reproduce those visual checks on Linux, use the same font setup; application font selection outside CI is unchanged.
 

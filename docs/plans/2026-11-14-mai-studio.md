@@ -209,4 +209,19 @@ Hosted CI follow-up: the first Linux x64 run reported406/407 due to a font-depen
 
 - [ ] Obtain the post-fix full Linux x64 CI result after hosted runner availability is restored. Run44031873818 for f6553bc never started a runner and had zero steps; its account/runner annotation is external to source validation. Do not report hosted CI green from local evidence.
 
+### Native CI installer build — 17/11/2026
+
+**Status: IMPLEMENTED LOCALLY / NATIVE JOBS PENDING —** the operator requested CI build like automation-marketing. The existing MaiHub workflow was read as the reference: verification gate, native OS runners, macOS ad-hoc signing, installer-only artifacts, and 14-day retention. MaiStudio reuses its current five-platform matrix and its own build commands; no MaiHub-only runtime or release task is added.
+
+Files: .github/workflows/build.yml, README.md, CONTRIBUTING.md, SYSTEM_DOCUMENTATION.md, CHANGELOG.md and this plan. There is no application-source, version, schema, IPC, or dependency change.
+
+- [x] Review the scoped workflow diff; pass build/lint/docs/actionlint and both Electron desktop/mobile, light/dark stress rounds.
+- [ ] Commit/push the workflow, then dispatch build.yml on the exact main commit with package_artifacts=true; the new run must complete its full verification gate.
+- [ ] Inspect all five native package jobs and their installer artifacts. Fix observed packaging errors in dev, rerun the affected jobs, and distinguish package success from runtime acceptance.
+- [ ] Verify final main/remote state and provide the run/artifact download links. Do not create a tag, GitHub Release or production deployment during this installer-only task.
+
+Rollback is the scoped workflow/documentation commit; existing product commits and user data are preserved. Risks to report: ad-hoc/untrusted signing and runtime/provider coverage not established merely by building installers. Retain failure logs and actual platform results rather than promoting configured matrix entries to successful builds.
+
+Pre-dispatch evidence: Build succeeded, lint/docs/actionlint exit0; round1 980 succeeded/20 cancelled; round2 881 succeeded/68 intentional fixture-429 failures/51 cancelled; each1000 tasks, peak2, zero renderer errors and desktop/mobile/light-dark assertions plus reopen/no-resubmit. Report path `/private/tmp/mai-studio-ci-packaging-20261117/stress/`. Fresh full `make test` is the mandatory hosted verify gate before any native package job.
+
 Rollback: each new change has its own Git commit; the historical three commits remain intact. Preserve the working tree and existing user data. A rejected push requires checking remote history, never automatic force-pushing.

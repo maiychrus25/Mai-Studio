@@ -1,4 +1,4 @@
-name: Validate and package MaiStudio
+name: Build
 on:
   push:
     branches: [main]
@@ -55,9 +55,10 @@ jobs:
       - run: make test
       - run: node scripts/check-docs.js
   package:
+    name: Đóng gói ${{ matrix.name }}
     if: github.event_name == 'workflow_dispatch' && inputs.package_artifacts
     needs: verify
-    timeout-minutes: 35
+    timeout-minutes: 60
     strategy:
       fail-fast: false
       matrix:
@@ -84,11 +85,24 @@ jobs:
         with: { node-version: 24, cache: npm }
       - run: npm ci
       - run: npm run build
-      - run: npx electron-builder ${{ matrix.target }} --publish never
+      - name: Đóng gói bản cài
+        shell: bash
+        run: |
+          extra=()
+          if [[ "$RUNNER_OS" == "macOS" ]]; then extra+=("-c.mac.identity=-"); fi
+          npx electron-builder ${{ matrix.target }} --publish never "${extra[@]}"
         env:
           CSC_IDENTITY_AUTO_DISCOVERY: 'false'
       - uses: actions/upload-artifact@v4
         with:
           name: mai-studio-${{ matrix.name }}
-          path: release/*
+          path: |
+            release/*.AppImage
+            release/*.deb
+            release/*.exe
+            release/*.dmg
+            release/*.zip
+            release/latest*.yml
+            release/*.blockmap
+          if-no-files-found: error
           retention-days: 14
