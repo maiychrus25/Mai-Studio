@@ -233,6 +233,8 @@ Ngày 17/11/2026 anh cho phép nối origin `https://github.com/maiychrus25/Mai-
 
 CI Linux cài `fonts-dejavu-core` và đặt FONTCONFIG_FILE tới `tools/ci-fonts.conf`: giữ cấu hình font hệ thống nhưng ưu tiên DejaVu Sans cho yêu cầu Arial của libass, khớp baseline Linux QA trước đó. Bước CI kiểm fc-match trước build/test. Đây là môi trường kiểm ảnh phụ đề ở kích thước nhỏ, không phải ép font ứng dụng hoặc cấu hình máy người dùng. Assertion pixel/subtitle gốc vẫn giữ nguyên; các font/máy thực tế khác chưa được chứng nhận có pixel giống nhau.
 
+Sau khi runner được cấp lại, CI vẫn báo 406/407 ở cùng pixel assertion dù fc-match qua; family font chưa đủ để chứng nhận toàn bộ môi trường. Workflow chạy chính test render phụ đề đó trước full suite để phản hồi sớm; lỗi test ghi peak pixel xanh và FFmpeg version thực. Điều kiện pass, media/timing và ngưỡng pixel giữ nguyên. Không đổi binary/font ứng dụng hoặc bỏ test để làm CI xanh; hosted Linux x64 sau sửa vẫn cần kết quả thực trong Actions.
+
 Hai Dockerfile trong tools/ tách kiểm thử lõi Linux khỏi đóng gói desktop. Verification image dùng FFmpeg hệ thống trong container; distribution image tải Electron/FFmpeg native của Linux. Package homepage là about:blank trong bản dev vì chưa có website công khai của sản phẩm, không trỏ tới domain tự nhận quyền sở hữu. Xem báo cáo nghiệm thu trong docs/reports/ để biết artifact và coverage thực.
 
 Dockerfile đóng gói Linux mặc định dùng kiến trúc của Node trong image, không ép ARM64 trên image x64. Chọn build platform trước npm ci để Electron, FFmpeg và Sherpa optional package khớp nhau; không cross-copy addon ARM sang gói x64. Dockerfile verify lõi lịch sử chưa thay thế full suite/Xvfb và native packaged smoke của checkpoint 0.2.

@@ -796,7 +796,8 @@ test('hierarchical slideshow renders 101 SRT-timed images with Ken Burns, gaps a
   const first = await rgbFrame(output, 10.5); const moved = await rgbFrame(output, 11); const faded = await rgbFrame(output, 11.25);
   assert.equal(first.length, 160 * 120 * 3); assert.equal(moved.length, first.length);
   assert.ok(first.reduce((sum, value, index) => sum + Math.abs(value - moved[index]), 0) / first.length > 5, 'Ken Burns must animate the image in the second chunk');
-  assert.ok(moved.some((value, index) => index % 3 === 1 && value > 150), 'The final SRT caption must add white text to the red/blue image');
+  const rendererVersion = (await exec(ffmpegPath, ['-version'])).stdout.split('\n')[0];
+  assert.ok(moved.some((value, index) => index % 3 === 1 && value > 150), `The final SRT caption must add white text to the red/blue image (greenPeak=${Math.max(...moved.filter((_, index) => index % 3 === 1))}; ${rendererVersion})`);
   const brightness = (frame: Buffer) => frame.reduce((sum, value) => sum + value, 0) / frame.length;
   assert.ok(brightness(faded) < brightness(moved) * 0.4, 'Fade-out must use the final timeline end');
   const early = await rgbFrame(output, 0.2); assert.ok(brightness(early) < brightness(moved) * 0.8, 'Fade-in must use the start of the entire timeline');
