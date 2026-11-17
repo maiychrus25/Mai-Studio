@@ -71,7 +71,7 @@ export class JobQueue {
         if (active.filter(value => value.media === media).length >= (media ? this.limits.mediaConcurrency : this.limits.generationConcurrency)) continue;
         if (task.accountId && active.some(value => value.accountId === task.accountId)) continue;
         const project = this.store.project(task.projectId);
-        const projectLease = ['pipeline', 'plan'].includes(task.kind) ? String(project.data.seriesParentId || project.id) : '';
+        const projectLease = ['pipeline', 'plan', 'product-import'].includes(task.kind) ? String(project.data.seriesParentId || project.id) : '';
         if (projectLease && active.some(value => value.projectLease === projectLease)) continue;
         const controller = new AbortController();
         this.store.updateTask(task.id, { status: 'running', progress: 0, attempts: task.attempts + 1, message: 'Đang chạy' });

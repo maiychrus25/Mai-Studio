@@ -1,4 +1,150 @@
+## Giao diện kiểu Muse, âm thanh Affiliate và tài khoản — 17/11/2026
+
+**Trạng thái: UI/âm thanh đã triển khai và kiểm dev; spoken live, native comparison mới và full parity còn mở.** Ưu tiên vẫn Affiliate → Film → SRT. Screenshot UI nguồn là Muse 1.13.12; options/project/scene metadata và kiểm tài khoản là Muse 1.13.18, không gộp hai phiên bản làm một bằng chứng.
+
+MaiStudio có điều hướng ngang, danh sách dự án Affiliate với trạng thái/số cảnh thật, bốn tab Sản phẩm/Thiết lập/Shot/Output. Script/cast/voice/raw config giữ trong Công cụ nâng cao; đóng nhóm khi đang ở tab phụ quay về Thiết lập. Lưới bốn cảnh desktop có ảnh/preview clip và tạo lại riêng từng cảnh; khung chạy lựa chọn chỉ hiện sau khi chọn shot. Giữ xác nhận, queue/force, merge field vào state mới nhất, source thiếu ảnh tự mở và nút bỏ reference không còn khả dụng. Review fail/unknown/stale và lỗi task vẫn có đường xem; history phân trang 40, hủy vẫn thấy Retry. Bảy visual preset do Mai viết prompt độc lập và custom không đổi legacy styles.
+
+Nhạc none/file/auto, musicVolume/ducking và voiceVolume hiện trực tiếp. Optional `affiliateDub` dùng IntegrationClient/TTS sẵn có (OpenAI-compatible hoặc VoiceTube ở host đã hỗ trợ), voice ID, speed 0,8–1,25 và fitted audio cache; speech QC đọc audio thay thế. Thiếu provider/voice dừng trước generation; render/check cache không gọi TTS. Silent/ASMR/slideshow không nhận dub. Chưa có credential hoặc lượt VoiceTube thật, không chứng nhận khẩu hình hay automatic voice matching.
+
+Lượt live có lời: plan + review nguồn đạt, một MP3 15,05 giây/361.787 bytes và một ảnh cảnh đã tạo. Custom waveform không có URL DOM; menu More options → Download được tái hiện và phục hồi **cùng task** thành công, không gửi lại prompt nhạc. Bổ sung bind reply/prompt/DOM order, CDP Page download progress theo GUID để cancel quá 256 MiB, deadline, file/URL/probe guard và cancel handle đến muộn hoặc bị từ chối. Progress có độ trễ; kiểm kích thước trước import vẫn giữ. API Page events deprecated được kiểm trên Chrome157/Playwright1.62 đã pin, chưa bảo đảm bản trình duyệt tương lai. Provider trả lời từ chối video theo quốc gia/khu vực; lượt all sở hữu được hủy, giữ admission và media. Guard mới trả NeedsInput sớm cho refusal mới với “your account”, “this account” hoặc một nhãn ASCII như “your MaiStudio account”; ba ca browser RED→GREEN bảo đảm admitted retry không gửi lại. Không auto-resubmit. **Không có clip có lời mới từ lượt này.**
+
+Mẫu `evidence/affiliate-fashion-music.mp4` là dựng cục bộ **bốn clip Mai Fashion cũ đã tạo**, gắn MP3 thật vừa tải, host silent, nhạc 100%; không tạo clip/lời hoặc model review mới. Video15s1080×1920/30fps H.264 + AAC, xuất TXT riêng; decode đầy đủ, mean−24,9dB/peak−7,7dB, preview bản đóng gói seek đúng1/7/14giây; số liệu âm thanh lưu trong evidence. Probe clone đầu tiên bị chặn đúng vì cache scoped theo project ID cũ; sửa dữ liệu QA bằng lựa chọn clip/ảnh Library rõ ràng rồi dựng, không đổi engine hoặc bỏ guard. Video Fashion cũ và mọi asset giữ nguyên.
+
+Theo yêu cầu mới của anh, native Muse refresh quota/cookie của cả sáu account đang bật lúc00:35–00:39: Tour/số6 tuần100%, top-up0; số7/9/10/11 tuần0%, số8 tuần28%, mỗi account mới còn2tỷ top-up. Cả sáu cookie check hiện tại ok. 1–5 vẫn tắt, quota cũ không được gọi là vừa kiểm.
+
+Kiểm quyền video thực tế01:14–01:28: dùng đúng profile và proxy sẵn có của native Muse, gửi **một** yêu cầu clip ngắn vào side-chat sở hữu ở số7/9/10/11. Số8 hiển thị đúng lượt Mai spoken Fashion trước đó cùng refusal, không gửi lại. **Cả năm đều được provider trả thông báo không có video generation theo quốc gia/khu vực, không có clip mới.** Không suy ra còn token là tạo video được, không coi lời model là một chẩn đoán entitlement/backend độc lập. Bằng chứng từng account và thread ID ở `evidence/muse-video-account-probes.json`, PNG tương ứng. Không bật lại1–5, không đổi enabled/proxy/concurrency, không retry cùng lượt hoặc fallback ảnh. Đã thả hold7–11, kiểm lại giao diện01:32 không còn Chrome/busy hold, đóng RDP; không có credential/cookie/proxy-secret được chuyển.
+
+
+Kiểm hồi quy: toàn bộ407 test trên macOS ARM64 và407 trên Linux ARM64, không fail/cancel/skip. Bao gồm intake/parser/HTTP ảnh, planning/director, product-aware QC/repair, cached stage/render, voice fitting/volume, SRT timing/ASR, Film/Series, cancel/retry/admission/no-duplicate, media decode/mix/ranges, Store/protocol/security/update. Các provider chưa cấu hình vẫn không được ghi là đã chạy live. Bộ browser mới có năm ca RED→GREEN cho in-flight declared/chunked bound, late abort, rejected extension/URL; fresh menu và legacy resume vẫn qua. UI phát hiện và sửa nhãn slider, nút speech khi bật dub, source lỗi bị giấu, tab phụ mất điều hướng và khung chọn0shot chiếm chỗ.
+
+Hai vòng UI **mỗi OS**, mỗi vòng1.000 draft, 11style×3host form matrix, đầy đủ pipeline qua HTTP kiểm soát → 4ảnh/4clip/8assessment → MP4+TXT/FFmpeg thật. Kiểm desktop1440×900/mobile390×844, VI/EN và light/dark, điều hướng cả12 trang, không tràn ngang; xem screenshot thực. Chọn shot khác vẫn tạo riêng đúng cảnh, hủy/thử lại tái dùng media, caption/post edit+review giữ clip, unknown hiện lý do, reopen không resubmit, legacy15refs render không ép save, source missing sửa không cần JSON. Chỉ form/fixture coverage, không gọi là33 tổ hợp live. Bản mac đóng gói còn mở dự án thật và chụp bốn viewport/theme với ảnh thực.
+
+Linux QA lần đầu thiếu mount `scripts/check-docs.js` (404pass/1 môi trường lỗi); gắn đúng file, kiểm riêng rồi chạy lại toàn bộ405/405; sau bổ sung hai wording refusal, full suite cuối đạt407/407. GUI container64MiB `/dev/shm` từng crash khi đổi trang; hai vòng lặp lại với512MiB qua, giữ log lỗi và không sửa sản phẩm để né test. Đây là coverage Xvfb/container, chưa phải bare-metal/Wayland. macOS dùng userData QA/`--use-mock-keychain`, chưa chứng nhận ACL/keystore thật.
+
+Artifact dev ở `Downloads/MaiStudio-interface-dev-20261116/`: mac-arm64/MaiStudio.app (ad-hoc), Linux ARM64 unpacked + tar.gz. Đối chiếu63 file core/electron/UI và các trường package name/version/main/dependencies với dist; electron-builder chuẩn hóa package.json nên không so byte thô toàn file metadata. Reviewer UI không còn P1/P2 ở phạm vi đọc; hai P2 download được sửa và kiểm browser thật. Parent đã đọc actual diff và kiểm nguồn đóng băng. Reuse Store/Queue, stage toolbar, status/field/modal, VoiceTools, IntegrationClient, FFmpeg và Playwright; **không thêm dependency**, không refactor ngoài scope, không push/deploy/migrate/release.
+
+```text
+make build: Build succeeded
+make test (macOS ARM64): 407 pass, 0 fail/cancelled/skipped
+Linux ARM64 full suite: 407 pass, 0 fail/cancelled/skipped
+make lint: exit 0, zero warnings
+docs-check: OK
+UI: 2 rounds macOS + 2 rounds packaged Linux ARM64
+```
+
+Còn mở: clip mới có lời và so cùng brief với Muse bằng account đủ quyền; VoiceTube live/auto-match voice, sửa mô tả cảnh bằng instruction AI như native, native transition/adaptive timing, mọi kiểu/host/ngôn ngữ/ngành hàng live, macOS Intel/Linux x64 và bare-metal/installer/notarization. Không dùng số test, preset hoặc nhạc thành công để tuyên bố “tốt bằng Muse”.
+
 # Nghiệm thu bản dev MaiStudio 0.1.0
+
+## Affiliate sau nhập Shopee — dev 16/11/2026
+
+Đã nối luồng riêng cho dự án bật `data.affiliate`: 11 kiểu review/story/problem/unbox/howto/top3/fashion/snack/lookbook/asmr/pov, ba host modes presenter/voiceover/silent, ngân sách 15/30/45/60 giây, 16 ngôn ngữ và các lựa chọn hook/tư thế/tuổi/giới/giọng vùng. Hỗ trợ ảnh người mẫu/bối cảnh, 1–4 outfit cho lookbook, sửa caption/chuyển cảnh/copy; lập kịch bản theo từng kiểu, review facts/structure/host độc lập, tạo ảnh có nguồn sản phẩm, I2V một anchor, review sản phẩm/nhân vật và chuyển động, sửa cảnh fail trong giới hạn, dựng caption/giá/CTA/nhãn/endcard và xuất MP4 + TXT. Tái dùng Store/Queue, browser admission/checkpoint, native narration, FFmpeg, card renderer và UI hiện có; không thêm dependency.
+
+Đối chiếu đọc-only gồm Affiliate source Muse 1.13.12 và options/project/video-scene metadata Muse 1.13.18 trên VPS. Có 11 kiểu/ba host, cách đếm cảnh, settings và trường review/caption/outfit/beat thực; recipe prompt remote chưa thu được. Prompt Mai được viết độc lập. Lượt này không có video Muse mới cùng brief/sản phẩm để so trực tiếp, không xem coverage lựa chọn là chứng minh chất lượng ngang Muse.
+
+**Lượt provider thật:** dự án `b973c9f6-6f91-41af-aa86-4eecc3d041a4`, Fashion/silent, nam trẻ mặc áo đen, 15 giây, từ product/ảnh Shopee đã nhập mới. Một plan và review độc lập pass; tạo một người mẫu, bốn ảnh cảnh và bốn clip; cả bốn image review (gồm product) và bốn sampled-video review pass ở take đầu. Đã xem ảnh/khung hình thực: đi tới, xoay nửa người, kéo nhẹ tay áo/chất vải, trở lại toàn thân; giữ áo đen/họa tiết/logo nguồn. Không nhạc vì Library không có audio, nên beatSync ghi unchanged, không giả nhận đã căn beat. Silent đúng brief, không audio stream. Không kết luận toàn bộ video từ bốn frame đánh giá mô hình.
+
+Kiểm trực quan lần đầu phát hiện caption chồng lên endcard và libass `Alignment=8` thực là giữa theo SSA. Hai regression probes RED→GREEN kiểm mốc caption dừng ở giây 13 và vị trí chữ trong frame RGB thật; Sau khi kiểm preview mobile thật, tiếp tục chuyển caption xuống vùng dưới thân người, giữ vùng riêng cho phụ đề lời và footer compact 14%, tránh che mặt/ngực áo; kiểm RGB/alpha thật cho cả ba vùng, gồm footer đủ năm tỷ lệ ở kích thước nhỏ; footer tự giảm padding/font theo kích thước, card legacy giữ nguyên. Caption dừng trước endcard, card dùng tiêu đề ngắn đã review. Dựng lại bằng đúng bốn clip, không mua thêm media/provider. File cuối `Downloads/MaiStudio-affiliate-dev-20261116/evidence/affiliate-fashion-15s.mp4`: H.264 1080×1920, 30fps, 450 frames/15 giây; decode toàn file exit 0. Copy đăng bài có nguồn giá/ngày, CTA/link/hashtags và nhãn đã chọn, không tự đăng.
+
+Review code độc lập phát hiện hai lỗi biên; đã tái hiện rồi sửa: caption ASMR/POV đang chỉnh phải ưu tiên hơn caption plan cũ, và tổng 15 reference phải tính cả người mẫu tự tạo trước lưu/nhận job. Test kiểm 15 ảnh + auto host bị chặn trước queue, 14 ảnh hợp lệ, presenter đã chọn được deduplicate; giữ render thủ công provider-free. UI không save thừa khi dựng dự án chưa chỉnh, nên dự án cũ vượt giới hạn generation mới vẫn dựng từ output được; thêm ca UI legacy 15 ảnh chạy thật, không gọi provider. Các test và stress mới cũng giữ sửa caption/post đã lưu qua review-only, không viết lại hoặc tạo media trùng.
+
+Hai vòng UI trên macOS và hai vòng trên **artifact Linux ARM64** trong container có Electron/Chromium sandbox, Xvfb: mỗi vòng 1.000 draft, đủ lựa chọn 11×3, thực hiện queue→plan/source review→bốn ảnh→bốn clip→tám media assessments→FFmpeg MP4/TXT với provider HTTP kiểm soát. Kiểm cancel/retry/cache, edit/review giữ media, unknown dừng, đóng/mở không resubmit; desktop 1440×900/mobile 390×844 × Việt/Anh × light/dark, không overflow hay lỗi renderer. Đây là kiểm engine/UI với fixture, tách khỏi lượt live trên.
+
+Bản mac đóng gói còn kiểm preview video thật tại bốn viewport/theme, giữ năm profile và project Shopee gốc 7/7 ảnh. Hồi quy tự động kiểm Shopee parser/capture/CSV/JSON, API signing fixtures, browser admission/cancel, phim/series/SRT/Dub cũ, narration/acoustic/ASR/quality repair, media/security/store/queue/license/update. Không coi test fixture cho các provider là nghiệm thu live.
+
+Artifact dev: `Downloads/MaiStudio-affiliate-dev-20261116/mac-arm64/MaiStudio.app` và `linux-arm64-unpacked/`. Bằng chứng `live-run.json` (all-stage), `live-render.json` (render-only/preview), `fashion-contact-sheet.jpg`, `affiliate-caption.txt`, REA bundle, QA logs và UI reports/screenshots lưu cạnh artifact. Không push/release/triển khai production, không sửa dữ liệu sản phẩm gốc hoặc xóa output cũ.
+
+```text
+make build: Build succeeded
+make test: 388 tests, 388 pass, 0 fail/cancelled/skipped
+make lint: exit 0, zero warnings
+node scripts/check-docs.js: docs-check: OK
+Linux ARM64 Affiliate core/integration: 38 tests, 38 pass, 0 fail/cancelled/skipped
+Linux ARM64 text safe-area regressions: 3 tests, 3 pass
+macOS UI stress: rounds 1/2 PASS; 1000 drafts per round; desktop/mobile, vi/en, light/dark
+Packaged Linux ARM64 UI stress: rounds 1/2 PASS; same checks
+Packaged macOS actual video: 4 viewport/theme playbacks, no renderer errors
+macOS/Linux ASAR modules: match current compiled source; mac codesign verify: exit 0
+Final MP4 decode: 450 frames, 15s, 1080x1920, 30fps, exit 0
+```
+
+Giới hạn: live mới có Fashion/silent và một sản phẩm áo; chưa nghiệm thu live đủ kiểu/host, lời nói/16 ngôn ngữ, ngành hàng, nhạc auto, mọi model/provider hoặc so sánh mới cùng Muse. Linux ARM64 kiểm artifact trong container, chưa bare-metal/keyring người dùng hoặc Linux x64; mac ad-hoc chưa notarize. Film/SRT giữ hoạt động cũ, chưa mở thêm phạm vi trong lượt này.
+
+## Shopee Affiliate intake dev — 16/11/2026
+
+Anh đã chạy bookmarklet trong Chrome thường trên trang sản phẩm và nhập qua bản MaiStudio đóng gói. Task `b0120e79-d0c4-4653-96d0-ecd7cff7535d` succeeded một lần, tải và giải mã 7/7 ảnh gallery thật vào Library. Shop/item khớp link `https://shopee.vn/product/261487657/44102644150`; giữ tên/mô tả, giá nguồn `112.686₫ – 120.000₫`, 9 thuộc tính, 8 tổ hợp model thuộc 2 nhóm màu/size, rating và shop. capturedAt `2026-11-16T09:47:36.686Z` tách khỏi importedAt. Nguồn lần này không cung cấp sold, UI đánh dấu thiếu; không lấy số 0 từ mẫu lịch sử để thay vào.
+
+Đối chiếu contract Muse: đã đọc source bookmarklet bản 1.13.12 và metadata/options đang chạy 1.13.18 trên VPS. Hai đường API chính thức/capture Chrome được nối vào MaiStudio; parser nhận cả envelope capture cũ. Một kiểm tra riêng dùng metadata Muse cũ tải/giải mã 8/8 ảnh CDN hiện tại, giữ timestamp cũ và được ghi rõ là historical, không gán cho lượt đọc trang mới. Dữ liệu và ảnh từ lần nhập mới nằm trong `Downloads/MaiStudio-shopee-dev-20261116/evidence/fresh-import.json`, `fresh-page-capture.json`; kiểm tra historical/CDN nằm riêng `cdn-import.json`.
+
+Kiểm hồi quy bao gồm CSV/JSON batch, raw API Shopee/chữ ký, cancel/retry/checkpoint, các pipeline cũ, review/sửa chất lượng, render/media/protocol, browser admission và bảo vệ sửa dự án trong lúc import. 15 ca Shopee kiểm parser/link/giới hạn/tải ảnh thật qua HTTP có kiểm soát và decode FFmpeg, mất/một phần ảnh, hủy/tiếp tục không tải trùng và không ghi đè thay đổi mới; hai ca chạy Chrome thật trên trang kiểm soát để kiểm cache-only/product-only, loại sản phẩm gợi ý và fallback giá hiển thị gần tên. Cache miss không gửi mới authenticated product request.
+
+Hai vòng stress, mỗi vòng 1.000 draft tasks: mở link/copy mã, nhập thật qua queue/Store/FFmpeg với HTTP kiểm soát, báo ảnh lỗi, hủy giữ product cũ, retry tái dùng checkpoint ảnh, đóng mở không resubmit. Mỗi vòng kiểm desktop 1440×900/mobile 390×844, light/dark, không tràn ngang, không lỗi renderer. Kịch bản kiểm tra đã xác nhận cả hộp thoại Retry; lỗi selector/synchronization trong script QA trước đó được sửa, không bỏ assertion hay bỏ xác nhận của sản phẩm.
+
+Bản dev riêng: `Downloads/MaiStudio-shopee-dev-20261116/mac-arm64/MaiStudio.app`; dùng lại userData QA và giữ 5 profile anh đã đăng nhập. Không thay bản phát hành hay cấu hình VPS. Reuse Store/Queue/parser/UI/desktop actions/FFmpeg và Node URL/fetch/fs, không thêm dependency. Chỉ bổ sung module intake và các điểm nối cần thiết; không sửa engine video cũ để làm chức năng này.
+
+```text
+make build: Build succeeded
+make test: 347 tests, 347 pass, 0 fail/cancelled/skipped
+make lint: exit 0, zero warnings
+node scripts/check-docs.js: docs-check: OK
+Shopee Linux ARM64 core/container: 13 tests, 13 pass, 0 fail/cancelled/skipped
+Shopee UI stress rounds 1/2: PASS; 1000 drafts each; desktop/mobile, light/dark
+Fresh operator capture: 7/7 images imported; all 7 stored images decoded again in renderer
+```
+
+Giới hạn nghiệm thu: đã có một sản phẩm Shopee VN mới qua cache đang mở; chưa phải mọi ngành hàng/link rút gọn hay mọi layout Shopee. API chính thức mới kiểm chữ ký/contract bằng HTTP fixture, chưa có entitlement live. Linux ARM64 kiểm core trong container, chưa chạy UI/Chrome/Keychain Linux thật; bản mac ad-hoc chưa notarize. Chưa nghiệm thu đủ 11 kiểu Affiliate/3 host modes; thứ tự tiếp theo vẫn Affiliate → Film → SRT.
+
+## Quality workflow dev — 16/11/2026
+
+Đã tạo video AI mới bằng luồng MaiStudio có review/sửa thật: ba ảnh cảnh, ba clip ban đầu, review ảnh và bốn frame/clip trong đúng khoảng dùng khi dựng. Cảnh 2 fail vì có vai/tay áo người thứ hai ngoài bố cục đã yêu cầu. Một vòng sửa tạo lại riêng ảnh cảnh 2 và clip phụ thuộc; cảnh 1/3 giữ nguyên, review không đổi được tái sử dụng. Sau đó cả ba image/video review pass, render 1920×1080/30fps dài 13,266667 giây, không âm theo brief; giải mã toàn bộ exit 0. Take theo cảnh là 1/2/1, không sửa kịch bản/timecode và giữ media cũ. Đây là bằng chứng luồng hoạt động, không phải chứng nhận mọi đánh giá mô hình đều chính xác.
+
+Cặp A/B trong MaiStudio: cùng tài khoản mới, cùng một ảnh nguồn Muse đã xác minh, cùng tỷ lệ; một clip dùng prompt gốc đã quan sát, một clip dùng prompt Mai mới. Không tạo lại chọn mẫu cho cặp thử. Đã xuất hai raw clip và bản ghép 4,375 giây, prompt gốc trái/Mai phải, bỏ âm để xem chuyển động. Một cặp ngẫu nhiên và model identity không lộ không chứng minh nguyên nhân hay chất lượng tổng thể ngang Muse.
+
+Tài khoản QA cũ trả thông báo hết usage; anh đăng nhập lại, tạo plan bằng TK 02 thành công. Hai stage chưa gửi remote đã dừng do kiểm composer quá sớm sau mở profile; retry đúng task khi ô nhập hiện đã chạy được. Đã sửa readiness chung cho plan/media: chờ tối đa 15 giây, hủy trước admission không gửi request. Ca tái hiện trang hydrate 600ms RED→GREEN, cả plan và image; hủy trong lúc chờ cũng được kiểm. Editor merge field đã sửa vào state mới nhất để không mất production/review vừa tạo.
+
+Kiểm lại Muse trên VPS thấy phiên bản 1.13.18 (khác audit cũ 1.13.12), sáu tài khoản đang bật do anh cấu hình. Dự án thử riêng MaiStudioQuality-TeaStory-20261116 nhận plan một lần rồi báo không có khung chat sau 60 giây; browser tài khoản 6 hiển thị Something went wrong. Chưa có ảnh/clip mới từ lần này. Đã thả hold account 6 do phiên kiểm tra tạo; không thay enabled/proxy/concurrency của anh. Các video Muse cũ giữ nguyên, không gán kết quả cũ cho bản mới.
+
+```text
+make build: Build succeeded
+make test: 332 tests, 332 pass, 0 fail/cancelled/skipped
+make lint: exit 0, zero warnings
+Linux ARM64 (Node 24.22.3, container): 77 tests, 77 pass, 0 fail/cancelled/skipped
+Quality UI stress rounds 1/2: 1000 draft tasks each; real sampled frame bytes through controlled vision HTTP
+Each round: desktop1440x900/mobile390x844, light/dark, no horizontal overflow, 0 renderer errors
+Existing UI regression rounds 1/2: plan, selected/force images, review-only, stale association, music, preview, CPU render, WAV, CSV, product refs, local model cancel
+Actual packaged new live video: 4 viewport/theme playback checks, 12 seeks, 0 renderer errors
+node scripts/check-docs.js: docs-check: OK
+```
+
+Nguồn/bằng chứng: `/private/tmp/mai-studio-quality-upgrade/` (logs và stress), Downloads/MaiStudio-quality-comparison-20261116 (run.json, quality-report.json, raw A/B clips và mai-quality-tea-story.mp4), Downloads/MaiStudio-quality-dev-20261116 (app ARM64 và verification.json). Tái sử dụng Queue/Store/BrowserManager, MediaTools/FFmpeg, provider vision, React components/tokens; không thêm dependency. Bản dev riêng, không push/release/deploy. Linux mới chỉ kiểm nhóm core chất lượng; chưa đóng gói/GUI nghiệm thu lại với thay đổi này. macOS Intel và keystore/notarization thực chưa kiểm lại.
+
+
+## Bổ sung ngày 16/11/2026 — đối chiếu live và preview
+
+Anh đã chấp nhận chất lượng bản dựng 40 giây dùng tư liệu Muse và cho phép bài thử live trà quán 3 cảnh trên cả hai app. Tài khoản MaiStudio đăng nhập riêng; không chép cookie/profile hoặc thay cấu hình bản gốc. MaiStudio đã hoàn tất plan, 2 ảnh nhân vật, 3 ảnh cảnh, 3 clip mới 10 giây và render 1920×1080/30fps dài 13,266667 giây. Bốn cue Unicode/mốc phân số giữ nguyên; giải mã toàn bộ video qua. Đây là tạo AI mới, khác các probe render từ source media cũ. Review ảnh/clip cho thấy cùng nhân vật/trang phục/bối cảnh; continuity đạo cụ và ý nghĩa âm thanh còn cần nghe/xem đối chiếu, chưa kết luận chất lượng bằng Muse.
+
+Muse project riêng MaiStudioCompare-TeaStory đã xong plan/2 refs/3 ảnh và bắt đầu clips một lần. Sau đó RDP ngắt; kết nối lại và TCP3389 đều timeout, chưa lấy được kết quả cuối. Không gửi lại job hoặc ghi nhận ảnh desktop lưu cũ là tiến độ mới.
+
+Các probe khác: SRT ảnh/clip, film có thẻ đầu/cuối, fashion dựng 16 clip áo, series có 2 output và project con riêng, reopen không tự submit, thiếu media không tạo output. Đây là kiểm chức năng kỹ thuật, chưa phải chứng nhận toàn quy trình AI từng kiểu. Bài SRT cùng 4 cue cho thấy Muse gom 3 cảnh/13,25 giây, Mai mặc định giữ 4 cue/12,75 giây; groupNarration hiện có khớp chính xác khi chuẩn bị thủ công, UI import mặc định vẫn khác. Bảy clip source giày có cùng hash và hình mascot được loại khỏi dữ liệu chất lượng thành công. QC bật với clip sai cần waiting_input, không tạo output.
+
+Preview thật phát hiện tua 1/7,5/11,5 giây đều về 0 dù buffer đủ file; seekable chỉ [0,0]. Electron file fetch đọc đúng phần byte nhưng trả 200 và thiếu Content-Length/Content-Range. Sửa duy nhất handler media dùng Node stream/metadata đúng; giữ URI/GET/Store validation/CSP. Test byte range đóng/mở/suffix/clamp, sai range, abort và directory qua; gói app mới chạy 12 lượt tua trên bốn viewport/theme không lỗi renderer/tràn ngang. Kết quả smoke ngắn trước đây không chứng nhận được hành vi tua trên video thật này.
+
+Bằng chứng nằm ở Downloads/MaiStudio-parallel-tests-20261116 (comparison.json, mai-results.json, quality-guard.json, outputs/live/player-report.json và video mai-tea-story.mp4); gói sửa preview riêng Downloads/MaiStudio-player-dev-20261116. App cũ của anh không thay thế. Chỉ gói dev ARM64 ký ad-hoc, không notarized; Linux chưa đóng gói lại với composer/range fixes. Bốn compiled module trong ASAR khớp dist, codesign verify qua. Không thêm dependency.
+
+```text
+make build: Build succeeded
+make test: 303 tests, 303 pass, 0 fail/cancelled/skipped
+make lint: exit 0, zero warnings
+node scripts/check-docs.js: docs-check: OK
+Stress1: 1000 tasks = 980 succeeded + 20 cancelled; peak2; queue6436ms
+Stress2: 1000 tasks = 874 succeeded + 75 intentional429 failed + 51 cancelled; peak2; queue10923ms
+Each stress round: desktop1440x900/mobile390x844, light/dark, no renderer errors or horizontal overflow; reopen/no resubmit checked
+Packaged live-video player: 4 viewport/theme checks, 12 seeks passed
+```
+
+Regression suite kiểm queue/admission/retry/cancel, persistence, composer/ref/download, real FFmpeg gap/trim/fade/subtitle/music/cards, series và quality guards; probe thực tế kiểm SRT/fashion/film/series như trên. Các bài fixture không thay thế native keystore, mọi provider/OS hoặc chất lượng Muse live.
+
+## Mốc lịch sử 14/11/2026
 
 Ngày kiểm: 14/11/2026. Phạm vi: repo riêng, dữ liệu tạm, dịch vụ HTTP fixture sở hữu bởi kiểm thử. Không ghi vào MuseStudio/MaiHub, không gọi job tính phí, không push/deploy/migrate/publish.
 
@@ -121,3 +267,34 @@ ARM64 packaged GUI: giải nén chính AppImage sau khi kiểm SHA d4213fb254dc1
 Rà độc lập actual diff phát hiện ba lỗi admission/portrait/Dub; đã sửa bằng regression và reviewer chạy lại 3/3 repro qua. Bản sửa media sau review chỉ đặt fps output và chia block sidechain, giữ nguyên tests và dependency. Tái sử dụng queue/checkpoint/browser/FFmpeg/SQLite hiện có; dependency mới duy nhất là sherpa-onnx-node 2.0.1 cho native speech CPU. Không tạo framework hoặc service mới để thay luồng đang chạy.
 
 Chưa nghiệm thu: runtime MuseStudio trên VPS Windows, provider/account/commerce live, prompt recipe remote, hai business native modules, accuracy giọng thật/khẩu hình, teaser/credit/continuity tự động, nhạc recap liên tục, macOS Intel, FUSE/DEB installation, Wayland và installer/update rollback. Không phát paid job, push/publish/deploy, thay production hoặc sửa repo automation-marketing. Chưa đủ bằng chứng tuyên bố toàn sản phẩm “tốt bằng” bản gốc.
+
+## Bổ sung runtime VPS và sửa composer — 15–16/11/2026
+
+Phạm vi mới do anh cho phép: quan sát Muse Studio 1.13.12 đang chạy trên VPS Windows và lấy video/clip nguồn của dự án affiliate. Báo cáo parity ghi rõ phạm vi GUI/DOM đã quan sát; không mở rộng thành chứng nhận Windows của MaiStudio hoặc provider live. Không đọc/chuyển profile, credential/cookie, không gửi job AI. Đã thả account 1 khỏi phiên Treo trình duyệt do em mở, giữ nguyên account 4 đang tắt, đóng PowerShell/DevTools của đợt kiểm và disconnect RDP; không restart Muse hay dịch vụ của anh.
+
+Hai lỗi tương thích tái hiện được: mặc định chỉ tìm contenteditable trong khi live dùng textarea; `completeText` đòi nút Send trước khi điền prompt, nhưng live chỉ hiện Send khi có nội dung. Sửa tại Store/default settings đọc và prefill gate của BrowserManager, giữ custom selectors, không migrate schema hoặc ghi vào database của Muse. Bảy kiểm tra chọn lọc RED→GREEN; sáu ca mới tăng suite từ 296 lên 302. Kiểm lại các hành vi đang có: upload/ref readiness, Unicode, reply mới hoàn tất, resume không submit trùng, admission trước click, cancel/navigation/stream, response/checkpoint limits, media/download và custom selectors. Toàn bộ suite còn bao gồm persistence/queue/media/ASR/planning/series/dub/update/security; không dùng đó để suy rộng sang provider thật.
+
+```text
+make build: Build succeeded
+make test: 302 tests, 302 pass, 0 fail, 0 cancelled, 0 skipped
+make lint: exit 0, zero warnings
+node scripts/check-docs.js: docs-check: OK
+selected RED: 0 pass / 7 fail; selected GREEN: 7 pass / 0 fail
+```
+
+Rà diff độc lập không thấy lỗi code khác trong phạm vi; phát hiện một docs-check marker dạng chuỗi không được checker hỗ trợ, đã bỏ marker sai và chạy checker sạch. Tái dùng Store/BrowserManager và fixture có sẵn, không thêm dependency vào sản phẩm; thay đổi runtime chỉ 8 dòng thêm/3 dòng bỏ, không thêm abstraction hoặc UI.
+
+| Vòng | Batch | Thành công | Lỗi cố ý 429 | Hủy | Đỉnh concurrency | Queue ms | RSS mẫu cuối |
+|---|---:|---:|---:|---:|---:|---:|---:|
+| 1 | 1.000 | 980 | 0 | 20 | 2 | 5.434 | 296.697.856 bytes |
+| 2 | 1.000 | 877 | 72 | 51 | 2 | 10.435 | 277.790.720 bytes |
+
+Hai vòng Electron thật dùng provider loopback fixture, gồm hủy một request đang chạy, desktop 1440×900/mobile 390×844, light/dark, cả 12 màn hình điều hướng, primary Create & run và episode form. Không tràn ngang/renderer error; reopen giữ đủ task/asset và không thêm request. Đã xem bốn ảnh đại diện của cả hai vòng và cả hai viewport/theme. Không gọi số failed chủ đích là task thành công, RSS không phải peak.
+
+Video original `MuseStudio-affiliate-reference-20261115/muse-original.mp4`: 39,646 giây, 1080×1920/24 fps, bytes/SHA-256 khớp Windows. 16 clip tên chuẩn + nhạc + ảnh host đối chiếu 18/18 hashes/sizes. Bản thử `MaiStudio-affiliate-rebuild-20261116/lookbook-comparison.mp4` dùng queue `studio.run(stage=render)` và `dub` thực của MaiStudio để dựng 16×2,5 giây, caption thủ công và nhạc nguồn giảm 6 dB/fade, H.264/AAC 1080×1920/24 fps, 40 giây; full decode qua, mean −19,6 dB / peak −4,9 dB. Đây là thử phần dựng bằng clip do Muse tạo, không phải video mới tự động từ đầu của MaiStudio; không chứng nhận lựa chọn clip/nhịp dựng giống original, host/product continuity hoặc chất lượng ngang Muse. Giữ kết quả demo ảnh tĩnh trước đó là QUALITY_REJECTED.
+
+Player bản dựng kiểm tám lượt (hai vòng desktop/mobile sáng/tối), 40 lần seek rồi play và đọc pixel canvas xác nhận frame có hình, không chỉ metadata/seeked; không lỗi JS/overflow. HTTP video fixture hỗ trợ Range/206 và CORS cho kiểm pixel; không coi đó là xác minh byte-range của custom studio-media protocol.
+
+macOS ARM64 đã đóng gói lại dev 0.2.0-dev.1 ở `MaiStudio-composer-dev-20261116/MaiStudio.app`. Module `store.js` và `browser.js` trong ASAR khớp SHA compiled source, codesign ad-hoc verify qua. Gói thật chạy với userData riêng và mock Keychain: đọc đúng textarea/default, account.check ready, submit ảnh fixture đúng một lần và tải PNG qua queue, admission checkpoint, legacy default sau reopen, không submit thêm; bốn viewport/theme không tràn ngang hoặc renderer error. Không sửa app đang mở/userData của anh. Chưa kiểm native Keychain/Gatekeeper/notarization/update; không đóng gói lại Linux hoặc macOS Intel cho bản sửa này.
+
+Log/checkpoint/screenshot: `/private/tmp/mai-studio-vps-audit/`. Dự án thử riêng và `render-report.json` đi cùng video trong Downloads; `verification.json`/SHA ASAR đi cùng app mới. Artefact cũ vẫn giữ nguyên. Bộ kiểm chứng không phải chứng nhận full quality parity hoặc lượt tạo ảnh/video thật bằng provider Muse.

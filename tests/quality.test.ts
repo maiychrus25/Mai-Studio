@@ -1,0 +1,251 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import { createServer } from 'node:http';
+import { spawnSync } from 'node:child_process';
+import { mkdtempSync, readFileSync, rmSync, writeFileSync, readdirSync } from 'node:fs';
+import { join } from 'node:path';
+import { tmpdir } from 'node:os';
+import { setTimeout as delay } from 'node:timers/promises';
+import { StudioService } from '../src/core/studio';
+import { MediaTools } from '../src/core/media';
+import { parseVideoReview, qualityRetries, reviewScore } from '../src/core/quality';
+import { NeedsInputError } from '../src/core/queue';
+import type { Project, Task, TaskContext, TaskResult } from '../src/shared/studio';
+
+const imageVerdict = Object.fromEntries(['scene', 'face', 'outfit'].map(key => [key, { status: key === 'scene' ? 'pass' : 'not_applicable', reason: 'Controlled fixture' }]));
+const videoVerdict = (status = 'pass') => Object.fromEntries(['action', 'motion', 'continuity', 'identity'].map(key => [key, { status: key === 'motion' ? status : key === 'identity' ? 'not_applicable' : 'pass', reason: key === 'motion' && status !== 'pass' ? 'The requested teapot movement is missing' : 'Controlled sampled observation' }]));
+type Port = { generate(task: Task, context: TaskContext): Promise<TaskResult>; executeReview(task: Task, project: Project, context: TaskContext): Promise<TaskResult> };
+
+test('temporal verdict rejects missing evidence, unknown motion and malformed model output', () => {
+  assert.equal(parseVideoReview(JSON.stringify(videoVerdict())).status, 'pass');
+  assert.equal(parseVideoReview(JSON.stringify(videoVerdict('unknown'))).status, 'unknown');
+  assert.equal(parseVideoReview(JSON.stringify(videoVerdict('fail'))).status, 'fail');
+  assert.throws(() => parseVideoReview('{}'), /status/);
+  assert.throws(() => parseVideoReview(JSON.stringify(videoVerdict('not_applicable'))), /assessment/);
+  assert.throws(() => parseVideoReview('not JSON'), /JSON/);
+  for (const value of [-1, 3, 0.5, '2', NaN]) assert.throws(() => qualityRetries(value), /qualityRetries/);
+  assert.equal(qualityRetries(undefined), 0); assert.equal(qualityRetries(2), 2);
+  assert.ok(reviewScore({ video: videoVerdict('fail') }) < reviewScore({ video: { status: 'pass' } }));
+  assert.ok(reviewScore({ video: { checks: videoVerdict('fail') } }) > reviewScore({ video: { checks: Object.fromEntries(['action', 'motion', 'continuity'].map(key => [key, { status: 'fail' }])) } }));
+});
+
+async function fixture(run: (studio: StudioService, frames: string[], requests: Array<{ prompt: string; images: string[] }>, setVerdict: (fn: (index: number) => unknown, imageFn?: (index: number) => unknown) => void) => Promise<void>) {
+  const root = mkdtempSync(join(tmpdir(), 'mai-temporal-')), studio = new StudioService(root), frames: string[] = [];
+  for (const color of ['red', 'blue', 'green']) {
+    const file = join(root, `${color}.mp4`);
+    const result = spawnSync(require('ffmpeg-static'), ['-v', 'error', '-f', 'lavfi', '-i', `color=c=${color}:s=64x64:r=24:d=1`, '-c:v', 'libx264', '-pix_fmt', 'yuv420p', file]);
+    assert.equal(result.status, 0, result.stderr.toString()); frames.push(file);
+  }
+  const requests: Array<{ prompt: string; images: string[] }> = []; let decide: (index: number) => unknown = () => videoVerdict(), decideImage: (index: number) => unknown = () => imageVerdict; let videoCalls = 0, imageCalls = 0;
+  const server = createServer(async (req, res) => {
+    let body = ''; for await (const chunk of req) body += chunk;
+    const content = JSON.parse(body).messages[0].content;
+    const prompt = content.find((part: any) => part.type === 'text').text, images = content.filter((part: any) => part.type === 'image_url').map((part: any) => part.image_url.url);
+    requests.push({ prompt, images });
+    const verdict = await (prompt.startsWith('Assess an actual sampled video') ? decide(videoCalls++) : decideImage(imageCalls++));
+    res.setHeader('Content-Type', 'application/json');
+    if (verdict === 'disconnect') { res.statusCode = 503; res.end('{}'); return; }
+    res.end(JSON.stringify({ choices: [{ message: { content: JSON.stringify(verdict) } }] }));
+  });
+  await new Promise<void>(resolve => server.listen(0, '127.0.0.1', resolve));
+  try {
+    const address = server.address() as import('node:net').AddressInfo;
+    await studio.invoke('settings.save', { providers: { text: { baseUrl: `http://127.0.0.1:${address.port}/v1`, model: 'controlled-vision' } } });
+    await run(studio, frames, requests, (fn, imageFn) => { decide = fn; if (imageFn) decideImage = imageFn; });
+  } finally { await studio.close(); server.closeAllConnections(); await new Promise<void>(resolve => server.close(() => resolve())); rmSync(root, { recursive: true, force: true }); }
+}
+
+async function project(studio: StudioService, videoPaths: string[], data: Record<string, unknown> = {}) {
+  const png = join(studio.store.root, 'scene.png');
+  writeFileSync(png, Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+j04sAAAAASUVORK5CYII=', 'base64'));
+  const [frame, ...videos] = await studio.importFiles([png, ...videoPaths]);
+  const p = await studio.invoke<Project>('project.save', { name: 'Temporal fixture', kind: 'srt', data: { shots: [{ id: 'one', prompt: 'A teapot on a table', videoPrompt: 'Tilt the teapot and pour tea', assetId: frame.id, duration: 0.6 }], narrationMode: 'none', videoReview: true, width: 64, height: 64, fps: 24, ...data } });
+  return { p, frame, videos };
+}
+
+async function finish(studio: StudioService, task: Task) {
+  for (let index = 0; index < 1000; index++) { const current = studio.store.task(task.id); if (!['draft', 'queued', 'running'].includes(current.status)) return current; await delay(10); }
+  throw new Error('Controlled pipeline did not settle');
+}
+
+test('real frame sampling decodes four ordered JPEGs, validates bounds and honors cancellation', async () => {
+  await fixture(async (studio, paths) => {
+    const media = new MediaTools(), folder = join(studio.store.root, 'samples'), sequence = join(studio.store.root, 'red-blue.mp4');
+    const joined = spawnSync(require('ffmpeg-static'), ['-v', 'error', '-i', paths[0], '-i', paths[1], '-filter_complex', '[0:v][1:v]concat=n=2:v=1:a=0[v]', '-map', '[v]', '-c:v', 'libx264', sequence]);
+    assert.equal(joined.status, 0, joined.stderr.toString());
+    const samples = await media.sampleFrames(sequence, folder, [0.1, 0.5, 1.1, 1.5]);
+    assert.equal(samples.length, 4);
+    for (const [index, path] of samples.entries()) {
+      assert.equal(readFileSync(path).readUInt16BE(0), 0xffd8); const info = await media.probe(path); assert.ok(info.width! <= 640 && info.height! <= 640);
+      const decoded = spawnSync(require('ffmpeg-static'), ['-v', 'error', '-i', path, '-vf', 'scale=1:1', '-frames:v', '1', '-f', 'rawvideo', '-pix_fmt', 'rgb24', 'pipe:1']);
+      assert.equal(decoded.status, 0); assert.ok(index < 2 ? decoded.stdout[0] > decoded.stdout[2] + 100 : decoded.stdout[2] > decoded.stdout[0] + 100, 'samples follow actual red then blue source frames');
+    }
+    await assert.rejects(media.sampleFrames(paths[0], folder, [0, 0.1, 0.2, 2]), /sample time/);
+    await assert.rejects(media.sampleFrames(paths[0], folder, [0, 0.1, 0.1, 0.5]), /increasing/);
+    const before = readdirSync(folder); const abort = new AbortController(); abort.abort();
+    await assert.rejects(media.sampleFrames(paths[0], folder, [0, 0.1, 0.2, 0.3], abort.signal), /abort/i); assert.deepEqual(readdirSync(folder), before);
+  });
+});
+
+test('temporal review uploads the anchor then four actual frames from the edited window, and retry reuses its result', async () => {
+  await fixture(async (studio, paths, requests, decide) => {
+    decide(() => videoVerdict('fail'));
+    const { p, videos } = await project(studio, paths.slice(0, 1));
+    const current = studio.store.saveProject({ ...p, data: { ...p.data, shots: [{ ...(p.data.shots as any[])[0], videoAssetId: videos[0].id }] } });
+    const task = studio.store.createTasks({ projectId: p.id, prompts: ['Review'], kind: 'pipeline', input: { stage: 'check', projectSnapshot: current } })[0];
+    const execute = () => (studio as unknown as Port).executeReview(studio.store.task(task.id), current, { signal: AbortSignal.timeout(20000), progress() {}, checkpoint(value) { studio.store.updateTask(task.id, { checkpoint: { ...studio.store.task(task.id).checkpoint, ...value } }); } });
+    await execute(); await execute();
+    assert.equal(requests.length, 2, 'one image review and one temporal review, no duplicate requests');
+    const videoRequest = requests.find(value => value.prompt.startsWith('Assess an actual'))!; assert.equal(videoRequest.images.length, 5);
+    for (const image of videoRequest.images.slice(1)) assert.equal(Buffer.from(image.split(',')[1], 'base64').readUInt16BE(0), 0xffd8);
+    const review = (studio.store.project(p.id).data.qualityReviews as any)[`${p.id}/one`];
+    assert.equal(review.image.status, 'pass'); assert.equal(review.video.status, 'fail'); assert.equal(review.video.frameIds.length, 4);
+    assert.ok(review.video.sampleTimes.every((time: number) => time >= 0 && time < 0.6)); assert.equal(review.video.coverage, 'four_sampled_frames');
+  });
+});
+
+test('unknown remote temporal acceptance is not resent after a 503', async () => {
+  await fixture(async (studio, paths, requests, decide) => {
+    decide(() => 'disconnect'); const { p, videos } = await project(studio, paths.slice(0, 1));
+    const current = studio.store.saveProject({ ...p, data: { ...p.data, shots: [{ ...(p.data.shots as any[])[0], videoAssetId: videos[0].id }] } });
+    const task = studio.store.createTasks({ projectId: p.id, prompts: ['Review'], kind: 'pipeline', input: { stage: 'check', projectSnapshot: current } })[0];
+    const execute = () => (studio as unknown as Port).executeReview(studio.store.task(task.id), current, { signal: AbortSignal.timeout(20000), progress() {}, checkpoint(value) { studio.store.updateTask(task.id, { checkpoint: { ...studio.store.task(task.id).checkpoint, ...value } }); } });
+    await assert.rejects(execute(), /503/); await assert.rejects(execute(), /đối soát|gửi/); assert.equal(requests.length, 2);
+  });
+});
+
+test('automatic quality repair passes feedback to one anchored generation, reviews the replacement and renders it', async t => {
+  await fixture(async (studio, paths, requests, decide) => {
+    decide(index => videoVerdict(index ? 'pass' : 'fail'));
+    const { p, frame, videos } = await project(studio, paths.slice(0, 2), { autoChecks: true, qualityRetries: 1 }); let calls = 0;
+    t.mock.method(studio as unknown as Port, 'generate', async (task: Task) => {
+      assert.deepEqual(task.input.refIds, [frame.id]); if (calls) assert.match(task.prompt, /teapot movement is missing/);
+      return { outputIds: [videos[calls++].id] };
+    });
+    const done = await finish(studio, await studio.invoke<Task>('studio.run', { projectId: p.id }));
+    assert.equal(done.status, 'succeeded', done.error); assert.equal(calls, 2);
+    const data = studio.store.project(p.id).data as any; assert.equal(data.production.videos[`${p.id}/one`], videos[1].id);
+    assert.equal(data.production.qualityTakes[`${p.id}/one`].length, 2); assert.equal(data.qualityReviews[`${p.id}/one`].video.status, 'pass');
+    assert.equal(requests.filter(value => value.prompt.startsWith('Assess an actual')).length, 2);
+    assert.ok(done.outputIds.length); assert.ok((await new MediaTools().probe(studio.store.assetPath(done.outputIds[0]))).duration >= 0.5);
+  });
+});
+
+test('exhausted repair keeps the better assessed take and retry does not purchase another generation or review', async t => {
+  await fixture(async (studio, paths, requests, decide) => {
+    decide(index => index ? Object.fromEntries(['action', 'motion', 'continuity', 'identity'].map(key => [key, { status: 'fail', reason: 'Worse replacement' }])) : videoVerdict('fail'));
+    const { p, videos } = await project(studio, paths.slice(0, 2), { autoChecks: true, qualityRetries: 1 }); let calls = 0;
+    t.mock.method(studio as unknown as Port, 'generate', async () => ({ outputIds: [videos[calls++].id] }));
+    const task = await studio.invoke<Task>('studio.run', { projectId: p.id }), done = await finish(studio, task);
+    assert.equal(done.status, 'waiting_input', done.error); assert.equal(calls, 2); assert.equal((studio.store.project(p.id).data.production as any).videos[`${p.id}/one`], videos[0].id);
+    const requestCount = requests.length; await studio.invoke('task.action', { action: 'retry', ids: [task.id] });
+    assert.equal((await finish(studio, task)).status, 'waiting_input'); assert.equal(calls, 2); assert.equal(requests.length, requestCount);
+    assert.equal((studio.store.project(p.id).data.production as any).qualityTakes[`${p.id}/one`].length, 2, 'restoring a previous take must not count it as a new generation');
+  });
+});
+
+test('unknown evidence pauses before automatic repairs and explicit source videos are never replaced', async t => {
+  for (const status of ['unknown', 'fail']) await fixture(async (studio, paths, _requests, decide) => {
+    decide(() => videoVerdict(status)); const { p, videos } = await project(studio, paths.slice(0, 1), { autoChecks: true, qualityRetries: 2 });
+    const current = studio.store.saveProject({ ...p, data: { ...p.data, shots: [{ ...(p.data.shots as any[])[0], videoAssetId: videos[0].id }] } });
+    t.mock.method(studio as unknown as Port, 'generate', async () => { throw new Error('Explicit sources cannot be regenerated'); });
+    const done = await finish(studio, await studio.invoke<Task>('studio.run', { projectId: current.id })); assert.equal(done.status, 'waiting_input', done.error);
+    assert.equal(((studio.store.project(p.id).data.shots as any[])[0]).videoAssetId, videos[0].id);
+  });
+});
+
+test('image repair regenerates only the failed scene then its dependent video, preserving character references', async t => {
+  await fixture(async (studio, paths, _requests, decide) => {
+    decide(() => videoVerdict(), index => ({ ...imageVerdict, scene: { status: index ? 'pass' : 'fail', reason: index ? 'Action visible' : 'The teapot action is not visible in the scene frame' } }));
+    const { p, frame, videos } = await project(studio, paths.slice(0, 2), { autoChecks: true, qualityRetries: 1 });
+    const nextFrame = (await studio.importFiles([studio.store.assetPath(frame.id)]))[0];
+    const current = studio.store.saveProject({ ...p, data: { ...p.data, characters: [{ id: 'host', name: 'Host', description: 'Blue robe', assetId: frame.id }], shots: [{ ...(p.data.shots as any[])[0], assetId: undefined, characterIds: ['host'] }] } });
+    const kinds: string[] = []; let imageCalls = 0, videoCalls = 0;
+    t.mock.method(studio as unknown as Port, 'generate', async (task: Task) => {
+      kinds.push(task.kind);
+      if (kinds.length > 2) assert.match(task.prompt, /teapot action is not visible/);
+      if (task.kind === 'image') { assert.deepEqual(task.input.refIds, [frame.id]); return { outputIds: [(imageCalls++ ? nextFrame : frame).id] }; }
+      assert.deepEqual(task.input.refIds, [videoCalls ? nextFrame.id : frame.id]); return { outputIds: [videos[videoCalls++].id] };
+    });
+    const done = await finish(studio, await studio.invoke<Task>('studio.run', { projectId: current.id }));
+    assert.equal(done.status, 'succeeded', done.error); assert.deepEqual(kinds, ['image', 'video', 'image', 'video']);
+    assert.equal((studio.store.project(p.id).data.production as any).images[`${p.id}/one`], nextFrame.id);
+    assert.equal(((studio.store.project(p.id).data.characters as any[])[0]).assetId, frame.id);
+  });
+});
+
+test('two-repair budget never exceeds three video generations, including task retry', async t => {
+  await fixture(async (studio, paths, _requests, decide) => {
+    decide(() => videoVerdict('fail')); const { p, videos } = await project(studio, paths, { autoChecks: true, qualityRetries: 2 }); let calls = 0;
+    t.mock.method(studio as unknown as Port, 'generate', async () => ({ outputIds: [videos[calls++].id] }));
+    const task = await studio.invoke<Task>('studio.run', { projectId: p.id }); assert.equal((await finish(studio, task)).status, 'waiting_input'); assert.equal(calls, 3);
+    await studio.invoke('task.action', { action: 'retry', ids: [task.id] }); assert.equal((await finish(studio, task)).status, 'waiting_input'); assert.equal(calls, 3);
+  });
+});
+
+test('video response cannot stamp old-plan motion results after an edit during the HTTP request', async () => {
+  await fixture(async (studio, paths, _requests, decide) => {
+    const { p, videos } = await project(studio, paths.slice(0, 1));
+    const current = studio.store.saveProject({ ...p, data: { ...p.data, shots: [{ ...(p.data.shots as any[])[0], videoAssetId: videos[0].id }] } });
+    decide(() => { studio.store.saveProject({ ...studio.store.project(p.id), data: { ...current.data, shots: [{ ...(current.data.shots as any[])[0], videoPrompt: 'New action' }] } }); return videoVerdict(); });
+    const task = studio.store.createTasks({ projectId: p.id, prompts: ['Review'], kind: 'pipeline', input: { stage: 'check', projectSnapshot: current } })[0];
+    await assert.rejects((studio as unknown as Port).executeReview(task, current, { signal: AbortSignal.timeout(20000), progress() {}, checkpoint() {} }), /thay đổi|changed|input/i);
+    assert.equal((studio.store.project(p.id).data.qualityReviews as any)?.[`${p.id}/one`]?.video, undefined);
+  });
+});
+
+test('pending video-stage review cannot be bypassed with a new image-stage task', async t => {
+  await fixture(async (studio, paths, _requests, decide) => {
+    decide(() => 'disconnect'); const { p, videos } = await project(studio, paths.slice(0, 1), { autoChecks: true, qualityRetries: 1 });
+    t.mock.method(studio as unknown as Port, 'generate', async () => ({ outputIds: [videos[0].id] }));
+    const task = await studio.invoke<Task>('studio.run', { projectId: p.id, stage: 'videos' });
+    assert.equal((await finish(studio, task)).status, 'failed');
+    await assert.rejects(studio.invoke('studio.run', { projectId: p.id, stage: 'images' }), /đối soát|provider/);
+  });
+});
+
+test('silent rendering honors keepAudio=false without changing or removing the source audio', async () => {
+  await fixture(async (studio, paths, requests) => {
+    const sound = join(studio.store.root, 'sound.mp4');
+    const result = spawnSync(require('ffmpeg-static'), ['-v', 'error', '-i', paths[0], '-f', 'lavfi', '-i', 'sine=frequency=440:duration=1', '-c:v', 'copy', '-c:a', 'aac', '-shortest', sound]);
+    assert.equal(result.status, 0, result.stderr.toString());
+    const { p, videos } = await project(studio, [sound], { keepAudio: false, nativeAudio: false });
+    const current = studio.store.saveProject({ ...p, data: { ...p.data, shots: [{ ...(p.data.shots as any[])[0], videoAssetId: videos[0].id }] } });
+    const done = await finish(studio, await studio.invoke<Task>('studio.run', { projectId: current.id, stage: 'render' }));
+    assert.equal(done.status, 'succeeded', done.error); assert.equal(requests.length, 0);
+    assert.equal((await new MediaTools().probe(studio.store.assetPath(done.outputIds[0]))).hasAudio, false);
+    assert.equal((await new MediaTools().probe(studio.store.assetPath(videos[0].id))).hasAudio, true);
+  });
+});
+
+test('an accepted interrupted repair resumes its saved generation without spending another repair budget', async t => {
+  await fixture(async (studio, paths, _requests, decide) => {
+    decide(index => videoVerdict(index ? 'pass' : 'fail')); const { p, videos } = await project(studio, paths.slice(0, 2), { autoChecks: true, qualityRetries: 1 });
+    let submissions = 0, resumes = 0;
+    t.mock.method(studio as unknown as Port, 'generate', async (task: Task, context: TaskContext) => {
+      if (task.checkpoint.remoteSubmitted === true) { resumes++; return { outputIds: [videos[1].id] }; }
+      submissions++; if (submissions === 1) return { outputIds: [videos[0].id] };
+      context.checkpoint({ remoteSubmitted: true, threadUrl: 'https://muse.ai/thread/owned-test' }); throw new NeedsInputError('Accepted repair still processing');
+    });
+    const task = await studio.invoke<Task>('studio.run', { projectId: p.id }); assert.equal((await finish(studio, task)).status, 'waiting_input'); assert.equal(submissions, 2);
+    await studio.invoke('task.action', { action: 'retry', ids: [task.id] }); const done = await finish(studio, task);
+    assert.equal(done.status, 'succeeded', done.error); assert.equal(submissions, 2); assert.equal(resumes, 1);
+    assert.equal((studio.store.project(p.id).data.production as any).videos[`${p.id}/one`], videos[1].id);
+  });
+});
+
+test('repairing one of two scenes reuses all unchanged reviews and leaves the passing scene intact', async t => {
+  await fixture(async (studio, paths, requests, decide) => {
+    decide(index => videoVerdict(index === 1 ? 'fail' : 'pass'));
+    const { p, frame, videos } = await project(studio, paths, { autoChecks: true, qualityRetries: 1 });
+    const current = studio.store.saveProject({ ...p, data: { ...p.data, shots: ['one', 'two'].map(id => ({ ...(p.data.shots as any[])[0], id })) } });
+    const generated: string[] = []; let calls = 0;
+    t.mock.method(studio as unknown as Port, 'generate', async (task: Task) => { generated.push(task.prompt); assert.deepEqual(task.input.refIds, [frame.id]); return { outputIds: [videos[calls++].id] }; });
+    const done = await finish(studio, await studio.invoke<Task>('studio.run', { projectId: current.id })); assert.equal(done.status, 'succeeded', done.error);
+    assert.equal(calls, 3); assert.equal(requests.filter(request => request.prompt.startsWith('Assess an actual')).length, 3); assert.equal(requests.length, 5);
+    const production = studio.store.project(p.id).data.production as any;
+    assert.equal(production.videos[`${p.id}/one`], videos[0].id); assert.equal(production.videos[`${p.id}/two`], videos[2].id);
+    assert.equal(production.qualityTakes[`${p.id}/one`].length, 1); assert.equal(production.qualityTakes[`${p.id}/two`].length, 2);
+    assert.ok(generated[2].includes('teapot movement is missing'));
+  });
+});

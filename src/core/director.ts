@@ -12,7 +12,7 @@ export interface Shot { id: number; scene: string; type: ShotType; visual: strin
 export interface Settings { idea: string; minutes: number; pace?: Pace; lang?: string; narrator?: boolean; style?: string; cast?: Array<{ id: string; name: string; description: string }> }
 export interface State { budget?: { shots: number; scenes: [number, number] }; bible?: Bible; shots: Record<string, Shot>; review?: { issues: string[]; fixed: number; hook?: number; skipped?: boolean }; verifyRounds?: number; lint?: string[]; done?: boolean; repair?: number }
 export interface IO { complete(turn: string, prompt: string): Promise<string>; save(state: State): void }
-export interface PlanShot { id: string; sceneId: string; shotType: ShotType; prompt: string; videoPrompt: string; duration: number; characterIds: string[]; speaker?: string; listenerIds: string[]; dialogue?: string }
+export interface PlanShot { id: string; sceneId: string; shotType: ShotType; prompt: string; videoPrompt: string; action?: string; acting?: string; camera?: string; environment?: string; duration: number; characterIds: string[]; speaker?: string; listenerIds: string[]; dialogue?: string }
 export interface Plan {
   name: string; summary?: string; characters: Array<{ id: string; name: string; description: string; voiceProfile?: string }>;
   scenes: Array<{ id: string; name: string; location?: string; time?: string; characterIds: string[] }>; shots: PlanShot[];
@@ -29,7 +29,11 @@ export function toPlan(state: State, pace: Pace = 'flow'): Plan {
   const bible = state.bible; if (!bible) throw new Error('Chưa có bible phim');
   const p = PACE[pace] ?? PACE.flow; const cast = new Set(bible.characters.map(c => c.id));
   const places = new Map(bible.locations.map(l => [l.id, l.name])); const titles = new Map(bible.scenes.map(s => [s.id, s.title]));
-  const cut = (value: string, max: number) => value.slice(0, max);   // parsePlan field limits
+  const cut = (value: string, max: number) => {
+    const bytes = Buffer.from(value); if (bytes.length <= max) return value;
+    let end = max; while ((bytes[end] & 0xc0) === 0x80) end--;
+    return bytes.toString('utf8', 0, end);
+  };   // parsePlan field limits are UTF-8 bytes
   const characters = bible.characters.map(c => {
     const out: Plan['characters'][number] = { id: c.id, name: cut(c.name, 32768), description: cut(c.look.trim() || c.name, 32768) };
     if (c.voice.trim()) out.voiceProfile = cut(c.voice, 4000); return out;
@@ -47,8 +51,12 @@ export function toPlan(state: State, pace: Pace = 'flow'): Plan {
     const duration = spoken ? Math.min(10, Math.max(p.min, p.pad + words * SECONDS_PER_WORD)) : p.silent;
     const prompt = s.visual.trim() || s.motion.trim() || titles.get(s.scene) || `Shot ${s.id}`;
     const action = [s.motion.trim(), s.face.trim() && `Expression: ${s.face.trim()}`, s.camera && `Camera: ${s.camera}`].filter(Boolean).join('. ');
-    const shot: PlanShot = { id: String(s.id), sceneId: s.scene, shotType: s.type, prompt: cut(prompt, 32768), videoPrompt: cut(action || prompt, 32768), duration: Math.round(duration * 10) / 10,
+    // Keep room in the assembled provider prompt; structured directions below retain each field separately.
+    const shot: PlanShot = { id: String(s.id), sceneId: s.scene, shotType: s.type, prompt: cut(prompt, 32768), videoPrompt: cut(action || prompt, 4000), duration: Math.round(duration * 10) / 10,
       characterIds: s.characters, listenerIds: first?.to && cast.has(first.to) ? [first.to] : [] };
+    const scene = scenes.find(scene => scene.id === s.scene);
+    const environment = [scene?.location && `Location: ${scene.location}`, scene?.time && `Time: ${scene.time}`].filter(Boolean).join('. ');
+    for (const [key, value] of [['action', s.motion], ['acting', s.face], ['camera', s.camera], ['environment', environment]] as const) if (value?.trim()) shot[key] = cut(value, 4000);
     if (spoken) shot.dialogue = cut(spoken, 32768);
     if (first && cast.has(first.speaker)) shot.speaker = first.speaker;
     return shot;

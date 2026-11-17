@@ -1,10 +1,47 @@
 # P1 — MuseStudio reconstruction and functional parity gaps
 
+## Shopee product intake — 2026-11-16
+
+The first Affiliate dependency now has a verified fresh operator run: the normal-Chrome capture bookmark was used on the loaded Shopee Vietnam product, then the packaged MaiStudio UI imported matching product identity, source price/description, 9 attributes, 8 SKU combinations in 2 variation groups and 7/7 decoded gallery images into Library. Missing sold remains unavailable. Saved native metadata was used only for a separately labelled historical/CDN check; it is not the fresh source. Official API and legacy capture envelopes remain compatible. Cancellable image checkpoints, partial-source warnings and concurrent-edit protection are covered in core and two desktop/mobile light/dark stress rounds.
+
+This closes the demonstrated one-product browser-capture/import path, not universal scraping or Affiliate video parity. Official API live credentials, other Shopee layouts/categories and Linux desktop acceptance remain unverified. All 11 Affiliate styles and 3 host modes still precede Film and SRT work. Exact reports/artifact/source-time limits are recorded in acceptance.md and SYSTEM_DOCUMENTATION.md.
+
+## Quality workflow runtime — 2026-11-16
+
+Mai now uses independently assembled visual/action/acting/camera/environment prompts and one scene anchor for pipeline I2V. New AI plans enable review with one bounded repair by default (max two); explicit old opt-outs survive. Four decoded frames from the edited interval are reviewed with retained reasons/assets, unknown pauses, failed generated scenes may repair, unchanged reviews are reused and exhausted tasks retain the best assessed take. Render-only remains provider-free; legacy prompt-only shots retain their action. No provider recipe source was copied.
+
+Live same-account/same-image prompt A/B completed without regeneration selection. Full three-shot live Mai workflow caught an extra-person image error, repaired only shot2 and its video, reused shot1/3 reviews, then passed all recorded image/video checks and rendered 13.266667s1080p30. This establishes bounded repair and actual frame review, not an overall artistic parity guarantee. Evidence and 332 macOS/77 Linux ARM64 test results are in acceptance and Downloads/MaiStudio-quality-comparison-20261116.
+
+VPS native app was upgraded by the operator to Muse Studio1.13.18. Its new owned SRT project plan failed waiting60s for the composer; held account6 showed the provider error page, then the owned hold was released. No new native image/video from that attempt; prior1.13.12 evidence is historical. Enabled accounts/proxies/concurrency were preserved. Latest native full-workflow comparison remains unresolved.
+
+
+## Runtime checkpoint — 2026-11-16
+
+Accepted baseline: operator approved the 40s edit using Muse source footage, not overall parity. Authorized live tea-house comparison: Mai completed planning, 2 character refs, 3 scene images, 3 new clips and a 13.266667s 1080p30 render with original four cue clocks. Muse completed planning/refs/images and started clips once; RDP disconnected and reconnect/TCP3389 timed out, so final original result remains unobserved. New AI content is explicitly separate from imported-media render probes.
+
+Default SRT import still differs: Muse groups four cues into three visual shots lasting13.25s; Mai retains four cue slots lasting12.75s. Existing groupNarration matches the original groups when manually prepared; this does not certify the default UI workflow. Film/cards, fashion imported-clips, two-episode series, missing media, reopen and quality-guard probes establish technical behavior only. Wrong-product mascot clips are not quality-success fixtures. Prop/audio semantics and other live style comparisons remain open.
+
+Actual packaged Mai video seeking failed at1/7.5/11.5s despite full buffering. Root cause observed in Electron file fetch: partial body with status200 and no range metadata. The shared protocol now streams with206/Content-Range/length or416 for invalid single ranges, preserving Store/URI/GET guards and CSP. Unit range cases and12 actual packaged seeks at desktop/mobile light/dark pass; earlier short player smoke did not establish this behavior. New macOS ARM64 dev artifact is separate; existing Linux artifacts do not contain these composer/media corrections.
+
+## Historical static checkpoint
+
 Date: 2026-11-14. Status: static source-contract extraction; **not a functional parity pass**.
 
 Authorized scope: inspect original artifacts and the port; write this report and scratch evidence only. No EXE/app execution, provider calls, downloads, implementation, test edits, commit or deployment. Parent implementation is concurrent: port gaps below describe the initial inspection at HEAD `f041899baad82b109ed8001132fc6677818fb196`, when only the existing plan was dirty. Later parent edits are not assessed or reverted.
 
 ## Evidence and deliverables
+
+### Runtime bổ sung — 15–16/11/2026, sau khi anh cấp VPS
+
+Phạm vi đọc runtime mới được anh cho phép sau báo cáo tĩnh này. RDP quan sát Muse Studio 1.13.12 đang chạy trên Windows; phiên trình duyệt mở tạm bằng điều khiển Treo/Thả của ứng dụng gốc. Không chuyển credential/profile/cookie, không chạy job AI, không đổi proxy/concurrency, không restart ứng dụng hoặc service. Sau khảo sát đã thả trình duyệt tài khoản 1, đóng PowerShell/DevTools do em mở và disconnect; tài khoản 4 vẫn tắt như ban đầu. Đây là quan sát GUI/DOM qua RDP và Chrome DevTools; không mô tả công cụ REA là đã tự điều khiển Windows.
+
+- Đã thấy dự án affiliate lookbook báo 16 cảnh, 16 ảnh, 16 clip. Video hoàn chỉnh gốc tải về có 33.962.693 bytes, SHA-256 `8f4415de4dcfa28e593531c633d55c67291fc1e79a91c94efcb227dc1cb511ae`, khớp Get-FileHash trên Windows; 39,646 giây, H.264 1080×1920/24 fps, AAC. Decode đầy đủ qua. Video gốc là sản phẩm của Muse; không gán cho MaiStudio. SRT bên cạnh chỉ có một cue ngắn, không chứng minh narration/khẩu hình đầy đủ.
+- 16 clip tên chuẩn của cùng dự án (mỗi clip 10 giây), nhạc MP3 và ảnh host đã được sao chép; cả 18 file đối chiếu bytes/SHA-256 nguồn. Thư mục còn các biến thể clip/ảnh; bộ tên chuẩn không được chứng nhận là đúng toàn bộ biến thể mà video hoàn chỉnh gốc đã sử dụng.
+- Probe chỉ lấy metadata DOM, không lấy nội dung hội thoại: trong `data-hatch-composer-root` là textarea, không có contenteditable=true; action slot rỗng khi chưa nhập. Một draft tự viết, không gửi, làm xuất hiện nút Send và được xóa trong finally. Đây là bằng chứng trực tiếp cho lỗi selector cũ và kiểm nút Send quá sớm của MaiStudio.
+- Bản sửa dev giới hạn ở defaults/settings đọc và `completeText` prefill gate, giữ custom selectors và checkpoint trước click. Bảy ca tái hiện RED→GREEN, full suite 302/302, hai vòng stress được ghi trong acceptance. Chưa gửi prompt live từ MaiStudio sang provider, chưa kiểm completion marker/Stop bằng một lượt tính phí thật.
+- Đối chiếu frontend gốc `web/app.js:4707–4725`: affiliate có host presenter/voiceover/silent, style riêng, lookbook có người mẫu dù host là voiceover, nhịp shot dựa trên giây và style. `src/core/planning.ts` hiện còn prompt film chung, phút mặc định 2 và tỷ lệ 16:9 khi không đặt. Bản sửa browser không khép khoảng cách lập kế hoạch/director, nhịp nhạc hoặc kiểm đồng nhất người mẫu/sản phẩm.
+
+Bằng chứng riêng: `/private/tmp/mai-studio-vps-audit/transfer/{dom,fields,draft,media-manifest}.json`, log RED/GREEN/build/test/lint/docs và stress. Video/media gốc ở `/Users/maiychrus/Downloads/MuseStudio-affiliate-reference-20261115/`. Các giới hạn tĩnh/remote recipes bên dưới vẫn giữ nguyên; runtime này chỉ bổ sung phần đã quan sát.
 
 Original root: `/Users/maiychrus/Downloads/MuseStudio-analysis-1.13.12/artifacts/`.
 `P/` below means `PYZ.pyz/musestudio/`; `W/` means `musestudio/web/`. Python line numbers are recovered `co_firstlineno`/instruction positions in original filenames, **not lines in decompiled source**. JSON references preserve module/function and constant indices; instruction JSON adds bytecode offsets.
@@ -397,3 +434,33 @@ No build/runtime stress or original function execution; this verifies the recons
 ## Implementation checkpoint — 0.2.0-dev.1
 
 The gap tables above describe the inspected baseline and recovered source contract. The new development implementation now connects staged AI/director planning, measured narration, native offline speech, current-asset QC, product vision, voice-fit Dub and cached series recap. It does not recover the remote recipe text or certify equivalence of native business modules. See the latest checkpoint in acceptance.md and SYSTEM_DOCUMENTATION.md for current test/platform evidence and remaining work; the historical evidence and native/remote unknowns above remain unchanged.
+
+
+## Affiliate workflow checkpoint — 2026-11-16
+
+The explicit Affiliate dev workflow now implements the observed eleven styles/three host modes, native scene-count budgets, source/model/background/outfit references, independently assessed script, product-aware image QC, sampled clip review and bounded repair, actual onset alignment, scene captions, CTA/price/disclosure/endcard, MP4 and post-copy export. Legacy projects without affiliate settings retain their preceding behavior. Shipped 1.13.12 source and read-only 1.13.18 options/successful historical video metadata establish the recovered contract; remote prompt recipes remain unknown and Mai prompts are independently authored.
+
+A current Mai live Fashion/silent 15-second black-shirt case completed one host/four images/four clips/eight assessments and a full decoded 1080x1920/30fps MP4. A render-only correction fixed caption/card layering without generating new media. Two macOS and two packaged Linux ARM64 desktop/mobile bilingual/light-dark fixture UI rounds exercise persistence, cancellation/retry, independent review, media generation, real FFmpeg export and reopening without resubmission. These are distinct evidence classes. Detailed artifacts, review fixes, regression results and coverage are in acceptance.md. No new native Muse video with the same brief was produced in this pass; artistic equivalence, all style/voice/language/category live combinations and bare-metal Linux/x64 remain unverified.
+
+
+## UI / Affiliate audio checkpoint — 2026-11-17
+
+Observed native UI screenshots are 1.13.12; options/project/scene metadata are from 1.13.18. Mai now follows the top navigation/project list/scene-card organization, retaining advanced tools and original actions. Seven native visual-style choices are represented by independently authored preset directions and custom style. Optional dubbing now connects the existing TTS adapter, selected voice, 0.8–1.25 speed, cached fitting, real replacement audio QC, and direct voice/music volume/ducking controls. Provider waveform-menu audio capture was reproduced live and added with admission/freshness/download guards; the existing accepted music task recovered a real 15-second MP3 without resubmission.
+
+Evidence remains bounded: current live spoken Fashion plan and source review passed, music and one scene image were generated, but the account explicitly refused video generation by country/region. No new spoken clip or matching native comparison was produced. Optional VoiceTube live, automatic voice matching, instruction-driven AI scene-description revision, native transition fidelity/adaptive timing and all style/host/language/category combinations remain unverified or unimplemented as specified in acceptance.md. The existing automatic QC repair and manual scene editing are separate from native AI fix. No full parity claim.
+
+
+### Muse account refresh — 2026-11-17, 00:35–00:39 ICT
+
+At the operator’s request, native Muse Studio 1.13.18 refreshed quota and login checks for all six enabled accounts, preserving disabled accounts 1–5, enabled switches, proxies and concurrency. Native `check_quota` reports account 6/Tour exhausted (weekly 100%, top-up 0); accounts 7/9/10/11 weekly 0%, account 8 weekly 28%, each with 2,000,000,000 top-up tokens. All six enabled accounts returned current `cookie_status=ok`; account 7 was also opened through the native hold control and showed the authenticated Muse Connected page. No video job was submitted; quota/login are not proof of video entitlement, region eligibility or clip quality. Disabled-account quota values remain historical.
+
+The owned account-7 hold was released, owned DevTools/PowerShell closed, only this audit’s Windows Temp directory removed and RDP disconnected. Evidence: `Downloads/MaiStudio-interface-dev-20261116/evidence/muse-accounts-20261117.json` and screenshot. No cookies, passwords, auth headers or proxy credentials were extracted or moved. Local Mai’s earlier region refusal remains unresolved; available native quota does not establish the local account’s video rights.
+
+
+### Native-profile video capability probes — 2026-11-17, 01:14–01:32 ICT
+
+Follow-up to the earlier quota-only check: accounts7/9/10/11 each received one owner-authorized short-video request in a new owned side-chat, with their existing native profile/proxy. Account8 displayed the exact prior owned spoken Fashion prompt and regional refusal, so it was not resubmitted. All five provider replies reported video generation unavailable by country/region; no playable video or still fallback was produced. This establishes failed observed requests, not an independent diagnosis of platform entitlements, country or proxy location. Available top-up tokens did not establish video access.
+
+Captured variants include “for your account”, “for this account”, and “for your MaiStudio account”. Mai’s fresh-reply guard now recognizes these bounded forms; a real-browser test per variant proves prompt refusal and admitted retries without a second submission. The last two variants reproduced failures before the one-line matcher extension. Final core suite407/407 on both macOS ARM64 and Linux ARM64; UI source remains unchanged.
+
+Native switches/proxies/concurrency remain as found, accounts1–5 remain disabled/unprobed, account6 remains quota-exhausted. Owned holds7–11 were released and a fresh reconnect at01:32 verified all native rows back to Treo trình duyệt with no held Chrome. RDP disconnected. Evidence: `Downloads/MaiStudio-interface-dev-20261116/evidence/muse-video-account-probes.json`, account7–11 screenshots and `muse-accounts-restored.png`. No new native Affiliate output was created; matching live parity remains blocked.

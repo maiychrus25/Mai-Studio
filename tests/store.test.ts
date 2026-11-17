@@ -19,6 +19,19 @@ test('assets produced during an active pipeline stay locked through checkpoints 
   } finally { store.close(); rmSync(root, { recursive: true, force: true }); }
 });
 
+test('legacy Muse composer defaults resolve on reopen while custom selectors stay unchanged', () => {
+  const root = mkdtempSync(join(tmpdir(), 'maistudio-composer-')); let store = new Store(root);
+  try {
+    const selectors = store.settings().museSelectors;
+    store.setSettings({ museSelectors: { ...selectors, composer: '[data-hatch-composer-root] [contenteditable="true"]' } });
+    store.close(); store = new Store(root);
+    assert.match(store.settings().museSelectors.composer, /textarea/);
+    store.setSettings({ museSelectors: { ...selectors, composer: '#custom-prompt', submit: '#custom-send' } });
+    store.close(); store = new Store(root);
+    assert.equal(store.settings().museSelectors.composer, '#custom-prompt'); assert.equal(store.settings().museSelectors.submit, '#custom-send');
+  } finally { store.close(); rmSync(root, { recursive: true, force: true }); }
+});
+
 test('projects and queued tasks persist across reopen without losing input or refs', () => {
   const root = mkdtempSync(join(tmpdir(), 'maistudio-store-'));
   try {

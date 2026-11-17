@@ -1,5 +1,49 @@
 # MaiStudio Implementation Plan
 
+## Muse-like interface and remaining Affiliate verification — 16/11/2026
+
+Status: DEV UI/AUDIO IMPLEMENTED; SPOKEN LIVE AND FULL PARITY OPEN. Operator approved simplifying the UI to resemble Muse and continuing Affiliate parity checks. Existing UI flow is bounded; preserve all commands, fields, outputs, edit merging and safety guards. No new dependencies or provider features guessed from names.
+
+- [x] Read observed Muse screenshots/settings/scene grid and current renderer; capture task baseline outside repo.
+- [x] Use a horizontal app navigation, compact page heading, Affiliate project list, visible production stages, grouped settings, collapsed technical/history detail and visual scene cards. Keep mobile drawer, light/dark, keyboard focus and old pages accessible.
+- [x] Reuse existing form controls/actions; move rather than duplicate save/run/music/review controls. Keep errors and pending input visible. Update DESIGN.md and system docs with UI behavior.
+- [x] Independently audit native Affiliate behavior against implemented code and actual evidence; report definite gaps separately from unknown recipes and untested live combinations.
+- [x] Verify actual diff; run build/test/lint/docs; two desktop/mobile bilingual/theme UI stress rounds and existing page navigation regressions. Package dev artifacts only.
+- [x] Attempt the bounded spoken/music live case: plan/review, real music and one image completed; video was explicitly refused by region. Retain the admitted checkpoint and assets; no invented spoken-clip success. Native quota/login refresh found five new valid accounts; one capability request each for7/9/10/11 and the prior owned refusal at8 all reported regional video restriction. No new clip, no retry, all owned holds restored.
+- [ ] Complete a new spoken/music clip and matching native comparison with video-eligible accounts; optional VoiceTube live and all-style artistic equivalence remain open.
+
+Likely files: App.tsx, AdvancedStudio.tsx, AffiliateWorkflow.tsx, Production.tsx, style.css, DESIGN.md and existing project docs. Source/intake/media engine changes require a concrete reproduced gap first. Rollback only current UI patches against /private/tmp/mai-studio-interface/starting-tree; retain all prior work and media. No push, deployment, production config, unrelated restarts or real-data migrations.
+
+## Affiliate production after Shopee intake — 16/11/2026
+
+Status: DEV IMPLEMENTED / ONE LIVE FASHION-SILENT CASE VERIFIED. Full live style/host parity remains open; see acceptance.md. Operator requested the remaining Affiliate workflow to follow Muse after the verified product import. Scope: eleven content styles, three host modes, 15/30/45/60-second budgets and distinct scene structure; optional presenter/background and 1–4 outfit references; source-grounded script and independent plan review; existing image/video review and bounded scene repair; actual captions/price/CTA/labels, montage timing and export. Reuse the existing all-stage queue, native narration, media renderer and edit guards. Legacy projects without explicit affiliate settings retain their behavior. Film/SRT features are outside this change.
+
+Native contract evidence: shipped Muse web/app.js Affiliate section (1.13.12) and options read from running 1.13.18 on the operator VPS. The remote prompt recipes are not available; Mai writes its own prompts to implement observed behavior. Static source, fixture runs and live generation evidence are reported separately. Do not claim artistic parity from option coverage.
+
+Implementation: domain/settings + matrix tests and UI can proceed in disjoint modules; parent integrates planning/service/pipeline/rendering. Plan source/host/structure review stops on unknown and repairs a failed plan once before media generation. Review actual diff, run build/test/lint/docs and two desktop/mobile light/dark stress rounds; then verify a bounded live Affiliate run with the imported product and logged-in profile. Preserve the prior accepted videos, imported product and all existing media. No release/push/production deployment. Rollback only this task's changes against /private/tmp/mai-studio-affiliate-workflow/starting-tree.
+
+## Current priority — Affiliate intake first (operator direction 16/11/2026)
+
+Status: DEV IMPLEMENTED / ONE FRESH SHOPEE PRODUCT VERIFIED. The operator captured the loaded page and the packaged UI saved matching facts, 8 SKU combinations and 7/7 gallery images. Official API live and broader category/layout coverage remain pending; see acceptance.md. No full Affiliate parity claim.
+
+Order: Shopee product-link intake → all Affiliate content/scenario types → Film → SRT Video last. The SRT quality work above is retained as engine groundwork, not Affiliate acceptance.
+
+Immediate scope: validated long/short Shopee links; official API when provisioned; open the operator browser and a product-only capture bookmarklet when API/page access is unavailable; normalize captured product facts/variants/images with provenance; import actual image bytes into Library through a cancellable/resumable job; save only into the intended project and retain previous outputs. Missing/login/blocked/partial source data must be visible. No cookie/password transfer, access-control bypass or global VPS account/proxy changes.
+
+Implementation: shared intake result and queue contract → link/capture/parser/download core with boundary tests → native-equivalent product form and bookmarklet guide → complete build/test/lint/docs and diff review → two desktop/mobile light/dark stress rounds → scoped real Shopee source/image verification → current dev artifact. Existing CSV/JSON and official API callers must remain compatible. Reuse Node URL/fetch/fs, Store, Queue, existing desktop actions and UI components; no dependency needed. Rollback by task-only diff against /private/tmp/mai-studio-shopee-import/starting-tree; preserve the preceding quality workflow.
+
+Acceptance: a supported link and operator-visible product capture populate the correct name, supplied price/description/attributes/variations and owned product images; source URL/method/time and unavailable fields are shown; mismatch/private URL/malformed payload/image errors never silently replace prior project data or count as complete. Fixture tests establish contracts; current live page/account coverage is reported separately.
+
+## Quality workflow upgrade — 16/11/2026
+
+**Status: DEV IMPLEMENTED / LIVE MAI VERIFIED —** three-shot live quality workflow caught and repaired one failed scene; same-frame prompt A/B completed. Native1.13.18 fresh comparison is blocked by the provider error page. No full parity claim.
+
+Scope: structured visual/action/acting/camera/environment prompts; character/product references belong to scene-image generation, and generated video uses one scene anchor. Standalone multi-reference generation remains available. Add bounded, cancellable sampling of the actual clip window and model review of action, motion, continuity and identity. Preserve unknown and provider-admission guards. New AI plans enable review and allow one repair by default (maximum two); explicit existing opt-outs remain. A manual render remains provider-free.
+
+Implementation sequence: pipeline/planner contracts and regression tests → frame sampling and temporal review → bounded repair/history/best assessed take → UI results and controls → dev build/test/lint/docs → two desktop/mobile light/dark stress rounds → scoped live comparison with retained originals → review actual diff and document remaining limitations.
+
+Rollback: retained starting worktree snapshot outside the repo; reverse only this task's patches, never reset prior user changes. No production deployment, migration, push or unrelated service restart. Keep every generated asset and the earlier accepted video.
+
 > **For agentic workers:** Use superpowers:executing-plans for the coordinated implementation and superpowers:dispatching-parallel-agents for the disjoint media, integrations and renderer tasks.
 
 **Goal:** Implement the approved F01–F14 desktop studio with durable jobs and explicit provider readiness.
@@ -79,6 +123,16 @@ Files: .github/workflows/build.yml; scripts/check-docs.js; scripts/stress.mjs; R
 
 ## Progress
 
+### VPS runtime follow-up — 15/11/2026
+
+Scope: repair F02 against observed Muse DOM in the existing dev branch. Files: `src/core/store.ts`, `src/core/browser.ts`, their existing tests, system documentation and parity report. No UI changes, dependencies, provider jobs, schema migration or deployment. Rollback is the scoped Git diff; keep existing packaged artifacts intact.
+
+Evidence: owned RDP DOM probes found a textarea under `data-hatch-composer-root`; the action slot has zero buttons when empty and one Send button after an unsent draft. The draft was cleared without submission. Original 39.646-second lookbook was copied with source SHA-256 matching; it is a reference, not a MaiStudio result.
+
+- [x] Reproduce default textarea readiness/generation, custom lazy submit and persisted legacy defaults with failing real-browser/store tests: seven selected cases RED, then GREEN.
+- [x] Extend the default composer to textarea/contenteditable; resolve only the exact legacy default at settings read, preserving custom selectors and disk schema. Require the composer before filling, then wait for Send. Preserve admission/cancellation guards.
+- [x] Run the complete suite (302/302), build/lint/docs, two existing desktop/mobile/light/dark stress rounds and a fresh diff review. Reviewer identified one unsupported documentation marker; removed it and reran docs-check. No remaining code finding in the reviewed scope. Evidence: `/private/tmp/mai-studio-vps-audit/`; live generation and full quality parity remain open.
+
 Dev implementation M1–M4 exists with actual local operations and contract fixtures; M5 is partial. Host and Linux verification, packaged runtime checks, independent diff review and measured stress results are recorded in SYSTEM_DOCUMENTATION.md and docs/reports/acceptance.md. Live provider access, advanced parity gaps, remaining OS/architecture checks and signed update/rollback acceptance remain open; the unchecked acceptance items above are not implied complete by a passing dev suite.
 
 ## Functional parity pass — operator reaffirmed “tốt bằng”, 14/11/2026
@@ -124,6 +178,8 @@ Extend MediaInput with trim start/end and MediaOptions with fit pad|crop, fadeIn
 - [ ] Recover Market attachment delivery and validate authorized link/commerce behavior; never bypass vendor entitlements.
 
 ### Task P5 — expose actual workflow and verify parity
+
+Post-implementation note, 16/11/2026: scoped paid/live three-scene comparison is now authorized. Mai completed new AI assets/render; original Muse clips were started once, then RDP disconnected and reconnect timed out. Full acceptance remains open. Real13s media exposed broken seeking; shared preview byte-range serving was corrected and packaged desktop/mobile light/dark seeking verified. This updates current evidence without reclassifying historical fixture-only checks or claiming full parity. Default SRT import grouping still differs from original.
 
 **Status: LOCAL VERIFICATION COMPLETE / PLATFORM AND LIVE ACCEPTANCE OPEN —** 0.2.0-dev.1 host build/test/lint/docs, two actual Electron rounds of 1,000 tasks and packaged macOS ARM64 ASR/render/playback passed. Earlier 0.1.0 evidence remains historical. Linux artifacts/native verification and live Windows comparison are recorded separately; no paid/live/prod action was performed.
 

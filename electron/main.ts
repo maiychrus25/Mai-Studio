@@ -1,6 +1,5 @@
-import { app, BrowserWindow, dialog, ipcMain, net, protocol, safeStorage, shell } from 'electron';
+import { app, BrowserWindow, clipboard, dialog, ipcMain, protocol, safeStorage, shell } from 'electron';
 import { join, resolve } from 'node:path';
-import { pathToFileURL } from 'node:url';
 import { copyFile, readFile } from 'node:fs/promises';
 import { existsSync } from 'node:fs';
 import { autoUpdater } from 'electron-updater';
@@ -8,6 +7,7 @@ import { StudioService } from '../src/core/studio';
 import { object, publicUrl, redact } from '../src/core/store';
 import type { StudioCommand } from '../src/shared/studio';
 import { SignedUpdateGate } from '../src/core/updates';
+import { mediaResponse } from './media';
 
 protocol.registerSchemesAsPrivileged([{ scheme: 'studio-media', privileges: { secure: true, standard: true, supportFetchAPI: true, stream: true } }]);
 const isolatedRoot = process.env.MAISTUDIO_DATA_DIR;
@@ -62,6 +62,7 @@ async function start(): Promise<void> {
     },
     actions: {
       openExternal: async url => { await shell.openExternal(publicUrl(url)); },
+      copyText: async value => { clipboard.writeText(value); },
       openAsset: async path => { shell.showItemInFolder(path); },
       exportAsset: async (path, name) => { const chosen = await dialog.showSaveDialog({ defaultPath: name }); if (!chosen.canceled && chosen.filePath) await copyFile(path, chosen.filePath); else throw new Error('Đã hủy lưu tệp'); },
       checkUpdate: async () => {
@@ -86,8 +87,8 @@ async function start(): Promise<void> {
   protocol.handle('studio-media', async request => {
     try {
       const url = new URL(request.url); if (url.hostname !== 'asset' || !/^\/[a-f0-9-]{36}$/.test(url.pathname) || request.method !== 'GET') return new Response('Not found', { status: 404 });
-      const path = studio!.store.assetPath(url.pathname.slice(1)); const range = request.headers.get('range');
-      return await net.fetch(pathToFileURL(path).href, { headers: range ? { Range: range } : {} });
+      const id = url.pathname.slice(1);
+      return await mediaResponse(studio!.store.assetPath(id), studio!.store.asset(id).mime, request);
     } catch { return new Response('Not found', { status: 404 }); }
   });
   ipcMain.handle('studio:invoke', async (event, rawCommand: unknown, rawInput: unknown) => {

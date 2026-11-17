@@ -377,3 +377,23 @@ test('retrying an incomplete script asks Muse again for the shots that are still
   const state = await direct(settings, second.io, first.saves.at(-1)!);
   assert.deepEqual(second.turns, ['scene:s1:missing:r1:1', 'review']); assert.equal(count(state), 13);
 });
+
+test('toPlan carries face, camera, motion and scene environment as structured planner directions', () => {
+  const plan = toPlan(planState(), 'flow'); const shot = plan.shots[1] as unknown as Record<string, unknown>;
+  assert.equal(shot.action, 'Mai quay sang'); assert.equal(shot.acting, 'mắt mở to'); assert.equal(shot.camera, 'static');
+  assert.equal(shot.environment, 'Location: Hồ Gươm. Time: Sáng');
+  const { parsePlan } = require('../src/core/planning') as typeof import('../src/core/planning');
+  const project: Project = { id: 'p', name: 'Film', kind: 'film', data: {}, createdAt: 1, updatedAt: 1 };
+  const parsed = parsePlan(JSON.stringify(plan), project).shots as Record<string, unknown>[];
+  for (const field of ['action', 'acting', 'camera', 'environment']) assert.equal(parsed[1][field], shot[field]);
+});
+
+test('director direction limits use UTF-8 bytes and omit absent optional directions', () => {
+  const state = planState(); state.shots['2'].motion = 'ế'.repeat(2000); state.shots['2'].face = 'ế'.repeat(2000); state.shots['2'].camera = 'ế'.repeat(2000);
+  state.bible!.scenes[0].time = 'ế'.repeat(2000);
+  const plan = toPlan(state); const shot = plan.shots[1] as unknown as Record<string, unknown>;
+  for (const field of ['action', 'acting', 'camera', 'environment']) { assert.equal(typeof shot[field], 'string'); assert.ok(Buffer.byteLength(String(shot[field])) <= 4000, field); assert.ok(!String(shot[field]).includes('\uFFFD'), field); }
+  assert.equal(Object.hasOwn(plan.shots[0], 'acting'), false);
+  const { parsePlan } = require('../src/core/planning') as typeof import('../src/core/planning');
+  assert.doesNotThrow(() => parsePlan(JSON.stringify(plan), { id: 'p', name: 'Film', kind: 'film', data: {}, createdAt: 1, updatedAt: 1 }));
+});

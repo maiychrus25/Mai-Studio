@@ -22,7 +22,14 @@ typography:
   title: 24px
 spacing:
   unit: 4px
-  panel: 24px
+  panel: 16px
+layout:
+  navigationHeight: 64px
+  projectRailWidth: 208px
+  sceneCardGap: 12px
+controls:
+  primaryMinHeight: 40px
+  sceneSecondaryMinHeight: 32px
 radius:
   control: 8px
   panel: 16px
@@ -32,8 +39,15 @@ motion:
 
 # Production workspace
 
-Use a narrow navigation rail, a clear project toolbar and a dense but legible production canvas. Indigo marks the current primary action; status always includes a text label. Keep dark/light tokens centralized. Use local system fonts and icons built from simple inline SVG, avoiding network font dependencies.
+Use a compact horizontal application bar, an Affiliate project rail on desktop, a clear production toolbar and a dense but legible production canvas, following the observed Muse workflow. Indigo marks the current primary action; status always includes a text label. Keep dark/light tokens centralized. Use local system fonts and icons built from simple inline SVG, avoiding network font dependencies.
 
-Panels have subtle borders rather than large shadows; dialogs alone use elevation. Inputs have visible labels, 40px minimum action height, keyboard focus rings and explicit error text. Task tables scroll within their panel; the document must never overflow horizontally.
+Panels have subtle borders rather than large shadows; dialogs alone use elevation. Inputs have visible labels; primary actions use at least 40px height, with keyboard focus rings and explicit error text. Dense secondary scene actions may use 32px targets with accessible names and tooltips, keeping the portrait gallery readable without crowding the card. Task tables scroll within their panel; the document must never overflow horizontally.
 
 At 900px collapse the navigation to a drawer; at 640px stack the composer and task list and use cards for dense data. Test 1440×900 and 390×844 in both themes. Honor reduced motion. Dialogs trap focus, close on Escape, restore focus, and destructive actions require confirmation. Preview uses lazy media loading and does not auto-play.
+
+
+# Affiliate workflow
+
+Keep four primary work areas: product, video setup, scene storyboard and outputs. Script, cast, voice tools and raw configuration stay available under advanced tools. The project rail shows real saved videos and progress. Keep the main automatic action and individual generation/review/render stages visible; group regeneration controls separately. Source and technical details may collapse, but errors, missing source data and failed/unknown quality gates remain visible. Music mode and original/native voice behavior must be understandable before running.
+
+Use a two-column settings grid beside a narrow audio/output panel on large screens; use visual storyboard cards with a portrait preview before editable details. Group long technical explanations and activity history in native details elements. At compact widths stack settings and cards; the app bar uses the existing keyboard-accessible mobile drawer, and the project selector remains available. No page-level horizontal scroll. Preserve all existing actions and English/Vietnamese labels.

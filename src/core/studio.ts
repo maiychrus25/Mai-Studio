@@ -3,17 +3,17 @@ import { EventEmitter, once } from 'node:events';
 import { createHash, randomUUID } from 'node:crypto';
 import { createWriteStream } from 'node:fs';
 import { mkdir, writeFile, rm, copyFile } from 'node:fs/promises';
-import { extname, join } from 'node:path';
+import { dirname, extname, join } from 'node:path';
 import { pipeline } from 'node:stream/promises';
 import { Readable, Transform } from 'node:stream';
-import type { Account, Asset, Capability, LicenseView, MediaOptions, Project, ProjectKind, Settings, StudioCommand, StudioState, Task, TaskContext, TaskKind, TaskResult } from '../shared/studio';
+import type { Account, Asset, Capability, Character, LicenseView, MediaOptions, Project, ProjectKind, Settings, Shot, StudioCommand, StudioState, Task, TaskContext, TaskKind, TaskResult } from '../shared/studio';
 import { Store, object, text, publicUrl } from './store';
 import { JobQueue, NeedsInputError, RetryableError, hasPendingAdmission } from './queue';
 import { SecretVault, type EncryptionPort } from './vault';
 import { BrowserManager, browserExecutable } from './browser';
 import { MediaTools, parseSrt, formatSrt } from './media';
 import { createRecap } from './series';
-import { buildShots, validateCharacters, validateEpisodes, pipelineSteps } from './pipelines';
+import { buildShots, validateCharacters, validateEpisodes, pipelineSteps, affiliateDubbing } from './pipelines';
 import { IntegrationClient } from './integrations';
 import { CodexJobs } from './codex';
 import { verifyLicense } from '../../services/studio-hub';
@@ -24,9 +24,16 @@ import { parseProducts } from './products';
 import { splitStory, cuesFromDurations, groupNarration, alignScript } from './story';
 import { OfflineAsr } from './offline-asr';
 import { analyzeSpeech, compareTranscripts, compareSpeakers } from './acoustics';
+import { parseVideoReview, qualityRetries, reviewScore, videoReviewPrompt, VIDEO_REVIEW_FRAMES } from './quality';
+import { downloadShopeeImage, parseShopeeCapture, resolveShopeeLink, shopeeImageUrl, shopeeLink, shopeeOffer, MAX_SHOPEE_IMAGES, MAX_SHOPEE_CAPTURE_BYTES } from './shopee';
+import { shopeeBookmarklet } from '../shared/shopee-capture';
+import { readAffiliateSettings, affiliateMode, MAX_AFFILIATE_REFERENCES } from '../shared/affiliate';
+import { affiliateReviewPrompt, parseAffiliateReview } from './affiliate';
+import { affiliateCaptionCues, affiliatePostText, alignAffiliateShots, detectAffiliateBeats } from './affiliate-edit';
 
 export interface DesktopActions {
   openExternal?(url: string): Promise<void>;
+  copyText?(value: string): Promise<void>;
   openAsset?(path: string): Promise<void>;
   exportAsset?(path: string, name: string): Promise<void>;
   checkUpdate?(): Promise<unknown>;
@@ -40,6 +47,16 @@ function directorEligible(project: Project): boolean {
   const d = project.data;
   return project.kind === 'film' && typeof d.script === 'string' && !!d.script.trim() && d.keepScript !== true && d.storyMode !== true
     && !(Array.isArray(d.visualGroups) && d.visualGrouped === true) && !(typeof d.subtitle === 'string' && d.subtitle.trim());
+}
+
+function clipWindow(data: Record<string, unknown>, duration: number, requested: number, speech?: Awaited<ReturnType<typeof analyzeSpeech>>, affiliate = false): { start: number; duration: number; speechOverflow?: boolean } {
+  if (!speech) return { start: 0, duration: Math.min(requested, duration) };
+  if (!speech.parts.length) throw new NeedsInputError('Clip chưa phát hiện lời nói để căn hình và phụ đề');
+  const lead = data.pace === 'drama' ? 0.18 : 0.45, hold = data.pace === 'drama' ? 0.4 : 0.75, minimum = data.pace === 'drama' ? 1.6 : 2.6;
+  const start = Math.max(0, speech.parts[0].start - lead), end = Math.min(duration, Math.max(speech.parts.at(-1)!.end + hold, start + minimum));
+  if (affiliate) return { start, duration: Math.min(requested, duration - start), speechOverflow: speech.parts.at(-1)!.end - start > requested - 0.1 };
+  const fps = Number(data.fps) || 24;
+  return { start, duration: Math.floor((end - start) * fps) / fps };
 }
 
 export class StudioService extends EventEmitter {
@@ -131,14 +148,31 @@ export class StudioService extends EventEmitter {
         if (data?.characters !== undefined) validateCharacters(data.characters);
         if (data?.episodes !== undefined) validateEpisodes(data.episodes);
         if (data?.shots !== undefined) buildShots({ shots: data.shots });
+        if (data) {
+          qualityRetries(data.qualityRetries);
+          for (const key of ['autoChecks', 'videoReview']) if (data[key] !== undefined && typeof data[key] !== 'boolean') throw new Error(`Invalid ${key}`);
+        }
         if (data?.productAssetIds !== undefined) this.validateInputRefs({ refIds: data.productAssetIds });
+        if (kind === 'affiliate' && data?.affiliate !== undefined) {
+          data = { ...data, affiliate: this.validateAffiliateRefs(data) };
+          affiliateDubbing({ kind, data });
+        }
         if (data && typeof input.id === 'string') {
           const previous = this.store.project(input.id);
+          const affiliateIntent = (value: unknown, review = false) => {
+            if (value === undefined) return undefined;
+            const settings: Record<string, unknown> = { ...readAffiliateSettings(value) };
+            for (const key of ['showPrice', 'screenText', 'aiLabel', 'adLabel', 'endCard', 'affiliateUrl', ...(!review ? ['caption', 'cta'] : [])]) delete settings[key];
+            return settings;
+          };
+          const affiliateChanged = kind === 'affiliate' && JSON.stringify(affiliateIntent(data.affiliate)) !== JSON.stringify(affiliateIntent(previous.data.affiliate));
+          const affiliateCopyChanged = kind === 'affiliate' && JSON.stringify(affiliateIntent(data.affiliate, true)) !== JSON.stringify(affiliateIntent(previous.data.affiliate, true));
           if (this.contentFingerprint(data) !== this.contentFingerprint(previous.data) && previous.data.production) data = { ...data, productionStale: true };
           if (['ai-api', 'muse-browser'].includes(String(object(previous.data.planning ?? {}).source))) {
             if (['shots', 'scenes'].some(key => JSON.stringify(data![key]) !== JSON.stringify(previous.data[key]))) data = { ...data, planningNeedsUpdate: false };
-            else if (['script', 'minutes', 'genre', 'language', 'product'].some(key => JSON.stringify(data![key]) !== JSON.stringify(previous.data[key]))) data = { ...data, planningNeedsUpdate: true };
+            else if (affiliateChanged || ['script', 'minutes', 'genre', 'language', 'product', ...(kind === 'affiliate' && data.affiliate !== undefined ? ['productAssetIds', 'style', 'styleText'] : [])].some(key => JSON.stringify(data![key]) !== JSON.stringify(previous.data[key]))) data = { ...data, planningNeedsUpdate: true };
           }
+          if (kind === 'affiliate' && previous.data.affiliateReview && (affiliateCopyChanged || ['shots', 'scenes', 'characters', 'product', 'productAssetIds', 'language', 'style', 'styleText', 'suggestedTitle', 'affiliatePost', 'affiliateCaption'].some(key => JSON.stringify(data![key]) !== JSON.stringify(previous.data[key])))) data = { ...data, affiliateReview: { ...object(previous.data.affiliateReview), stale: true } };
         }
         const previous = typeof input.id === 'string' ? this.store.project(input.id) : undefined;
         this.store.transaction(() => {
@@ -230,6 +264,9 @@ export class StudioService extends EventEmitter {
         if (!['plan', 'music', 'characters', 'images', 'videos', 'speech', 'check', 'render', 'all'].includes(String(stage))) throw new Error('Bước sản xuất không hợp lệ');
         if (project.kind === 'dub' && !['speech', 'check', 'render', 'all'].includes(String(stage))) throw new Error('Dubbing chỉ hỗ trợ lời đọc, kiểm tra local, dựng từ output và chạy toàn bộ');
         if (project.kind === 'dub' && input.shotIds !== undefined && stage !== 'speech') throw new Error('Dubbing chỉ chọn cue khi chạy bước lời đọc');
+        const dubbing = affiliateDubbing(project);
+        if (project.kind === 'affiliate' && project.data.affiliate !== undefined && stage === 'speech' && !dubbing) throw new NeedsInputError('Affiliate dùng giọng trong clip hoặc chế độ không lời đã chọn; không tạo TTS riêng');
+        if (dubbing && !['render', 'check'].includes(String(stage))) this.client('voice');
         if (project.data.planningNeedsUpdate === true && ['images', 'videos', 'check', 'render'].includes(String(stage))) throw new NeedsInputError('Cần cập nhật kế hoạch AI hoặc chỉnh storyboard trước khi dùng các bước tạo media, review và dựng');
         if (input.force !== undefined && typeof input.force !== 'boolean') throw new Error('force must be boolean');
         if (input.force === true && !['music', 'characters', 'images', 'videos', 'speech'].includes(String(stage))) throw new Error('Chỉ tạo lại ở bước nhạc, nhân vật, ảnh, video hoặc lời đọc');
@@ -301,6 +338,24 @@ export class StudioService extends EventEmitter {
         break;
       }
       case 'shopee.product': result = await this.client('shopee').shopeeProduct(text(input.url, 'URL sản phẩm', 2048)); break;
+      case 'shopee.open': {
+        const link = shopeeLink(input.url);
+        if (!this.actions.openExternal) throw new Error('Không có trình duyệt hệ thống để mở sản phẩm');
+        await this.actions.openExternal(link.url); result = link; break;
+      }
+      case 'shopee.bookmarklet': {
+        const code = shopeeBookmarklet(); await this.actions.copyText?.(code); result = { code, copied: !!this.actions.copyText }; break;
+      }
+      case 'shopee.import': {
+        const project = this.store.project(text(input.projectId, 'Project ID', 100));
+        if (project.kind !== 'affiliate') throw new Error('Nhập sản phẩm Shopee vào dự án Affiliate');
+        const link = shopeeLink(input.url);
+        const raw = typeof input.text === 'string' && input.text.trim() ? text(input.text, 'Product capture JSON', MAX_SHOPEE_CAPTURE_BYTES) : '';
+        const capture = raw ? parseShopeeCapture(raw, link.short ? String(object(JSON.parse(raw)).url) : link.url) : undefined;
+        if (this.store.tasks().some(task => task.projectId === project.id && task.kind === 'product-import' && ['queued', 'running'].includes(task.status))) throw new Error('Dự án đang nhập sản phẩm; chờ hoặc hủy tác vụ hiện tại');
+        const [task] = this.store.createTasks({ projectId: project.id, kind: 'product-import', prompts: ['Nhập sản phẩm Shopee'], input: { url: link.inputUrl, ...(capture ? { capture } : {}), inputHash: this.contentFingerprint(project.data) } });
+        this.queue.enqueue([task.id]); result = task; break;
+      }
       case 'codex.status': result = await this.codex.status(); break;
       case 'codex.run': result = await this.codex.run(text(input.prompt, 'Prompt', 32768), input.mode === 'edit' ? 'edit' : 'plan'); break;
       case 'codex.cancel': await this.codex.cancel(id()); result = { cancelled: true }; break;
@@ -341,9 +396,19 @@ export class StudioService extends EventEmitter {
       for (const id of input.refIds) { const asset = this.store.asset(text(id, 'Asset ID', 100)); if (!asset.mime.startsWith('image/')) throw new Error('Ảnh tham chiếu phải là image asset'); }
     }
   }
+  private validateAffiliateRefs(data: Record<string, unknown>): ReturnType<typeof readAffiliateSettings> {
+    const affiliate = readAffiliateSettings(data.affiliate), model = affiliateMode(affiliate).model;
+    this.validateInputRefs({ refIds: [affiliate.presenterAssetId, affiliate.backgroundAssetId, ...affiliate.outfitAssetIds].filter(Boolean) });
+    const refs = new Set([...(Array.isArray(data.productAssetIds) ? data.productAssetIds as string[] : []), model ? affiliate.presenterAssetId : '', affiliate.backgroundAssetId, ...(affiliate.contentStyle === 'lookbook' ? affiliate.outfitAssetIds : [])].filter(Boolean));
+    const generatedHost = model && !affiliate.presenterAssetId ? 1 : 0;
+    if (refs.size + generatedHost > MAX_AFFILIATE_REFERENCES) throw new Error(`Affiliate giới hạn ${MAX_AFFILIATE_REFERENCES} ảnh tham chiếu kể cả người mẫu tự tạo để còn chỗ cho ảnh cần review`);
+    return affiliate;
+  }
   private planningRefs(project: Project): string[] {
     const products = project.data.productAssetIds === undefined ? [] : project.data.productAssetIds; this.validateInputRefs({ refIds: products });
-    const ids = [...new Set([...validateCharacters(project.data.characters).flatMap(character => character.assetId ? [character.assetId] : []), ...products as string[]])];
+    const affiliate = project.kind === 'affiliate' && project.data.affiliate !== undefined ? readAffiliateSettings(project.data.affiliate) : undefined;
+    const cast = affiliate && !affiliateMode(affiliate).model ? [] : validateCharacters(project.data.characters);
+    const ids = [...new Set([...cast.flatMap(character => character.assetId ? [character.assetId] : []), ...products as string[], ...(affiliate ? [affiliateMode(affiliate).model ? affiliate.presenterAssetId : '', affiliate.backgroundAssetId, ...(affiliate.contentStyle === 'lookbook' ? affiliate.outfitAssetIds : [])].filter(Boolean) : [])])];
     this.validateInputRefs({ refIds: ids }); return ids;
   }
   private runTasks(ids: string[]): void {
@@ -360,12 +425,15 @@ export class StudioService extends EventEmitter {
   }
   private assertProductionAdmission(projectId: string, stage: string, ownId = ''): void {
     if (stage === 'render') return;
-    const project = this.store.project(projectId); const family = project.data.seriesParentId || project.id;
+    const project = this.store.project(projectId);
+    if (project.kind === 'affiliate' && project.data.affiliate !== undefined) this.validateAffiliateRefs(project.data);
+    if (affiliateDubbing(project) && !['render', 'check'].includes(stage)) this.client('voice');
+    const family = project.data.seriesParentId || project.id;
     const pending = this.store.tasks().find(task => {
       if (task.id === ownId || task.status === 'succeeded' || !['pipeline', 'plan'].includes(task.kind)) return false;
       const other = this.store.project(task.projectId); if ((other.data.seriesParentId || other.id) !== family) return false;
       const previousStage = String(task.input.stage || (task.kind === 'plan' ? 'plan' : 'all'));
-      return (stage === 'all' || previousStage === 'all' || stage === previousStage || ['images', 'characters'].includes(stage) && ['images', 'characters'].includes(previousStage)) && hasPendingAdmission(task.checkpoint);
+      return hasPendingAdmission(object(task.checkpoint.qualityControl ?? {})) || (stage === 'all' || previousStage === 'all' || stage === previousStage || ['images', 'characters'].includes(stage) && ['images', 'characters'].includes(previousStage)) && hasPendingAdmission(task.checkpoint);
     });
     if (pending) throw new NeedsInputError(`Task ${pending.id} còn yêu cầu provider chưa rõ kết quả; đối soát và tiếp tục task đó trước khi gửi việc mới`);
   }
@@ -394,6 +462,7 @@ export class StudioService extends EventEmitter {
   private async execute(task: Task, context: TaskContext): Promise<TaskResult> {
     if (task.checkpoint.outputIds && Array.isArray(task.checkpoint.outputIds) && task.checkpoint.outputIds.every(id => this.store.assets().some(asset => asset.id === id))) return { outputIds: task.checkpoint.outputIds as string[] };
     if (task.kind === 'model-prepare') { await this.offline.prepare(context.signal, (progress, message) => context.progress(progress, message)); return { outputIds: [], message: 'Mô hình giọng local đã xác minh và sẵn sàng' }; }
+    if (task.kind === 'product-import') return this.executeProductImport(task, context);
     if (task.kind === 'image' || task.kind === 'video' || task.kind === 'image-to-video' || task.kind === 'music') return this.generate(task, context);
     if (task.kind === 'plan') return this.executePlan(task, context);
     if (task.kind === 'pipeline') return this.executePipeline(task, context);
@@ -445,12 +514,68 @@ export class StudioService extends EventEmitter {
     if (!task.accountId) throw new NeedsInputError('Cần chọn tài khoản Muse cho video/browser generation');
     const result = await this.browsers.generate(task, context); context.checkpoint({ outputIds: result.outputIds }); return result;
   }
-  private async executePipeline(task: Task, context: TaskContext): Promise<TaskResult> {
+  private async executeProductImport(task: Task, context: TaskContext): Promise<TaskResult> {
+    context.signal.throwIfAborted();
+    const original = this.store.project(task.projectId);
+    if (original.kind !== 'affiliate') throw new Error('Shopee import requires an Affiliate project');
+    const link = await resolveShopeeLink(task.input.url, context.signal);
+    let capture = task.checkpoint.capture ?? task.input.capture;
+    if (!capture) {
+      if (!this.store.settings().providers.shopee.baseUrl) throw new NeedsInputError('Chưa cấu hình API Shopee. Mở sản phẩm trong Chrome thường, bấm nút Lấy SP rồi dán dữ liệu vào MaiStudio');
+      context.progress(0.05, 'Đang đọc sản phẩm qua API Shopee');
+      capture = shopeeOffer(await this.client('shopee').shopeeProduct(link.url, context.signal), link.url);
+    }
+    const candidate = object(capture), product = parseProducts(JSON.stringify(candidate.product), 'json')[0], source = object(candidate.source);
+    const identity = shopeeLink(product.url);
+    if (identity.short || identity.url !== link.url || source.url !== link.url || !['page', 'cached', 'api'].includes(String(source.method))) throw new Error('Product capture identity does not match requested Shopee link');
+    text(product.name ?? product.title, 'Product name', 2000);
+    if (!Array.isArray(candidate.images) || candidate.images.length > MAX_SHOPEE_IMAGES) throw new Error('Invalid product image count');
+    const images = [...new Set(candidate.images.map(shopeeImageUrl))];
+    if (!images.length) throw new NeedsInputError('Chưa có ảnh thật sản phẩm. Mở phần ảnh trên trang Shopee, lấy lại dữ liệu rồi nhập');
+    const warnings = Array.isArray(source.warnings) ? source.warnings.map(value => text(value, 'Product warning', 1000)) : [];
+    const missingFields = Array.isArray(source.missingFields) ? source.missingFields.map(value => text(value, 'Missing field', 64)) : [];
+    context.checkpoint({ capture: { product, images, source } });
+    const imported = { ...object(task.checkpoint.productImages ?? {}) }, imageErrors: Array<{ url: string; message: string }> = [];
+    const folder = join(this.store.root, 'work', task.id); await mkdir(folder, { recursive: true });
+    for (const [index, url] of images.entries()) {
+      context.signal.throwIfAborted();
+      if (typeof imported[url] === 'string' && this.store.assets().some(asset => asset.id === imported[url] && asset.projectId === task.projectId && asset.taskId === task.id && asset.mime.startsWith('image/'))) continue;
+      try {
+        const image = await downloadShopeeImage(url, context.signal);
+        const file = join(folder, `product-${index + 1}-${randomUUID()}${image.extension}`);
+        try {
+          await writeFile(file, image.buffer, { mode: 0o600, flag: 'wx' });
+          await this.withMedia(context.signal, () => this.media().validateImage(file, context.signal));
+          const asset = await this.store.importAsset(file, { projectId: task.projectId, taskId: task.id }, context.signal);
+          if (!asset.mime.startsWith('image/')) throw new Error('Product reference must be an image');
+          imported[url] = asset.id; context.checkpoint({ productImages: imported });
+        } finally { await rm(file, { force: true }); }
+      } catch (error) {
+        context.signal.throwIfAborted(); imageErrors.push({ url, message: error instanceof Error && /^(Invalid Shopee image|Shopee image|Product image)/.test(error.message) ? error.message : 'Không tải hoặc giải mã được ảnh sản phẩm' });
+        context.checkpoint({ productImageErrors: imageErrors });
+      }
+      context.progress(0.1 + (index + 1) / images.length * 0.8, `Đã xử lý ${index + 1}/${images.length} ảnh sản phẩm`);
+    }
+    const outputIds = images.map(url => imported[url]).filter((id): id is string => typeof id === 'string' && this.store.assets().some(asset => asset.id === id && asset.projectId === task.projectId && asset.taskId === task.id && asset.mime.startsWith('image/')));
+    if (!outputIds.length) throw new NeedsInputError('Không nhập được ảnh thật sản phẩm; dữ liệu dự án cũ được giữ nguyên. ' + (imageErrors[0]?.message || 'Kiểm tra ảnh nguồn rồi thử lại'));
+    const current = this.store.project(task.projectId);
+    if (this.contentFingerprint(current.data) !== task.input.inputHash) throw new NeedsInputError('Dự án đã được chỉnh trong lúc nhập sản phẩm; giữ ảnh ở task để anh kiểm tra, không ghi đè dữ liệu mới');
+    const productSource = { ...source, inputUrl: link.inputUrl, url: link.url, shopId: link.shopId, itemId: link.itemId, taskId: task.id, importedAt: Date.now(), warnings, missingFields, imageCount: images.length, importedImageCount: outputIds.length, imageErrors };
+    this.store.transaction(() => {
+      context.signal.throwIfAborted();
+      this.store.saveProject({ ...current, data: { ...current.data, product, productAssetIds: outputIds, productSource, productionStale: !!current.data.production, planningNeedsUpdate: true } });
+      context.checkpoint({ outputIds, productApplied: true });
+    });
+    return { outputIds, message: `Đã nhập sản phẩm và ${outputIds.length}/${images.length} ảnh thật${imageErrors.length ? '; có ảnh lỗi, xem nguồn sản phẩm' : ''}${missingFields.length ? '; xem các trường nguồn chưa cung cấp' : ''}` };
+  }
+  private async executePipeline(task: Task, context: TaskContext, repair?: Record<string, string>): Promise<TaskResult> {
     let project = object(task.input.projectSnapshot) as unknown as Project;
     const stage = String(task.input.stage ?? 'all');
     const latest = this.store.project(project.id);
     if (task.checkpoint.workingHash && this.contentFingerprint(latest.data) === task.checkpoint.workingHash) project = latest;
     else if (this.contentFingerprint(latest.data) !== this.contentFingerprint(project.data)) throw new NeedsInputError('Dự án đã thay đổi sau khi nhận việc; chạy task mới để dùng bản chỉnh');
+    const dubbing = affiliateDubbing(project);
+    if (dubbing && !['render', 'check'].includes(stage)) this.client('voice');
     if (project.data.planningNeedsUpdate === true && ['images', 'videos', 'check', 'render'].includes(stage)) throw new NeedsInputError('Cần cập nhật kế hoạch AI hoặc chỉnh storyboard trước khi tiếp tục bước này');
     if (stage === 'music') return this.executeMusic(task, project, context);
     if (project.kind === 'series') {
@@ -528,30 +653,37 @@ export class StudioService extends EventEmitter {
     }
     if (stage === 'plan') return this.executePlan({ ...task, kind: 'plan', input: { ...task.input, projectSnapshot: project } }, context);
     if (project.kind === 'dub') return this.executeDub(task, project, context);
-    if (stage === 'check') return this.executeReview(task, project, context);
-    if (project.data.storyMode === true && ['speech', 'all'].includes(stage)) {
+    if (stage === 'check') {
+      if (project.kind === 'affiliate' && project.data.affiliate !== undefined && (!project.data.affiliateReview || object(project.data.affiliateReview).stale === true)) project = await this.reviewAffiliateProject(task, project, context);
+      const production = object(project.data.production ?? {});
+      if (project.kind === 'affiliate' && project.data.affiliate !== undefined && !Object.keys(object(production.images ?? {})).length && !Object.keys(object(production.videos ?? {})).length && !buildShots(project.data).some(shot => shot.assetId || shot.videoAssetId)) return { outputIds: [], message: 'Đã đối chiếu kịch bản đã chỉnh với nguồn sản phẩm; chưa có media để review' };
+      return this.executeReview(task, project, context);
+    }
+    if (project.data.storyMode === true && !(project.kind === 'affiliate' && project.data.affiliate !== undefined) && ['speech', 'all'].includes(stage)) {
       const narration = await this.executeNarration(task, project, context);
       if (stage === 'speech') return narration;
       project = this.store.project(project.id);
     }
-    if (stage === 'all' && (project.data.planningNeedsUpdate === true || (!project.data.shots && !project.data.scenes && !project.data.subtitle))) {
+    if (stage === 'all' && (project.data.planningNeedsUpdate === true || (project.kind === 'affiliate' && project.data.affiliate !== undefined && (!Array.isArray(project.data.shots) || !project.data.shots.length)) || (!project.data.shots && !project.data.scenes && !project.data.subtitle))) {
       let state = object(task.checkpoint.plan ?? {});
       await this.executePlan({ ...task, kind: 'plan', input: { ...task.input, projectSnapshot: project }, checkpoint: state }, { ...context, checkpoint: value => {
         state = { ...state, ...value }; context.checkpoint({ plan: state, workingHash: this.contentFingerprint(this.store.project(project.id).data) });
       } });
       project = this.store.project(project.id);
     }
+    if (['all', 'images', 'videos', 'characters'].includes(stage) && project.kind === 'affiliate' && project.data.affiliate !== undefined && (!project.data.affiliateReview || object(project.data.affiliateReview).stale === true)) project = await this.reviewAffiliateProject(task, project, context);
     if (stage === 'characters') return this.executeCharacters(task, project, context);
     if (stage === 'all' && project.data.musicMode === 'auto') {
       await this.executeMusic(task, project, context); project = this.store.project(project.id);
     }
-    if (['all', 'images'].includes(stage) && validateCharacters(project.data.characters).length) await this.executeCharacters(task, project, context);
+    if (['all', 'images'].includes(stage) && project.kind === 'affiliate' && project.data.affiliate !== undefined) project = await this.alignAffiliateMusic(task, project, context);
+    if (!repair && ['all', 'images'].includes(stage) && validateCharacters(project.data.characters).length) await this.executeCharacters(task, project, context);
     const production = structuredClone(object(this.store.project(project.id).data.production ?? {})); const fingerprints = object(production.fingerprints ?? {}); production.fingerprints = fingerprints;
     const characters = validateCharacters(project.data.characters).map(character => {
-      const id = object(production.characterImages ?? {})[character.id]; const signature = createHash('sha256').update(JSON.stringify({ character, style: project.data.style ?? '', styleText: project.data.styleText ?? '' })).digest('hex');
+      const id = object(production.characterImages ?? {})[character.id]; const signature = this.characterFingerprint(project, character);
       return !character.assetId && fingerprints[`character/${character.id}`] === signature && typeof id === 'string' && this.store.assets().some(asset => asset.id === id) ? { ...character, assetId: id } : character;
     });
-    const steps = pipelineSteps({ ...project, data: { ...project.data, characters } }, { speech: !['images', 'videos'].includes(stage) }); const results = object(task.checkpoint.steps ?? {}); const clips: Array<{ path: string; duration: number; start?: number; trimStart?: number; trimEnd?: number }> = []; const voices: Array<{ path: string; start: number; duration?: number }> = []; const nativeCues: ReturnType<typeof parseSrt> = [];
+    const steps = pipelineSteps({ ...project, data: { ...project.data, characters } }, { speech: !['images', 'videos'].includes(stage) }); const results = object(task.checkpoint.steps ?? {}); const clips: Array<{ path: string; duration: number; start?: number; trimStart?: number; trimEnd?: number; base?: string }> = []; const voices: Array<{ path: string; start: number; duration?: number }> = []; const nativeCues: ReturnType<typeof parseSrt> = [];
     const selected = Array.isArray(task.input.shotIds) ? new Set(task.input.shotIds as string[]) : undefined;
     const stageIds: string[] = [];
     const projectHash = this.contentFingerprint(project.data);
@@ -581,10 +713,10 @@ export class StudioService extends EventEmitter {
       let saved = results[step.id] ? object(results[step.id]) : {};
       let assetId = typeof saved.assetId === 'string' && this.store.assets().some(asset => asset.id === saved.assetId) ? saved.assetId : '';
       if (step.kind === 'video' && step.videoAssetId) { if (!this.store.asset(step.videoAssetId).mime.startsWith('video/')) throw new Error('Clip nguồn phải là video asset'); assetId = step.videoAssetId; }
-      const refs = [...step.refIds];
-      if (step.kind === 'video' && stills.has(base)) refs.push(stills.get(base)!);
+      const refs = step.kind === 'video' && stills.has(base) ? [stills.get(base)!] : [...step.refIds];
       if (stage === 'videos' && imageStep && !stills.has(base)) throw new Error(`Chạy bước ảnh cho shot ${base} trước khi tạo video`);
-      const signature = createHash('sha256').update(JSON.stringify({ ...step, refIds: [...new Set(refs)], ratio: project.data.ratio ?? '16:9' })).digest('hex');
+      const voiceInput = object(object(production.affiliateSpeechInputs ?? {})[base] ?? {});
+      const signature = dubbing && step.kind === 'speech' ? this.affiliateSpeechFingerprint(step.prompt, dubbing.voiceId, stage === 'render' && voiceInput.assetId === savedAssets[base] ? voiceInput.provider : undefined) : createHash('sha256').update(JSON.stringify({ ...step, refIds: [...new Set(refs)], ratio: project.data.ratio ?? '16:9' })).digest('hex');
       if (typeof saved.signature === 'string' && saved.signature !== signature) {
         if (hasPendingAdmission(saved)) throw new NeedsInputError('Input của shot đã đổi khi provider còn xử lý; đối soát lượt cũ trước khi gửi lại');
         saved = {}; assetId = step.kind === 'video' && step.videoAssetId ? step.videoAssetId : '';
@@ -594,46 +726,64 @@ export class StudioService extends EventEmitter {
       if (!assetId) {
         if (stage === 'render') {
           if (step.kind === 'image') continue;
+          if (dubbing && step.kind === 'speech') throw new NeedsInputError(`Chưa có lời đọc hiện tại cho ${base}; chạy bước speech trước khi dựng`);
           throw new Error(`Chưa có ${bucket} cho shot ${base}; chạy bước tương ứng trước khi dựng`);
         }
         const childContext: TaskContext = { signal: context.signal,
           progress: (progress, message) => context.progress((index + progress) / Math.max(steps.length + 1, 1), `${index + 1}/${steps.length}: ${message}`),
           checkpoint: value => { results[step.id] = { ...saved, ...object(results[step.id] ?? {}), ...value, signature }; context.checkpoint({ steps: results }); },
         };
-        const child: Task = { ...task, kind: step.kind, prompt: step.prompt, input: { refIds: [...new Set(refs)], voiceId: step.voiceId, ratio: project.data.ratio ?? '16:9' }, checkpoint: saved };
+        const prompt = repair?.[base] && step.kind !== 'speech' ? text(`${step.prompt}\nCorrect the following observed problems while keeping the same scene, story, cast and requested action: ${repair[base]}`, 'Quality repair prompt', 32768) : step.prompt;
+        const child: Task = { ...task, kind: step.kind, prompt, input: { refIds: [...new Set(refs)], voiceId: step.voiceId, ratio: project.data.ratio ?? '16:9' }, checkpoint: saved };
+        if (repair) { results[step.id] = { ...object(results[step.id] ?? {}), generationPrompt: prompt }; context.checkpoint({ steps: results }); }
         const result = step.kind === 'speech' ? await this.execute(child, childContext) : await this.generate(child, childContext);
         assetId = result.outputIds[0]; results[step.id] = { ...object(results[step.id] ?? {}), assetId, signature }; context.checkpoint({ steps: results });
       }
+      if (dubbing && step.kind === 'speech') production.affiliateSpeechInputs = { ...object(production.affiliateSpeechInputs ?? {}), [base]: { assetId, provider: this.store.settings().providers.voice.baseUrl ? this.store.settings().providers.voice : voiceInput.provider } };
       savedAssets[base] = assetId; fingerprints[step.id] = signature; remember(); stageIds.push(assetId);
       if (step.kind === 'image') stills.set(base, assetId);
       else if (step.kind === 'video') {
         const path = this.store.assetPath(assetId); const info = await this.media().probe(path, context.signal); let duration = Math.min(step.duration, info.duration); let trimStart = 0;
         const start = step.start ?? position;
-        if (project.data.nativeAudio === true && step.dialogue) {
+        if (!dubbing && project.data.nativeAudio === true && step.dialogue) {
           if (!info.hasAudio) throw new NeedsInputError(`Clip ${base} chưa có lời thoại; kiểm tra hoặc tạo lại trước khi dựng`);
           const analysis = await this.withMedia(context.signal, () => analyzeSpeech(path, this.media().executablePath, context.signal));
           if (!analysis.parts.length) throw new NeedsInputError(`Clip ${base} chưa phát hiện lời nói để căn hình và phụ đề`);
-          const lead = project.data.pace === 'drama' ? 0.18 : 0.45; const hold = project.data.pace === 'drama' ? 0.4 : 0.75; const minimum = project.data.pace === 'drama' ? 1.6 : 2.6;
-          trimStart = Math.max(0, analysis.parts[0].start - lead); const end = Math.min(info.duration, Math.max(analysis.parts.at(-1)!.end + hold, trimStart + minimum));
-          const fps = Number(project.data.fps) || 24; duration = Math.floor((end - trimStart) * fps) / fps;
+          const window = clipWindow(project.data, info.duration, step.duration, analysis, project.kind === 'affiliate' && project.data.affiliate !== undefined); trimStart = window.start; duration = window.duration;
+          if (window.speechOverflow && (stage === 'render' || project.data.autoChecks !== true)) throw new NeedsInputError(`Lời thoại shot ${base} vượt khoảng dựng; review và tạo lại clip trước khi xuất để không cắt mất lời`);
           nativeCues.push({ index: nativeCues.length + 1, start: start + analysis.parts[0].start - trimStart, end: Math.min(start + duration, start + analysis.parts.at(-1)!.end - trimStart), text: step.dialogue });
         }
-        clips.push({ path, duration, start: project.data.nativeAudio === true ? start : step.start, ...(trimStart || project.data.nativeAudio === true ? { trimStart, trimEnd: trimStart + duration } : {}) }); position = start + duration;
+        clips.push({ path, duration: dubbing ? step.duration : duration, start: dubbing || project.data.nativeAudio === true ? start : step.start, ...(dubbing ? { base } : trimStart || project.data.nativeAudio === true ? { trimStart, trimEnd: trimStart + duration } : {}) }); position = start + (dubbing ? step.duration : duration);
       }
-      else voices.push({ path: this.store.assetPath(assetId), start: step.start ?? Math.max(0, position - step.duration), duration: step.duration });
+      else if (!dubbing) voices.push({ path: this.store.assetPath(assetId), start: step.start ?? Math.max(0, position - step.duration), duration: step.duration });
+    }
+    if (!repair && stage === 'videos' && project.data.autoChecks === true) {
+      await this.reviewAndRepair(task, this.store.project(project.id), context);
+      const videos = object(object(this.store.project(project.id).data.production ?? {}).videos ?? {});
+      const outputIds = steps.filter(step => step.kind === 'video').filter(step => !selected || selected.has(step.id.replace(/\/video$/, '')) || selected.has(decodeURIComponent(step.id.split('/').at(-2)!)))
+        .map(step => step.videoAssetId ?? videos[step.id.replace(/\/video$/, '')]).filter((id): id is string => typeof id === 'string');
+      context.checkpoint({ outputIds }); return { outputIds, message: 'Đã tạo và review clip; xem các đánh giá nội dung trước khi dựng' };
     }
     if (['images', 'videos', 'speech'].includes(stage)) { context.checkpoint({ outputIds: [...new Set(stageIds)] }); return { outputIds: [...new Set(stageIds)], message: `Hoàn tất bước ${stage}` }; }
     if (!clips.length) throw new Error('Pipeline chưa có clip để dựng');
+    if (dubbing) {
+      project = await this.prepareAffiliateDubs(task, this.store.project(project.id), context);
+      production.affiliateDubs = object(object(project.data.production).affiliateDubs);
+      for (const clip of clips) {
+        clip.path = this.store.assetPath(String(object(object(production.affiliateDubs)[clip.base!]).assetId));
+        if (steps.find(step => step.id === `${clip.base}/video`)?.dialogue) {
+          const speech = await this.withMedia(context.signal, () => analyzeSpeech(clip.path, this.media().executablePath, context.signal));
+          if (speech.parts.length) nativeCues.push({ index: nativeCues.length + 1, start: (clip.start ?? 0) + speech.parts[0].start, end: (clip.start ?? 0) + Math.min(clip.duration, speech.parts.at(-1)!.end), text: steps.find(step => step.id === `${clip.base}/video`)!.dialogue! });
+        }
+      }
+    }
     if (stage === 'all' && project.data.autoChecks === true) {
-      let review = object(task.checkpoint.quality ?? {});
-      await this.executeReview({ ...task, input: { ...task.input, stage: 'check' }, checkpoint: review }, this.store.project(project.id), { ...context, checkpoint: value => { review = { ...review, ...value }; context.checkpoint({ quality: review }); } });
-      const latest = this.store.project(project.id); Object.assign(production, object(latest.data.production ?? {}));
-      const reviews = object(latest.data.qualityReviews ?? {});
-      const verdicts = steps.filter(step => step.kind === 'video').flatMap(step => Object.entries(object(reviews[step.id.replace(/\/video$/, '')] ?? {})).filter(([kind]) => ['image', 'speech'].includes(kind)).map(([, result]) => object(result).status));
-      if (!verdicts.length || verdicts.some(status => status !== 'pass')) throw new NeedsInputError('Kiểm tra chất lượng còn fail/unknown; xem kết quả, tạo lại shot cần sửa hoặc tắt kiểm tra tự động sau khi tự review');
+      await this.reviewAndRepair(task, this.store.project(project.id), context);
+      let rendered = object(task.checkpoint.qualityRender ?? {});
+      return this.executePipeline({ ...task, input: { ...task.input, projectSnapshot: this.store.project(project.id), stage: 'render', force: false }, checkpoint: rendered }, { ...context, checkpoint: value => { rendered = { ...rendered, ...value }; context.checkpoint({ qualityRender: rendered }); } });
     }
     const narration = object(production.narration ?? {});
-    if (typeof narration.assetId === 'string' && project.data.narrationMode === 'source') {
+    if (!dubbing && typeof narration.assetId === 'string' && project.data.narrationMode === 'source') {
       const path = this.store.assetPath(narration.assetId); const info = await this.media().probe(path, context.signal);
       const end = clips.reduce((end, clip) => (clip.start ?? end) + clip.duration, 0);
       voices.push({ path, start: 0, duration: Math.min(info.duration, end) });
@@ -643,25 +793,40 @@ export class StudioService extends EventEmitter {
     const dimensions: Record<string, [number, number]> = { '16:9': [1280, 720], '9:16': [720, 1280], '1:1': [1024, 1024], '4:3': [1024, 768], '3:4': [768, 1024] };
     const [width, height] = dimensions[String(project.data.ratio || '16:9')] ?? dimensions['16:9'];
     const options: MediaOptions = { width: Number(project.data.width) || width, height: Number(project.data.height) || height, fps: Number(project.data.fps) || 24,
-      fit: project.data.fit === 'crop' ? 'crop' : 'pad', fadeIn: Number(project.data.fadeIn) || 0, fadeOut: Number(project.data.fadeOut) || 0, ducking: project.data.musicDucking === true, motion: project.data.motion === 'kenburns' ? 'kenburns' : 'none' };
+      fit: project.data.fit === 'crop' ? 'crop' : 'pad', keepAudio: dubbing ? true : typeof project.data.keepAudio === 'boolean' ? project.data.keepAudio : undefined,
+      ...(!dubbing && project.data.voiceVolume !== undefined ? { voiceVolume: project.data.voiceVolume as number } : {}),
+      fadeIn: Number(project.data.fadeIn) || 0, fadeOut: Number(project.data.fadeOut) || 0, ducking: project.data.musicDucking === true, motion: project.data.motion === 'kenburns' ? 'kenburns' : 'none' };
     if (project.data.musicId) {
       const music = this.store.asset(text(project.data.musicId, 'Music ID', 100)); if (!music.mime.startsWith('audio/')) throw new Error('Nhạc nền phải là audio asset'); options.musicPath = this.store.assetPath(music.id); options.volume = Number(project.data.musicVolume ?? 0.2);
     }
-    const title = typeof project.data.titleCard === 'string' ? project.data.titleCard.trim() : '';
-    const ending = typeof project.data.endCard === 'string' ? project.data.endCard.trim() : '';
+    const affiliate = project.kind === 'affiliate' && project.data.affiliate !== undefined ? readAffiliateSettings(project.data.affiliate) : undefined;
+    if (affiliate) options.subtitleMarginV = 52;
+    const title = !affiliate && typeof project.data.titleCard === 'string' ? project.data.titleCard.trim() : '';
+    const ending = !affiliate && typeof project.data.endCard === 'string' ? project.data.endCard.trim() : '';
     const product = project.data.product && project.data.productOverlay !== false ? object(project.data.product) : undefined;
-    const overlayText = product ? [product.price, product.cta].filter(value => typeof value === 'string' || typeof value === 'number').join(' · ') : '';
+    const overlayText = product ? (affiliate ? [affiliate.showPrice ? product.price : '', affiliate.adLabel ? (project.data.language === 'en' ? 'Advertisement' : 'Quảng cáo') : '', affiliate.aiLabel ? (project.data.language === 'en' ? 'AI visuals' : 'Hình ảnh AI') : ''] : [product.price, product.cta]).filter(value => (typeof value === 'string' || typeof value === 'number') && String(value).trim()).join(' · ') : '';
     const cards: Parameters<typeof renderCards>[0] = [];
     const intro = join(folder, 'title.png'); const outro = join(folder, 'end.png'); const overlay = join(folder, 'product-overlay.png');
     if (title) cards.push({ title, output: intro, width: options.width!, height: options.height! });
     if (ending) cards.push({ title: ending, output: outro, width: options.width!, height: options.height! });
-    if (product) cards.push({ title: String(product.name || product.title || project.name), body: overlayText, overlay: true, output: overlay, width: options.width!, height: options.height! });
+    if (product && (!affiliate || affiliate.screenText)) cards.push({ title: String(affiliate ? project.data.suggestedTitle || product.name || product.title || project.name : product.name || product.title || project.name), body: overlayText, overlay: true, compact: !!affiliate, output: overlay, width: options.width!, height: options.height! });
+    if (affiliate?.screenText && affiliate.endCard) cards.push({ title: String(project.data.suggestedTitle || object(project.data.product ?? {}).name || object(project.data.product ?? {}).title || project.name), body: [affiliate.cta, affiliate.affiliateUrl ? (project.data.language === 'en' ? 'Product link in the description' : 'Liên kết sản phẩm trong phần mô tả') : '', overlayText].filter(Boolean).join('\n'), output: outro, width: options.width!, height: options.height! });
     if (cards.length) await this.withMedia(context.signal, () => renderCards(cards, this.store.settings().browserPath, context.signal));
-    if (product) options.overlayPath = overlay;
+    if (product && (!affiliate || affiliate.screenText)) options.overlayPath = overlay;
+    if (affiliate?.screenText && affiliate.endCard) {
+      const end = clips.reduce((end, clip) => (clip.start ?? end) + clip.duration, 0);
+      options.overlays = [{ path: outro, start: Math.max(0, end - 2), end }];
+    }
+    if (affiliate) {
+      const captionEnd = options.overlays?.[0]?.start ?? Infinity;
+      const captions = affiliateCaptionCues(project, nativeCues).map(cue => ({ ...cue, end: Math.min(cue.end, captionEnd) })).filter(cue => cue.end > cue.start);
+      if (captions.length) { const path = join(folder, 'affiliate-captions.srt'); await writeFile(path, formatSrt(captions)); options.captionPath = path; }
+      options.flashes = buildShots(project.data).filter(shot => shot.transition === 'flash' && Number(shot.start) > 0).map(shot => Number(shot.start));
+    }
     const titleSeconds = Number(project.data.titleDuration ?? 2); const endSeconds = Number(project.data.endDuration ?? 2);
     if (![titleSeconds, endSeconds].every(value => Number.isFinite(value) && value >= 0.5 && value <= 15)) throw new Error('Thời lượng thẻ phải từ 0.5–15 giây');
     const titleOffset = title ? titleSeconds : 0;
-    const sourceCues = nativeCues.length ? nativeCues : typeof project.data.subtitle === 'string' ? parseSrt(project.data.subtitle) : [];
+    const sourceCues = nativeCues.length ? nativeCues : !affiliate && typeof project.data.subtitle === 'string' ? parseSrt(project.data.subtitle) : [];
     const subtitle = sourceCues.length ? formatSrt(sourceCues.map(cue => ({ ...cue, start: cue.start + titleOffset, end: cue.end + titleOffset }))) : undefined;
     if (subtitle) { production.subtitle = subtitle; production.subtitleInputHash = projectHash; }
     else { delete production.subtitle; delete production.subtitleInputHash; }
@@ -677,21 +842,30 @@ export class StudioService extends EventEmitter {
       if (ending) clips.push({ path: await cardClip(outro, 'end', endSeconds), duration: endSeconds, start: cursor + titleOffset });
       if (title) clips.unshift({ path: await cardClip(intro, 'title', titleSeconds), duration: titleSeconds, start: 0 });
     }
-    if (project.data.burnSubtitles === true && typeof subtitle === 'string') {
+    if (project.data.burnSubtitles === true && (!affiliate || affiliate.screenText) && typeof subtitle === 'string') {
       const captions = join(folder, 'subtitles.srt'); await writeFile(captions, subtitle); options.subtitlePath = captions;
     }
-    const visualOptions = voices.length ? { ...options, musicPath: undefined } : options;
+    const visualOptions = voices.length ? { ...options, musicPath: undefined, voiceVolume: undefined } : options;
     if (project.data.renderMode === 'slideshow') await this.withMedia(context.signal, () => this.media().slideshow(clips, output, visualOptions, mediaContext)); else await this.withMedia(context.signal, () => this.media().merge(clips, output, visualOptions, mediaContext));
     let final = output;
     if (voices.length) {
       const rendered = await this.media().probe(output, context.signal);
       const timed = voices.map(voice => ({ ...voice, duration: Math.min(voice.duration ?? rendered.duration - voice.start, rendered.duration - voice.start) }));
       if (timed.some(voice => voice.duration <= 0)) throw new Error('Lời đọc bắt đầu ngoài timeline đã dựng');
-      final = join(folder, 'voiced.mp4'); await this.withMedia(context.signal, () => this.media().dub(output, timed, final, { width: options.width, height: options.height, fps: options.fps, musicPath: options.musicPath, volume: options.volume, ducking: options.ducking, keepAudio: project.data.keepAudio === true }, mediaContext));
+      final = join(folder, 'voiced.mp4'); await this.withMedia(context.signal, () => this.media().dub(output, timed, final, { width: options.width, height: options.height, fps: options.fps, musicPath: options.musicPath, volume: options.volume, voiceVolume: options.voiceVolume, ducking: options.ducking, keepAudio: project.data.keepAudio === true }, mediaContext));
     }
     const info = await this.media().probe(final, context.signal); const asset = await this.store.importAsset(final, { taskId: task.id, projectId: task.projectId, duration: info.duration }, context.signal);
     const current = this.store.project(project.id);
     if (this.contentFingerprint(current.data) === projectHash) { production.render = { assetId: asset.id, inputHash: projectHash }; this.store.saveProject({ ...current, data: { ...current.data, production, productionStale: false } }); }
+    if (affiliate) {
+      const file = join(folder, 'affiliate-caption.txt'); await writeFile(file, affiliatePostText(project), { mode: 0o600 });
+      const post = await this.store.importAsset(file, { taskId: task.id, projectId: task.projectId }, context.signal);
+      await this.exportOutput(asset, task, context.signal); await this.exportOutput(post, task, context.signal);
+      const latest = this.store.project(project.id);
+      if (this.contentFingerprint(latest.data) !== projectHash) throw new NeedsInputError('Dự án đã đổi trong lúc xuất Affiliate; giữ output ở công việc để kiểm tra');
+      this.store.saveProject({ ...latest, data: { ...latest.data, production: { ...object(latest.data.production ?? {}), affiliatePostAssetId: post.id } } });
+      context.checkpoint({ outputIds: [asset.id, post.id] }); return { outputIds: [asset.id, post.id], message: 'Đã xuất video Affiliate và nội dung đăng bài' };
+    }
     context.checkpoint({ outputIds: [asset.id] }); await this.exportOutput(asset, task, context.signal); return { outputIds: [asset.id] };
   }
   private async appendRecap(task: Task, film: Project, prior: Project, rawOutputIds: string[], context: TaskContext): Promise<string[]> {
@@ -704,7 +878,7 @@ export class StudioService extends EventEmitter {
       const data = previous.data, saved = object(data.production ?? {}), fingerprints = object(saved.fingerprints ?? {});
       const characters = validateCharacters(data.characters).map(character => {
         const assetId = object(saved.characterImages ?? {})[character.id];
-        return !character.assetId && fingerprints[`character/${character.id}`] === hash({ character, style: data.style ?? '', styleText: data.styleText ?? '' }) && typeof assetId === 'string' ? { ...character, assetId } : character;
+        return !character.assetId && fingerprints[`character/${character.id}`] === this.characterFingerprint(previous, character) && typeof assetId === 'string' ? { ...character, assetId } : character;
       });
       const steps = pipelineSteps({ ...previous, data: { ...data, characters } }, { speech: false });
       return steps.filter(step => step.kind === 'video').map(step => ({ step, base: step.id.replace(/\/video$/, ''), assetId: step.videoAssetId ?? object(saved.videos ?? {})[step.id.replace(/\/video$/, '')] }))
@@ -712,7 +886,7 @@ export class StudioService extends EventEmitter {
           if (!this.store.asset(assetId).mime.startsWith('video/')) throw new NeedsInputError('Recap source phải là raw video asset');
           const imageStep = steps.find(value => value.id === `${base}/image`); const imageId = object(saved.images ?? {})[base];
           const frameValid = imageStep && fingerprints[imageStep.id] === hash({ ...imageStep, refIds: [...new Set(imageStep.refIds)], ratio: data.ratio ?? '16:9' });
-          const refs = [...new Set([...step.refIds, ...(frameValid && typeof imageId === 'string' ? [imageId] : [])])];
+          const refs = frameValid && typeof imageId === 'string' ? [imageId] : step.refIds;
           if (!step.videoAssetId && fingerprints[step.id] !== hash({ ...step, refIds: refs, ratio: data.ratio ?? '16:9' })) throw new NeedsInputError('Raw video tập trước không còn khớp kế hoạch');
           const review = object(data.qualityReviews ?? {})[base]; const reviewed = review === undefined ? undefined : object(review).speech;
           let speech: { start: number; end: number } | undefined;
@@ -789,6 +963,46 @@ export class StudioService extends EventEmitter {
       } catch (error) { this.store.deleteAsset(asset.id); throw error; }
     } finally { await rm(recapFile, { force: true }); await rm(output, { force: true }); }
   }
+  private affiliateSpeechFingerprint(dialogue: string, voiceId: string, cachedProvider?: unknown): string {
+    const provider = this.store.settings().providers.voice;
+    return createHash('sha256').update(JSON.stringify({ dialogue, voiceId, provider: provider.baseUrl ? provider : cachedProvider ?? provider })).digest('hex');
+  }
+  private async prepareAffiliateDubs(task: Task, project: Project, context: TaskContext): Promise<Project> {
+    const dubbing = affiliateDubbing(project); if (!dubbing) return project;
+    const initialHash = this.contentFingerprint(project.data), production = object(project.data.production ?? {});
+    const dubs = { ...object(production.affiliateDubs ?? {}) }, selected = Array.isArray(task.input.shotIds) ? new Set(task.input.shotIds as string[]) : undefined;
+    const folder = join(this.store.root, 'work', task.id); await mkdir(folder, { recursive: true });
+    for (const step of pipelineSteps(project, { speech: false }).filter(step => step.kind === 'video')) {
+      context.signal.throwIfAborted(); const base = step.id.replace(/\/video$/, '');
+      if (selected && !selected.has(base) && !selected.has(decodeURIComponent(base.split('/').at(-1)!))) continue;
+      const videoId = step.videoAssetId ?? object(production.videos ?? {})[base];
+      if (typeof videoId !== 'string') throw new NeedsInputError(`Chưa có clip hiện tại cho ${base}; tạo clip trước khi lồng tiếng`);
+      const speechId = step.dialogue ? object(production.speech ?? {})[base] : undefined;
+      const voiceInput = object(object(production.affiliateSpeechInputs ?? {})[base] ?? {});
+      if (step.dialogue && (typeof speechId !== 'string' || object(production.fingerprints ?? {})[`${base}/speech`] !== this.affiliateSpeechFingerprint(step.dialogue, dubbing.voiceId, voiceInput.assetId === speechId ? voiceInput.provider : undefined))) throw new NeedsInputError(`Chưa có lời đọc hiện tại cho ${base}; chạy bước speech trước khi kiểm tra hoặc dựng`);
+      const fingerprint = createHash('sha256').update(JSON.stringify({ videoId, speechId, duration: step.duration, speed: dubbing.speed, volume: project.data.voiceVolume ?? 1, fps: project.data.fps ?? 24 })).digest('hex');
+      const saved = object(dubs[base] ?? {});
+      if (saved.fingerprint === fingerprint && typeof saved.assetId === 'string' && this.store.assets().some(asset => asset.id === saved.assetId)) continue;
+      const source = this.store.assetPath(videoId), info = await this.media().probe(source, context.signal);
+      if (!info.width || !info.height) throw new NeedsInputError('Affiliate dubbing cần clip có luồng hình');
+      const silent = join(folder, `silent-${fingerprint}.mp4`), output = join(folder, `dub-${fingerprint}.mp4`);
+      const options: MediaOptions = { width: info.width, height: info.height, fps: Number(project.data.fps) || 24, keepAudio: false };
+      try {
+        await this.withMedia(context.signal, () => this.media().merge([{ path: source, duration: step.duration }], silent, options, context));
+        if (typeof speechId === 'string') await this.withMedia(context.signal, () => this.media().dub(silent, [{ path: this.store.assetPath(speechId), start: 0, duration: step.duration }], output, { ...options, fitVoice: true, voiceSpeed: dubbing.speed, ...(project.data.voiceVolume !== undefined ? { voiceVolume: project.data.voiceVolume as number } : {}) }, context));
+        const rendered = await this.store.importAsset(typeof speechId === 'string' ? output : silent, { projectId: project.id, taskId: task.id, duration: step.duration }, context.signal);
+        const latest = this.store.project(project.id);
+        const latestProduction = object(latest.data.production ?? {});
+        if (this.contentFingerprint(latest.data) !== initialHash || (step.videoAssetId ?? object(latestProduction.videos ?? {})[base]) !== videoId || (step.dialogue ? object(latestProduction.speech ?? {})[base] : undefined) !== speechId) throw new NeedsInputError('Clip/lời/giọng đã đổi khi dựng dub; giữ output ở task, không áp vào dự án mới');
+        dubs[base] = { assetId: rendered.id, fingerprint, videoId, speechId };
+        this.store.saveProject({ ...latest, data: { ...latest.data, production: { ...latestProduction, affiliateDubs: { ...object(latestProduction.affiliateDubs ?? {}), [base]: dubs[base] } } } });
+      } catch (error) {
+        if (error instanceof Error && /^Voice fit/.test(error.message)) throw new NeedsInputError(`Affiliate dub chưa vừa thời lượng cảnh; chỉnh lời hoặc thời lượng, không cắt mất từ. TTS đã tạo được giữ lại. ${error.message}`);
+        throw error;
+      } finally { await rm(silent, { force: true }); await rm(output, { force: true }); }
+    }
+    return this.store.project(project.id);
+  }
   private async executeMusic(task: Task, project: Project, context: TaskContext): Promise<TaskResult> {
     const production = structuredClone(object(project.data.production ?? {})); const previous = object(production.music ?? {});
     const description = typeof project.data.musicPrompt === 'string' && project.data.musicPrompt.trim() ? project.data.musicPrompt : `Instrumental film background for ${project.name}. Genre: ${String(project.data.genre || '')}. Mood: ${String(project.data.style || '')}.`;
@@ -811,15 +1025,17 @@ export class StudioService extends EventEmitter {
   }
   private async executePlan(task: Task, context: TaskContext): Promise<TaskResult> {
     const project = object(task.input.projectSnapshot) as unknown as Project; const current = this.store.project(project.id);
+    if (affiliateDubbing(project)) this.client('voice');
     if (task.checkpoint.planApplied === true) {
       if (this.contentFingerprint(current.data) !== task.checkpoint.planFingerprint) throw new NeedsInputError('Kế hoạch đã được chỉnh sau khi task lưu; tạo tác vụ mới để dùng bản chỉnh');
       return { outputIds: [], message: 'Kế hoạch đã lưu, sẵn sàng review' };
     }
     if (this.contentFingerprint(current.data) !== this.contentFingerprint(project.data)) throw new NeedsInputError('Dự án đã thay đổi; giữ kế hoạch hiện tại và chạy phân tích mới');
-    if (project.data.storyMode === true && !object(project.data.production ?? {}).narration) throw new NeedsInputError('Chạy bước lời đọc trước để lập kế hoạch khớp thời gian giọng thật');
+    if (project.data.storyMode === true && !(project.kind === 'affiliate' && project.data.affiliate !== undefined) && !object(project.data.production ?? {}).narration) throw new NeedsInputError('Chạy bước lời đọc trước để lập kế hoạch khớp thời gian giọng thật');
     const throughApi = !!this.store.settings().providers.text.baseUrl;
-    const directed = directorEligible(project) ? await this.directFilm(task, project, context, throughApi) : undefined;
-    let response = directed ? JSON.stringify(directed.plan) : typeof task.checkpoint.planText === 'string' ? task.checkpoint.planText : '';
+    const affiliate = project.kind === 'affiliate' && project.data.affiliate !== undefined ? await this.planAffiliate(task, project, context, throughApi) : undefined;
+    const directed = !affiliate && directorEligible(project) ? await this.directFilm(task, project, context, throughApi) : undefined;
+    let response = affiliate?.response || (directed ? JSON.stringify(directed.plan) : typeof task.checkpoint.planText === 'string' ? task.checkpoint.planText : '');
     if (!response) {
       const prompt = planningPrompt(project);
       const refs = this.planningRefs(project);
@@ -836,6 +1052,7 @@ export class StudioService extends EventEmitter {
       context.checkpoint({ planText: response });
     }
     const data = parsePlan(response, project); context.signal.throwIfAborted();
+    if (affiliate) data.affiliateReview = { ...affiliate.review, attempts: affiliate.attempts, modelAssessed: true, taskId: task.id, at: Date.now() };
     if (directed) data.director = { review: directed.state.review ?? null, lint: directed.state.lint ?? [], logline: directed.state.bible?.logline ?? '', question: directed.state.bible?.question ?? '' };
     for (const character of validateCharacters(data.characters)) if (character.assetId && !this.store.asset(character.assetId).mime.startsWith('image/')) throw new Error('Tham chiếu nhân vật không phải ảnh');
     const latest = this.store.project(project.id);
@@ -845,6 +1062,91 @@ export class StudioService extends EventEmitter {
       this.store.saveProject({ ...latest, data }); context.checkpoint({ planApplied: true, planFingerprint: this.contentFingerprint(data) });
     });
     context.progress(1, 'Đã lưu kế hoạch AI: kiểm tra nhân vật và từng shot trước khi tạo media'); return { outputIds: [] };
+  }
+  private async planAffiliate(task: Task, project: Project, context: TaskContext, throughApi: boolean, reviewOnly = false) {
+    const product = object(project.data.product ?? {});
+    text(product.name ?? product.title, 'Product name', 2000);
+    if (!Array.isArray(project.data.productAssetIds) || !project.data.productAssetIds.length) throw new NeedsInputError('Nhập hoặc chọn ảnh thật của sản phẩm trước khi lập kịch bản Affiliate');
+    const refs = this.planningRefs(project), turns = structuredClone(object(task.checkpoint.affiliateTurns ?? {})) as Record<string, Record<string, unknown>>;
+    const complete = async (turn: string, prompt: string): Promise<string> => {
+      const saved = object(turns[turn] ?? {}); if (typeof saved.text === 'string') return saved.text;
+      context.signal.throwIfAborted(); text(prompt, 'Affiliate planning request', 32768);
+      context.progress(0.1, turn.startsWith('review') ? 'Đang đối chiếu kịch bản với nguồn sản phẩm' : 'Đang viết kịch bản Affiliate theo kiểu đã chọn');
+      let response: string;
+      if (throughApi) {
+        if (saved.submitted === true) throw new NeedsInputError('Lượt Affiliate đã gửi; đối soát trước khi gửi lại');
+        turns[turn] = { submitted: true }; context.checkpoint({ affiliateTurns: structuredClone(turns) });
+        try { response = await this.client('text').reviewImages(prompt, refs.map(id => this.store.assetPath(id)), context.signal); }
+        catch (error) {
+          if (error instanceof Error && /Provider HTTP 429$/.test(error.message)) { turns[turn] = { submitted: false }; context.checkpoint({ affiliateTurns: structuredClone(turns) }); throw new RetryableError('Text provider đang giới hạn tốc độ'); }
+          throw error;
+        }
+      } else {
+        if (!task.accountId) throw new NeedsInputError('Chọn profile đã đăng nhập hoặc text provider để lập kịch bản Affiliate');
+        response = await this.browsers.completeText({ ...task, prompt, input: { ...task.input, refIds: refs }, checkpoint: object(saved.browser ?? {}) }, { ...context, checkpoint: value => {
+          turns[turn] = { ...object(turns[turn] ?? {}), browser: { ...object(object(turns[turn] ?? {}).browser ?? {}), ...value } }; context.checkpoint({ affiliateTurns: structuredClone(turns) });
+        } });
+      }
+      turns[turn] = { ...object(turns[turn] ?? {}), text: response }; context.checkpoint({ affiliateTurns: structuredClone(turns) }); return response;
+    };
+    if (reviewOnly) {
+      const data = project.data, post = object(data.affiliatePost ?? {});
+      const response = JSON.stringify({ name: data.suggestedTitle || project.name, summary: data.summary, characters: data.characters ?? [], scenes: data.scenes ?? [], shots: data.shots, caption: data.affiliateCaption, postCaption: post.caption, hashtags: post.hashtags });
+      const checked = parsePlan(response, project);
+      const review = parseAffiliateReview(await complete('review:edited', affiliateReviewPrompt(project, checked)));
+      context.checkpoint({ affiliateReview: review });
+      if (review.status !== 'pass') throw new NeedsInputError('Kịch bản đã chỉnh chưa được duyệt; giữ nguyên nội dung của anh: ' + JSON.stringify(review));
+      return { response, review, attempts: 1 };
+    }
+    let feedback = '';
+    for (let attempt = 0; attempt < 2; attempt++) {
+      const response = await complete(`plan:${attempt}`, text(`${planningPrompt(project)}${feedback ? `\nRevise the previous failed draft. Fix these observed problems without changing the product facts or requested settings:\n${feedback}` : ''}`, 'Affiliate planning request', 32768));
+      let data: Record<string, unknown>;
+      try { data = parsePlan(response, project); }
+      catch (error) {
+        feedback = error instanceof Error ? error.message : 'Invalid Affiliate plan';
+        context.checkpoint({ affiliatePlanError: feedback });
+        if (attempt === 1) throw new NeedsInputError('Kịch bản Affiliate chưa đúng cấu hình sau một lượt sửa: ' + feedback);
+        continue;
+      }
+      const review = parseAffiliateReview(await complete(`review:${attempt}`, affiliateReviewPrompt(project, data)));
+      context.checkpoint({ affiliateReview: review });
+      if (review.status === 'pass') return { response, review, attempts: attempt + 1 };
+      feedback = JSON.stringify(review);
+      if (review.status === 'unknown') throw new NeedsInputError('Chưa đủ bằng chứng để duyệt kịch bản Affiliate: ' + feedback);
+      if (attempt === 1) throw new NeedsInputError('Kịch bản Affiliate chưa đạt sau một lượt sửa: ' + feedback);
+    }
+    throw new NeedsInputError('Chưa có kịch bản Affiliate được duyệt');
+  }
+  private async reviewAffiliateProject(task: Task, project: Project, context: TaskContext): Promise<Project> {
+    const result = await this.planAffiliate(task, project, context, !!this.store.settings().providers.text.baseUrl, true);
+    const latest = this.store.project(project.id);
+    if (this.contentFingerprint(latest.data) !== this.contentFingerprint(project.data)) throw new NeedsInputError('Kịch bản đã đổi trong lúc review; không áp đánh giá cũ');
+    const saved = this.store.saveProject({ ...latest, data: { ...latest.data, affiliateReview: { ...result.review, modelAssessed: true, attempts: 1, taskId: task.id, at: Date.now() } } });
+    context.checkpoint({ workingHash: this.contentFingerprint(saved.data) }); return saved;
+  }
+  private async alignAffiliateMusic(task: Task, project: Project, context: TaskContext): Promise<Project> {
+    const settings = readAffiliateSettings(project.data.affiliate);
+    if (!['fashion', 'lookbook', 'asmr', 'pov'].includes(settings.contentStyle)) return project;
+    const shots = buildShots(project.data), musicId = typeof project.data.musicId === 'string' ? project.data.musicId : '';
+    const signature = (shots: Shot[]) => createHash('sha256').update(JSON.stringify({ musicId, seconds: settings.seconds, shots: shots.map(({ id, start, duration, dialogue }) => ({ id, start, duration, dialogue })) })).digest('hex');
+    const production = object(project.data.production ?? {}), saved = object(production.affiliateBeatSync ?? {});
+    if (saved.signature === signature(shots)) return project;
+    const before = this.contentFingerprint(project.data); let beats: number[] = [];
+    if (musicId) {
+      const music = this.store.asset(musicId); if (!music.mime.startsWith('audio/')) throw new Error('Nhạc Affiliate phải là audio asset');
+      context.progress(0.05, 'Đang đo nhịp từ file nhạc thực');
+      beats = await this.withMedia(context.signal, () => detectAffiliateBeats(this.store.assetPath(musicId), this.media().executablePath, context.signal));
+    }
+    const aligned = beats.length ? alignAffiliateShots(shots, beats, settings.seconds) : shots;
+    const moved = aligned.filter((shot, index) => Math.abs(Number(shot.start ?? 0) - Number(shots[index].start ?? 0)) > 0.001).length;
+    const latest = this.store.project(project.id);
+    if (this.contentFingerprint(latest.data) !== before) throw new NeedsInputError('Dự án đã đổi trong lúc đo nhịp; giữ kế hoạch mới của anh');
+    const result = this.store.saveProject({ ...latest, data: { ...latest.data, shots: aligned, production: { ...object(latest.data.production ?? {}), affiliateBeatSync: {
+      signature: signature(aligned), status: moved ? 'aligned' : 'unchanged', sourceAssetId: musicId, beats, cuts: aligned.slice(1).map(shot => shot.start), movedCuts: moved,
+      reason: moved ? 'Các điểm cắt không có lời được căn vào onset đo từ nhạc' : musicId ? 'Không có điểm cắt phù hợp để đổi; giữ timeline và lời nói' : 'Chưa có nhạc; giữ timeline đã duyệt', taskId: task.id,
+    } } } });
+    context.checkpoint({ workingHash: this.contentFingerprint(result.data) }); return result;
   }
   // Each director turn keeps its own admission checkpoint (turns[turn]); a resumed task reuses every answered turn
   // and the saved director state, so Muse/the model is never asked twice for work it already returned.
@@ -895,12 +1197,18 @@ export class StudioService extends EventEmitter {
     }
     return { plan: toPlan(state, pace), state };
   }
+  private characterFingerprint(project: Project, character: Character): string {
+    const data = project.data, affiliate = project.kind === 'affiliate' && data.affiliate !== undefined ? readAffiliateSettings(data.affiliate) : undefined;
+    return createHash('sha256').update(JSON.stringify({ character, style: data.style ?? '', styleText: data.styleText ?? '', ...(affiliate ? { product: data.product, productAssetIds: data.productAssetIds, outfits: affiliate.contentStyle === 'lookbook' ? affiliate.outfitAssetIds : [] } : {}) })).digest('hex');
+  }
   private async executeCharacters(task: Task, project: Project, context: TaskContext): Promise<TaskResult> {
     const characters = validateCharacters(project.data.characters);
+    const affiliate = project.kind === 'affiliate' && project.data.affiliate !== undefined ? readAffiliateSettings(project.data.affiliate) : undefined;
+    const refs = affiliate ? affiliate.contentStyle === 'lookbook' && affiliate.outfitAssetIds.length ? [affiliate.outfitAssetIds[0]] : (project.data.productAssetIds as string[] ?? []) : [];
     const states = object(task.checkpoint.characters ?? {}); const outputIds: string[] = []; const initialHash = this.contentFingerprint(project.data);
     const existing = (id: unknown): string => typeof id === 'string' && this.store.assets().some(asset => asset.id === id && asset.mime.startsWith('image/')) ? id : '';
     for (const [index, character] of characters.entries()) {
-      context.signal.throwIfAborted(); const key = `character/${character.id}`; const signature = createHash('sha256').update(JSON.stringify({ character, style: project.data.style ?? '', styleText: project.data.styleText ?? '' })).digest('hex');
+      context.signal.throwIfAborted(); const key = `character/${character.id}`; const signature = this.characterFingerprint(project, character);
       const current = this.store.project(project.id); if (this.contentFingerprint(current.data) !== initialHash) throw new NeedsInputError('Nhân vật đã được chỉnh; chạy task mới để dùng bản chỉnh');
       const production = object(current.data.production ?? {}), images = object(production.characterImages ?? {}), fingerprints = object(production.fingerprints ?? {});
       if (character.assetId && !this.store.asset(character.assetId).mime.startsWith('image/')) throw new Error('Tham chiếu nhân vật không phải image asset');
@@ -914,8 +1222,8 @@ export class StudioService extends EventEmitter {
       // A fresh force task generates; a completed retry follows the latest matching portrait.
       let assetId = character.assetId || (currentPortrait && (task.input.force !== true || !!completed) ? currentPortrait : completed);
       if (!assetId) {
-        const prompt = text(`Create a clear full-body character reference on a neutral background. One consistent face, hair and outfit, no text or logo. Character: ${character.name}. Appearance: ${character.description}. Style: ${[project.data.style, project.data.styleText].filter(value => typeof value === 'string' && value.trim()).join('. ')}.`, 'Character prompt', 32768);
-        const child: Task = { ...task, kind: 'image', prompt, input: { ratio: '3:4', refIds: [] }, checkpoint: saved };
+        const prompt = text(`Create a clear full-body character reference on a neutral background. One consistent face, hair and outfit, ${affiliate ? 'no added text or watermarks; preserve real printed product branding from the supplied references' : 'no text or logo'}. Character: ${character.name}. Appearance: ${character.description}. Style: ${[project.data.style, project.data.styleText].filter(value => typeof value === 'string' && value.trim()).join('. ')}.${affiliate ? ` Wear the actual product from the supplied reference photos without redesigning its shape, material, pattern or color. Product data only: ${JSON.stringify(project.data.product)}.` : ''}`, 'Character prompt', 32768);
+        const child: Task = { ...task, kind: 'image', prompt, input: { ratio: '3:4', refIds: refs }, checkpoint: saved };
         const result = await this.generate(child, { signal: context.signal, progress: (progress, message) => context.progress((index + progress) / Math.max(1, characters.length), message), checkpoint: value => { states[character.id] = { ...object(states[character.id] ?? {}), ...value, signature }; context.checkpoint({ characters: states }); } });
         assetId = result.outputIds[0]; saved = object(states[character.id] ?? {});
       }
@@ -994,7 +1302,84 @@ export class StudioService extends EventEmitter {
     if (!analysis.parts.length) throw new NeedsInputError('Chưa phát hiện câu nói rõ trong audio nguồn');
     return this.offline.transcribeParts(path, analysis.parts, signal);
   }
+  private async reviewAndRepair(task: Task, project: Project, context: TaskContext): Promise<void> {
+    const limit = qualityRetries(project.data.qualityRetries), state = object(task.checkpoint.qualityControl ?? {});
+    const rounds = object(state.rounds ?? {}), repairs = object(state.repairs ?? {});
+    const selected = Array.isArray(task.input.shotIds) ? new Set(task.input.shotIds as string[]) : undefined;
+    const steps = pipelineSteps(project, { speech: false });
+    const videos = steps.filter(step => step.kind === 'video').filter(step => !selected || selected.has(step.id.replace(/\/video$/, '')) || selected.has(decodeURIComponent(step.id.split('/').at(-2)!)));
+    if (!videos.length) throw new NeedsInputError('Chưa có shot để review');
+    let round = typeof state.round === 'number' ? state.round : 0;
+    if (!Number.isInteger(round) || round < 0 || round > 2) throw new Error('Invalid quality repair checkpoint');
+    const save = () => context.checkpoint({ qualityControl: { ...state, round, rounds, repairs } });
+    while (true) {
+      context.signal.throwIfAborted();
+      const repair = object(repairs[round] ?? {});
+      if (round > 0 && repair.done !== true) {
+        const feedback = object(repair.feedback) as Record<string, string>;
+        for (const stage of ['images', 'videos'] as const) {
+          const ids = repair[`${stage}Ids`]; if (!Array.isArray(ids) || !ids.length) continue;
+          let checkpoint = object(repair[stage] ?? {});
+          await this.executePipeline({ ...task, input: { ...task.input, projectSnapshot: this.store.project(project.id), stage, shotIds: ids, force: true }, checkpoint }, { ...context,
+            checkpoint: value => { checkpoint = { ...checkpoint, ...value }; repair[stage] = checkpoint; repairs[round] = repair; save(); },
+          }, feedback);
+        }
+        repair.done = true; repairs[round] = repair; save();
+      }
+      let checkpoint = object(rounds[round] ?? (round === 0 ? task.checkpoint.quality ?? {} : { reviews: structuredClone(object(object(rounds[round - 1] ?? {}).reviews ?? {})) }));
+      await this.executeReview({ ...task, input: { ...task.input, stage: 'check' }, checkpoint }, this.store.project(project.id), { ...context,
+        checkpoint: value => { checkpoint = { ...checkpoint, ...value }; rounds[round] = checkpoint; save(); },
+      });
+      const latest = this.store.project(project.id), production = { ...object(latest.data.production ?? {}) }, reviews = object(latest.data.qualityReviews ?? {});
+      const history = { ...object(production.qualityTakes ?? {}) }, imageIds: string[] = [], videoIds: string[] = [], feedback: Record<string, string> = {};
+      let unknown = false, failures = 0;
+      for (const step of videos) {
+        const base = step.id.replace(/\/video$/, ''), review = object(reviews[base] ?? {});
+        const required = [...(steps.some(value => value.id === `${base}/image`) || step.refIds.length ? ['image'] : []),
+          ...(project.data.videoReview === true && project.data.renderMode !== 'slideshow' ? ['video'] : []), ...((project.data.nativeAudio === true || affiliateDubbing(project)) && project.data.renderMode !== 'slideshow' ? ['speech'] : [])];
+        const statuses = required.map(key => object(review[key] ?? {}).status);
+        unknown ||= !statuses.length || statuses.some(status => !['pass', 'fail'].includes(String(status)));
+        const failed = required.filter(key => object(review[key] ?? {}).status === 'fail'); failures += failed.length;
+        const takes = Array.isArray(history[base]) ? history[base] as Array<Record<string, unknown>> : [];
+        const imageId = object(production.images ?? {})[base], videoId = object(production.videos ?? {})[base];
+        if (!takes.some(take => take.taskId === task.id && take.imageId === imageId && take.videoId === videoId && take.imageFingerprint === object(production.fingerprints ?? {})[`${base}/image`] && take.videoFingerprint === object(production.fingerprints ?? {})[step.id])) takes.push({ taskId: task.id, round, imageId, videoId, score: reviewScore(review), review,
+          imageFingerprint: object(production.fingerprints ?? {})[`${base}/image`], videoFingerprint: object(production.fingerprints ?? {})[step.id], at: Date.now() });
+        history[base] = takes.slice(-12);
+        if (failed.length) {
+          const imageFailed = failed.includes('image');
+          if (imageFailed && steps.some(value => value.id === `${base}/image`)) imageIds.push(base);
+          if (project.data.renderMode !== 'slideshow' && !step.videoAssetId && (!imageFailed || imageIds.includes(base)) && (!affiliateDubbing(project) || failed.some(key => key !== 'speech'))) videoIds.push(base);
+          feedback[base] = failed.flatMap(kind => {
+            const result = object(review[kind]); return Object.values(object(result.checks ?? {})).map(value => object(value).reason).filter(value => typeof value === 'string');
+          }).join('; ').slice(0, 2000) || 'Correct the failed assessment without changing the requested action or dialogue.';
+        }
+      }
+      production.qualityTakes = history; this.store.saveProject({ ...latest, data: { ...latest.data, production } });
+      if (!failures && !unknown) { save(); return; }
+      if (unknown) throw new NeedsInputError('Review còn unknown hoặc thiếu bằng chứng; cần anh xem trước khi tạo lại hoặc dựng');
+      if (round >= limit || !imageIds.length && !videoIds.length) {
+        const chosenReviews = { ...reviews }, fingerprints = { ...object(production.fingerprints ?? {}) };
+        for (const step of videos) {
+          const base = step.id.replace(/\/video$/, ''), takes = (history[base] as Array<Record<string, unknown>>).filter(take => take.taskId === task.id);
+          const best = takes.reduce((best, take) => Number(take.score) > Number(best.score) ? take : best);
+          if (best.imageId && steps.some(value => value.id === `${base}/image`)) { production.images = { ...object(production.images ?? {}), [base]: best.imageId }; fingerprints[`${base}/image`] = best.imageFingerprint; }
+          if (best.videoId && !step.videoAssetId) { production.videos = { ...object(production.videos ?? {}), [base]: best.videoId }; fingerprints[step.id] = best.videoFingerprint; }
+          chosenReviews[base] = best.review;
+          const saved = object(object(rounds[Number(best.round)] ?? {}).reviews ?? {})[base];
+          checkpoint.reviews = { ...object(checkpoint.reviews ?? {}), [base]: saved };
+        }
+        production.fingerprints = fingerprints; rounds[round] = checkpoint; save();
+        this.store.saveProject({ ...latest, data: { ...latest.data, production, qualityReviews: chosenReviews } });
+        throw new NeedsInputError('Kiểm tra chất lượng còn fail; đã giữ bản có đánh giá tốt nhất trong giới hạn tạo lại. Xem review trước khi dựng thủ công');
+      }
+      round++; repairs[round] = { imagesIds: imageIds, videosIds: videoIds, feedback, done: false }; save();
+      context.progress(0.8, `Sửa ${new Set([...imageIds, ...videoIds]).size} cảnh chưa đạt, vòng ${round}/${limit}`);
+    }
+  }
+
   private async executeReview(task: Task, project: Project, context: TaskContext): Promise<TaskResult> {
+    const dubbing = affiliateDubbing(project);
+    if (dubbing) project = await this.prepareAffiliateDubs(task, project, context);
     const initialHash = this.contentFingerprint(project.data);
     const hash = (value: unknown): string => createHash('sha256').update(JSON.stringify(value)).digest('hex');
     const currentTargets = () => {
@@ -1003,15 +1388,21 @@ export class StudioService extends EventEmitter {
       const data = current.data, production = object(data.production ?? {}), fingerprints = object(production.fingerprints ?? {});
       const characters = validateCharacters(data.characters).map(character => {
         const assetId = object(production.characterImages ?? {})[character.id];
-        return !character.assetId && fingerprints[`character/${character.id}`] === hash({ character, style: data.style ?? '', styleText: data.styleText ?? '' }) && typeof assetId === 'string' ? { ...character, assetId } : character;
+        return !character.assetId && fingerprints[`character/${character.id}`] === this.characterFingerprint(current, character) && typeof assetId === 'string' ? { ...character, assetId } : character;
       });
       const steps = pipelineSteps({ ...current, data: { ...data, characters } }, { speech: false });
       const images = new Map(steps.filter(step => step.kind === 'image').map(step => [step.id, step]));
       const explicitFrames = new Map<string, string>();
       const visualPlans = new Map<string, string>();
+      const castReferences = new Map<string, string[]>();
       const collect = (source: Record<string, unknown>, scope: string): void => {
         if (source.shots !== undefined || source.scenes === undefined) {
-          for (const shot of buildShots(source)) { const base = `${scope}/${encodeURIComponent(shot.id)}`; visualPlans.set(base, shot.prompt); if (shot.assetId) explicitFrames.set(base, shot.assetId); }
+          for (const shot of buildShots(source)) {
+            const base = `${scope}/${encodeURIComponent(shot.id)}`; visualPlans.set(base, shot.prompt); if (shot.assetId) explicitFrames.set(base, shot.assetId);
+            const scene = Array.isArray(source.scenes) ? source.scenes.map(object).find(value => value.id === shot.sceneId) : undefined;
+            const ids = [...(shot.characterIds ?? (scene?.characterIds as string[] | undefined) ?? (source.characterIds as string[] | undefined) ?? []), ...(shot.listenerIds ?? []), ...(shot.speaker ? [shot.speaker] : [])];
+            castReferences.set(base, characters.filter(character => ids.includes(character.id) && character.assetId).map(character => character.assetId!));
+          }
         } else for (const [index, raw] of (source.scenes as unknown[]).entries()) { const scene = object(raw); collect(scene, `${scope}/${encodeURIComponent(String(scene.id ?? `scene-${index + 1}`))}`); }
       };
       collect(data, encodeURIComponent(current.id));
@@ -1020,16 +1411,22 @@ export class StudioService extends EventEmitter {
         const cachedFrame = object(production.images ?? {})[base], cachedVideo = object(production.videos ?? {})[base];
         const frameValid = !!imageStep && fingerprints[imageStep.id] === hash({ ...imageStep, refIds: [...new Set(imageStep.refIds)], ratio: data.ratio ?? '16:9' });
         const frame = explicitFrames.get(base) ?? (frameValid && typeof cachedFrame === 'string' ? cachedFrame : undefined);
-        const videoRefs = [...new Set([...step.refIds, ...(imageStep && frame ? [frame] : [])])];
+        const videoRefs = frame ? [frame] : step.refIds;
         const videoValid = fingerprints[step.id] === hash({ ...step, refIds: videoRefs, ratio: data.ratio ?? '16:9' });
         const video = step.videoAssetId ?? (videoValid && typeof cachedVideo === 'string' ? cachedVideo : undefined);
         const stale = (!explicitFrames.has(base) && !!imageStep && typeof cachedFrame === 'string' && !frameValid) || (!step.videoAssetId && typeof cachedVideo === 'string' && !videoValid);
         if (frame && !this.store.asset(frame).mime.startsWith('image/')) throw new Error('Frame review requires an image');
         if (video && !this.store.asset(video).mime.startsWith('video/')) throw new Error('Speech review requires a video');
-        const refs = frame ? [...new Set([frame, ...step.refIds.filter(id => this.store.asset(id).mime.startsWith('image/'))])] : [];
+        const affiliate = current.kind === 'affiliate' && data.affiliate !== undefined ? readAffiliateSettings(data.affiliate) : undefined;
+        const productRefs = affiliate ? (Array.isArray(data.productAssetIds) ? data.productAssetIds as string[] : []) : [];
+        const refs = frame ? [...new Set([frame, ...(imageStep?.refIds ?? castReferences.get(base) ?? []), ...(!imageStep ? productRefs : [])].filter(id => this.store.asset(id).mime.startsWith('image/')))] : [];
         const visualPlan = imageStep?.prompt || visualPlans.get(base) || step.prompt;
-        const prompt = frame ? text(`Review these actual images against the supplied visual plan. Image 1 is the generated scene; subsequent images are character references. Compare scene composition, character face identity and outfit. Do not invent successful checks. If references are insufficient return unknown; if no people are involved mark face/outfit not_applicable. Return ONLY JSON: {"scene":{"status":"pass|fail|unknown","reason":"..."},"face":{"status":"pass|fail|unknown|not_applicable","reason":"..."},"outfit":{"status":"pass|fail|unknown|not_applicable","reason":"..."}}. Visual plan: ${visualPlan}. Cast: ${JSON.stringify(characters.filter(character => character.assetId && refs.includes(character.assetId)).map(({ name, description }) => ({ name, description })))}`, 'Review prompt', 32768) : '';
-        return { base, step, frame, video, stale, refs, prompt, imageHash: hash({ frame, prompt, refs, provider: this.store.settings().providers.text }), speechHash: hash({ video, dialogue: step.dialogue, speaker: step.speaker, characters, language: data.language, provider: this.store.settings().providers.asr }) };
+        const productCheck = affiliate ? ` Product identity is REQUIRED: compare the generated product against supplied product images for shape, material, pattern, selected color, packaging and supported use. No invented logo, garment, feature or SKU. Return unknown if product evidence is insufficient. Image roles after the generated scene: ${JSON.stringify(refs.slice(1).map((id, index) => ({ image: index + 2, role: id === affiliate.backgroundAssetId ? 'background' : productRefs.includes(id) || affiliate.outfitAssetIds.includes(id) ? 'product' : 'character' })))}. Add "product":{"status":"pass|fail|unknown","reason":"visible evidence or missing source"} to the JSON. Expected host mode: ${affiliate.hostMode}; content style: ${affiliate.contentStyle}. Reject an unexpected talking/visible host or face for hands-only/voiceover shots.` : '';
+        const prompt = frame ? text(`Review these actual images against the supplied visual plan. Image 1 is the generated scene; subsequent images are ${affiliate ? 'labelled product, character or background references' : 'character references'}. Compare scene composition, character face identity and outfit. Do not invent successful checks. If references are insufficient return unknown; if no people are involved mark face/outfit not_applicable. Return ONLY JSON: {"scene":{"status":"pass|fail|unknown","reason":"..."},"face":{"status":"pass|fail|unknown|not_applicable","reason":"..."},"outfit":{"status":"pass|fail|unknown|not_applicable","reason":"..."}}.${productCheck} Visual plan: ${visualPlan}. Cast: ${JSON.stringify(characters.filter(character => character.assetId && refs.includes(character.assetId)).map(({ name, description }) => ({ name, description })))}`, 'Review prompt', 32768) : '';
+        const dub = object(object(production.affiliateDubs ?? {})[base] ?? {}), speechVideo = dubbing ? dub.assetId : video;
+        return { base, step, frame, video, speechVideo: typeof speechVideo === 'string' ? speechVideo : undefined, stale: stale || !!dubbing && (dub.videoId !== video || dub.speechId !== (step.dialogue ? object(production.speech ?? {})[base] : undefined)), refs, prompt, visualPlan, imageHash: hash({ frame, prompt, refs, provider: this.store.settings().providers.text }),
+          affiliate: !!affiliate, audioRequired: affiliate?.contentStyle === 'asmr', videoHash: hash({ version: affiliate ? 2 : 1, video, frame, visualPlan, prompt: step.prompt, duration: step.duration, nativeAudio: data.nativeAudio, pace: data.pace, fps: data.fps, provider: this.store.settings().providers.text }),
+          speechHash: hash({ video: speechVideo, dialogue: step.dialogue, speaker: step.speaker, characters, language: data.language, provider: this.store.settings().providers.asr }) };
       });
     };
     const targets = currentTargets(), targetHash = hash(targets);
@@ -1052,11 +1449,13 @@ export class StudioService extends EventEmitter {
       const saved = object(states[base] ?? {}); saved[kind] = { ...stateFor(base, kind, fingerprint), ...value, fingerprint }; states[base] = saved; context.checkpoint({ reviews: states });
     };
     const analyses = new Map<string, Awaited<ReturnType<typeof analyzeSpeech>>>();
+    const audioPresent = new Map<string, boolean>();
     const points: Parameters<typeof compareSpeakers>[0] = [];
-    if (project.data.nativeAudio === true) for (const [index, target] of targets.entries()) {
-      if (!target.video || target.stale) continue;
-      const path = this.store.assetPath(target.video), media = this.media();
+    if (project.data.nativeAudio === true || dubbing) for (const [index, target] of targets.entries()) {
+      if (!target.speechVideo || target.stale) continue;
+      const path = this.store.assetPath(target.speechVideo), media = this.media();
       const info = await media.probe(path, context.signal);
+      audioPresent.set(target.base, info.hasAudio);
       const acoustic = info.hasAudio ? await this.withMedia(context.signal, () => analyzeSpeech(path, media.executablePath, context.signal)) : { duration: info.duration, voiced: 0, parts: [], f0: null };
       assertCurrent(); analyses.set(target.base, acoustic);
       const span = acoustic.parts.filter(part => part.end - part.start >= 0.8).sort((a, b) => (b.end - b.start) - (a.end - a.start))[0];
@@ -1082,19 +1481,22 @@ export class StudioService extends EventEmitter {
       let status = target.step.dialogue ? voiced < 0.6 || transcript?.ok === false ? 'fail' : speech.semantic === 'assessed' ? 'pass' : 'unknown' : typeof speech.heard === 'string' && speech.heard.trim() ? 'fail' : voiced > 0 && speech.semantic !== 'assessed' ? 'unknown' : 'pass';
       if (identity.status === 'consistency_fail') status = 'fail';
       else if (target.step.speaker && identity.status === 'unknown' && status !== 'fail') status = 'unknown';
+      if (target.audioRequired && !audioPresent.get(target.base)) return { ...speech, identity, status: 'fail', reason: 'Clip ASMR không có luồng âm thanh thao tác' };
+      const measured = analyses.get(target.base);
+      if (!dubbing && target.affiliate && target.step.dialogue && measured?.parts.length && clipWindow(project.data, measured.duration, target.step.duration, measured, true).speechOverflow) return { ...speech, identity, status: 'fail', reason: 'Lời nói vượt thời lượng shot; nói đúng câu ngắn gọn hơn trong khoảng dựng, không bỏ hoặc đổi từ' };
       return { ...speech, identity, status };
     };
     // Recompute consistency for the whole current cohort, without buying ASR/vision for unselected shots.
     for (const target of targets) if (!target.stale && target.video && target.step.speaker && target.step.dialogue && analyses.has(target.base)) {
       const current = this.store.project(project.id), prior = object(object(object(current.data.qualityReviews ?? {})[target.base] ?? {}).speech ?? {});
       const speech = prior.fingerprint === target.speechHash ? prior : { status: 'unknown', semantic: 'unknown', heard: '', expected: target.step.dialogue };
-      patches.set(target.base, { speech: applyIdentity({ ...speech, assetId: target.video, acoustic: analyses.get(target.base), fingerprint: target.speechHash, at: Date.now() }, target) });
+      patches.set(target.base, { speech: applyIdentity({ ...speech, assetId: target.speechVideo, acoustic: analyses.get(target.base), fingerprint: target.speechHash, at: Date.now() }, target) });
     }
     const save = (): void => {
       const latest = assertCurrent(), reviews = { ...object(latest.data.qualityReviews ?? {}) };
       for (const [base, patch] of patches) reviews[base] = { ...object(reviews[base] ?? {}), ...patch };
       const production = { ...object(latest.data.production ?? {}) };
-      if (project.data.nativeAudio === true) production.speakerCohort = { fingerprint: targetHash, closePairs: cohort.closePairs, at: Date.now() };
+      if (project.data.nativeAudio === true || dubbing) production.speakerCohort = { fingerprint: targetHash, closePairs: cohort.closePairs, at: Date.now() };
       this.store.saveProject({ ...latest, data: { ...latest.data, production, qualityReviews: reviews } });
     };
     const outputIds: string[] = []; let failed = 0;
@@ -1102,7 +1504,8 @@ export class StudioService extends EventEmitter {
       assertCurrent(); const { base, step, frame, video } = target, patch = patches.get(base) ?? {};
       // A source clip can replace a generated shot; old categories are not current-plan verdicts.
       if (!frame) patch.image = undefined;
-      if (!video || project.data.nativeAudio !== true) patch.speech = undefined;
+      if (!video || project.data.videoReview !== true || project.data.renderMode === 'slideshow') patch.video = undefined;
+      if (!video || project.data.nativeAudio !== true && !dubbing) patch.speech = undefined;
       if (frame) {
         const state = stateFor(base, 'image', target.imageHash); let response = typeof state.response === 'string' ? state.response : '';
         if (!response) {
@@ -1120,11 +1523,46 @@ export class StudioService extends EventEmitter {
         assertCurrent(); let parsed: Record<string, unknown>;
         try { parsed = object(JSON.parse(response.trim().replace(/^```(?:json)?\s*\n?([\s\S]*?)\n?```$/i, '$1'))); } catch { throw new Error('Image review must return valid JSON'); }
         const checks: Record<string, { status: string; reason: string }> = {};
-        for (const kind of ['scene', 'face', 'outfit']) { const value = object(parsed[kind]); if (!['pass', 'fail', 'unknown', 'not_applicable'].includes(String(value.status))) throw new Error('Invalid image review status'); checks[kind] = { status: String(value.status), reason: text(value.reason, 'Review reason', 4000) }; }
+        for (const kind of ['scene', 'face', 'outfit', ...(target.affiliate ? ['product'] : [])]) { const value = object(parsed[kind]); if (!(kind === 'product' ? ['pass', 'fail', 'unknown'] : ['pass', 'fail', 'unknown', 'not_applicable']).includes(String(value.status))) throw new Error('Invalid image review status'); checks[kind] = { status: String(value.status), reason: text(value.reason, 'Review reason', 4000) }; }
         const status = Object.values(checks).some(value => value.status === 'fail') ? 'fail' : Object.values(checks).some(value => value.status === 'unknown') || checks.scene.status === 'not_applicable' ? 'unknown' : 'pass';
         patch.image = { status, checks, modelAssessed: true, assetId: frame, fingerprint: target.imageHash, at: Date.now() }; if (status === 'fail') failed++; outputIds.push(frame);
       }
-      if (video && project.data.nativeAudio === true) {
+      if (video && project.data.videoReview === true && project.data.renderMode !== 'slideshow') {
+        const state = stateFor(base, 'video', target.videoHash); let response = typeof state.response === 'string' ? state.response : '';
+        let frameIds = Array.isArray(state.frameIds) ? state.frameIds as string[] : [];
+        let sampleTimes = Array.isArray(state.sampleTimes) ? state.sampleTimes as number[] : [];
+        if (!response) {
+          if (this.store.settings().providers.text.baseUrl && state.remoteSubmitted === true) throw new NeedsInputError('Review video đã gửi; đối soát trước khi gửi lại');
+          if (frameIds.length !== VIDEO_REVIEW_FRAMES || frameIds.some(id => !this.store.assets().some(asset => asset.id === id))) {
+            const path = this.store.assetPath(video), media = this.media(), info = await media.probe(path, context.signal);
+            const window = clipWindow(project.data, info.duration, step.duration, !dubbing && project.data.nativeAudio === true && step.dialogue ? analyses.get(base) : undefined, target.affiliate);
+            sampleTimes = Array.from({ length: VIDEO_REVIEW_FRAMES }, (_, index) => window.start + window.duration * (0.03 + index * 0.94 / (VIDEO_REVIEW_FRAMES - 1)));
+            const folder = join(this.store.root, 'work', task.id); await mkdir(folder, { recursive: true });
+            const paths = await this.withMedia(context.signal, () => media.sampleFrames(path, folder, sampleTimes, context.signal));
+            try {
+              frameIds = [];
+              for (const path of paths) { const asset = await this.store.importAsset(path, { projectId: project.id, taskId: task.id }, context.signal); frameIds.push(asset.id); }
+            } finally { if (paths.length) await rm(dirname(paths[0]), { recursive: true, force: true }); }
+            checkpoint(base, 'video', target.videoHash, { frameIds, sampleTimes });
+          }
+          assertCurrent(); const refs = [...(frame ? [frame] : []), ...frameIds];
+          const prompt = videoReviewPrompt(target.visualPlan, step.prompt, sampleTimes, !!frame, target.affiliate);
+          if (this.store.settings().providers.text.baseUrl) {
+            checkpoint(base, 'video', target.videoHash, { remoteSubmitted: true });
+            try { response = await this.client('text').reviewImages(prompt, refs.map(id => this.store.assetPath(id)), context.signal); }
+            catch (error) { if (error instanceof Error && /Provider HTTP 429$/.test(error.message)) { checkpoint(base, 'video', target.videoHash, { remoteSubmitted: false }); throw new RetryableError('Vision provider đang giới hạn tốc độ'); } throw error; }
+          } else {
+            if (!task.accountId) { checkpoint(base, 'video', target.videoHash, { remoteSubmitted: false }); throw new NeedsInputError('Chọn tài khoản Muse hoặc vision provider để review chuyển động video'); }
+            response = await this.browsers.completeText({ ...task, prompt, input: { refIds: refs }, checkpoint: stateFor(base, 'video', target.videoHash) }, { ...context, checkpoint: value => checkpoint(base, 'video', target.videoHash, value) });
+          }
+          checkpoint(base, 'video', target.videoHash, { response });
+        }
+        assertCurrent(); const assessment = parseVideoReview(response);
+        if (target.affiliate && assessment.checks.identity.status === 'not_applicable') { assessment.checks.identity.status = 'unknown'; assessment.checks.identity.reason = 'Affiliate cần đối chiếu sản phẩm với ảnh cảnh; chưa có đánh giá danh tính sản phẩm'; assessment.status = 'unknown'; }
+        patch.video = { ...assessment, assetId: video, frameIds, sampleTimes, fingerprint: target.videoHash, modelAssessed: true, coverage: 'four_sampled_frames', at: Date.now() };
+        if (assessment.status === 'fail') failed++; outputIds.push(video);
+      }
+      if (video && (project.data.nativeAudio === true || dubbing)) {
         const acoustic = analyses.get(base)!; let heard = '', semantic = 'unknown';
         if (step.dialogue || acoustic.voiced > 0) {
           if (this.store.settings().providers.asr.baseUrl) {
@@ -1133,17 +1571,17 @@ export class StudioService extends EventEmitter {
             else {
               if (state.remoteSubmitted === true) throw new NeedsInputError('Yêu cầu ASR đã gửi; đối soát trước khi gửi lại');
               checkpoint(base, 'speech', target.speechHash, { remoteSubmitted: true });
-              heard = (await this.client('asr').transcribeTimed(this.store.assetPath(video), context.signal)).text;
+              heard = (await this.client('asr').transcribeTimed(this.store.assetPath(target.speechVideo!), context.signal)).text;
               checkpoint(base, 'speech', target.speechHash, { response: heard, resolved: true });
             }
             semantic = 'assessed';
           } else if (this.offline.ready() && (project.data.language === undefined || project.data.language === 'vi')) {
-            try { heard = await this.offline.transcribe(this.store.assetPath(video), context.signal); semantic = 'assessed'; }
+            try { heard = await this.offline.transcribe(this.store.assetPath(target.speechVideo!), context.signal); semantic = 'assessed'; }
             catch (error) { if (error instanceof Error && /recognized no speech.*empty/i.test(error.message)) semantic = 'assessed'; else throw error; }
           }
         }
         assertCurrent(); const transcript = step.dialogue && semantic === 'assessed' ? compareTranscripts(step.dialogue, heard) : undefined;
-        const speech = applyIdentity({ assetId: video, heard, expected: step.dialogue || '', transcript, semantic, acoustic, fingerprint: target.speechHash, at: Date.now() }, target);
+        const speech = applyIdentity({ assetId: target.speechVideo, heard, expected: step.dialogue || '', transcript, semantic, acoustic, fingerprint: target.speechHash, at: Date.now() }, target);
         patch.speech = speech; if (speech.status === 'fail') failed++; outputIds.push(video);
       }
       patches.set(base, patch); save(); context.progress(0.4 + (index + 1) / Math.max(1, chosen.length) * 0.6, `Đã kiểm tra ${index + 1}/${chosen.length} shot; ${failed} kết quả chưa đạt`);
@@ -1207,7 +1645,7 @@ export class StudioService extends EventEmitter {
     }
     if (stage === 'speech') return { outputIds, message: 'Đã lưu lời đọc; sẵn sàng dựng từ output' };
     const folder = join(this.store.root, 'work', task.id); await mkdir(folder, { recursive: true }); const output = join(folder, 'dub.mp4');
-    try { await this.withMedia(context.signal, () => this.media().dub(source, audio, output, { width: sourceInfo.width, height: sourceInfo.height, keepAudio: data.keepAudio === true, volume: 1, fitVoice: true }, context)); }
+    try { await this.withMedia(context.signal, () => this.media().dub(source, audio, output, { width: sourceInfo.width, height: sourceInfo.height, keepAudio: data.keepAudio === true, volume: 1, fitVoice: true, ...(data.voiceVolume !== undefined ? { voiceVolume: data.voiceVolume as number } : {}) }, context)); }
     catch (error) { if (error instanceof Error && /^Voice fit/.test(error.message)) throw new NeedsInputError(`Lời đọc chưa vừa mốc SRT; tăng thời gian cue hoặc chỉnh lời. Audio đã tạo được giữ để dùng lại. ${error.message}`); throw error; }
     const info = await this.media().probe(output, context.signal); const asset = await this.store.importAsset(output, { projectId: task.projectId, taskId: task.id, duration: info.duration }, context.signal);
     production.render = { assetId: asset.id, inputHash: initialHash }; remember();

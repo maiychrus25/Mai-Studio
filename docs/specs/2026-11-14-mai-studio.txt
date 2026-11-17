@@ -187,3 +187,25 @@ Mã nguồn riêng tại /Users/maiychrus/Documents/mai-studio đã được t�
 Đã nối AI/director nhiều lượt, narration theo audio đo thật, ASR/WeSpeaker CPU native, stage cache/force/quality gate, product vision và series recap. Dub tách speech/check/render, render không gọi TTS; fitVoice giữ toàn câu trong giới hạn tempo. FFmpeg đặt frame clock và chia block sidechain rõ ràng để chạy trên binary Linux đã pin. Hành vi và giới hạn cụ thể, kiểm thử theo OS và artifact nằm trong SYSTEM_DOCUMENTATION.md và checkpoint mới nhất của docs/reports/acceptance.md.
 
 Prompt recipe gốc được tải từ xa và hai module native chưa có đủ runtime evidence; prompt MaiStudio là triển khai độc lập. Chưa chứng nhận chất lượng bằng bản gốc, tự sửa media, teaser/credit/continuity, căn khẩu hình hoặc mọi dịch vụ live. Anh xác nhận có VPS Windows nhưng chưa cung cấp kết nối; đối chiếu runtime vẫn là phần nghiệm thu còn mở. Không thay đổi phần thân thiết kế lịch sử hoặc coi việc có test fixture là full parity.
+
+PHỤ LỤC DEV — 16/11/2026: LUỒNG CHẤT LƯỢNG
+Trạng thái: đã triển khai dev và kiểm luồng Mai live ba cảnh có một vòng sửa; so sánh mới với Muse 1.13.18 còn vướng trang lỗi provider. Chưa chứng nhận full parity hay chất lượng nghệ thuật ngang Muse.
+Anh yêu cầu cải thiện sau mẫu SRT: một scene anchor cho I2V; visual beat/action/acting/camera/environment; review bốn frame đúng khoảng dùng trong edit; sửa fail có giới hạn tối đa hai lần, giữ lịch sử và bản có đánh giá tốt hơn; unknown chờ người review. Không sửa thân đặc tả lịch sử, xóa đầu ra cũ hay thay opt-out đã lưu. Hợp đồng, giới hạn và bằng chứng mới nằm trong SYSTEM_DOCUMENTATION.md và docs/reports/acceptance.md.
+
+PHỤ LỤC ƯU TIÊN — 16/11/2026: AFFILIATE / SHOPEE
+Trạng thái: đã triển khai dev và kiểm một lượt lấy mới từ trang Shopee qua Chrome của anh, nhập đủ 7/7 ảnh gallery và 8 tổ hợp phân loại; API live và các ngành hàng/layout khác chưa nghiệm thu. Affiliate là ưu tiên đầu, Film kế tiếp, SRT Video cuối cùng theo chỉ đạo mới của anh.
+
+Ghi chú sau triển khai dev: dùng bookmarklet product-only + queue ảnh có checkpoint, giữ đường API chính thức và CSV/JSON cũ. Source thiếu field được đánh dấu; không tự điều khiển Chrome cá nhân hay vượt login/anti-bot. Chưa chứng nhận đủ kiểu Affiliate hoặc full parity.
+Nối API Shopee khi có quyền và nhánh Chrome thường + dấu trang đọc product cache/DOM như hành vi quan sát của Muse; chuẩn hóa facts/phân loại và tải ảnh thật vào Library có owner, nguồn và thời điểm. Không đọc/chuyển phiên đăng nhập; thiếu dữ liệu hoặc lỗi ảnh phải hiển thị, không tự bịa. Nội dung/ảnh cũ giữ nguyên khi hủy/lỗi hoặc dự án bị chỉnh trong lúc tải. Các loại/kịch bản Affiliate vẫn cần triển khai và kiểm chứng riêng, không coi việc nhập nguồn thành công là hoàn tất Affiliate.
+
+
+PHỤ LỤC DEV — 16/11/2026: AFFILIATE SAU INTAKE
+Trạng thái: đã triển khai dev 11 kiểu/3 host và kiểm một lượt Fashion/silent 15 giây với sản phẩm Shopee thật. Chưa nghiệm thu mọi tổ hợp live hoặc chất lượng ngang Muse.
+Ghi chú sau triển khai: cấu hình Affiliate bật rõ để không đổi dự án cũ; review nguồn/kịch bản độc lập trước tạo media, product-aware QC và bounded scene repair, caption/beat/CTA/nhãn/endcard trong ngân sách, MP4 và TXT đăng bài. Giữ engine/provider/Store/Queue có sẵn, không thêm dependency; hai vòng UI mac và hai vòng artifact Linux ARM64 kiểm desktop/mobile Việt/Anh sáng/tối với HTTP kiểm soát, tách khỏi lượt provider thật. Sửa lỗi caption/card phát hiện khi xem output và hai lỗi biên được review độc lập; bằng chứng/giới hạn tại docs/reports/acceptance.md và SYSTEM_DOCUMENTATION.md. Không viết lại phần thân lịch sử, không phát hành/triển khai production; Affiliate vẫn ưu tiên trước Film và SRT.
+
+
+PHỤ LỤC DEV — 17/11/2026: UI VÀ ÂM THANH AFFILIATE
+Trạng thái: đã triển khai và kiểm dev UI macOS ARM64/Linux ARM64, optional dub và đọc audio-menu; spoken live và chất lượng ngang Muse còn mở.
+Ghi chú sau triển khai: giữ thương hiệu Mai/tokens sáng tối, điều hướng ngang, project rail, bốn tab chính và scene cards; các thao tác cũ giữ trong nhóm nâng cao. Có music/voice volume, ducking, bảy visual preset + custom, optional Affiliate dub qua TTS hiện có, giọng/tốc độ/cache/QC đúng audio đã ghép. MP3 thật đã tạo và tải từ menu của provider, không tạo lại. Mẫu spoken mới bị provider từ chối video theo vùng của tài khoản; không lấy ảnh/nhạc thành công làm bằng chứng video có lời thành công. Chi tiết, guard, giới hạn và bằng chứng ở SYSTEM_DOCUMENTATION.md và acceptance.md.
+
+Ghi chú nghiệm thu tài khoản01:14–01:32 ngày17/11: năm account native7–11 còn token/login tốt nhưng provider đều trả refusal video theo quốc gia/khu vực; bốn yêu cầu mới đơn lẻ và một refusal sở hữu trước đó, không có clip mới. Đã thả mọi hold, giữ enabled/proxy/concurrency và account1–5 tắt. Không suy từ quota sang quyền video hoặc chất lượng ngang Muse.

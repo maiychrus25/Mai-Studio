@@ -12,7 +12,7 @@ export const MAX_ASSET_BYTES = 2 * 1024 * 1024 * 1024;
 const TABLES = ['projects', 'tasks', 'accounts', 'proxies', 'assets', 'settings'] as const;
 type Table = typeof TABLES[number];
 const KINDS: ProjectKind[] = ['studio', 'srt', 'film', 'series', 'affiliate', 'dub'];
-const TASK_KINDS: TaskKind[] = ['image', 'video', 'image-to-video', 'music', 'merge', 'slideshow', 'dub', 'speech', 'pipeline', 'plan', 'extract-audio', 'model-prepare'];
+const TASK_KINDS: TaskKind[] = ['image', 'video', 'image-to-video', 'music', 'merge', 'slideshow', 'dub', 'speech', 'pipeline', 'plan', 'extract-audio', 'model-prepare', 'product-import'];
 export function object(value: unknown): Record<string, unknown> {
   if (!value || typeof value !== 'object' || Array.isArray(value)) throw new Error('Dữ liệu phải là object');
   return value as Record<string, unknown>;
@@ -36,13 +36,14 @@ function encoded(value: unknown): string {
   if (Buffer.byteLength(json) > 1024 * 1024) throw new Error('Dữ liệu vượt giới hạn 1 MiB');
   return json;
 }
+const MUSE_COMPOSER = '[data-hatch-composer-root] :is(textarea, [contenteditable="true"])';
 function defaultSettings(root: string): Settings {
   return {
     theme: 'system', language: 'vi', generationConcurrency: 2, mediaConcurrency: 1, outputDir: join(root, 'output'),
     browserPath: '', ffmpegPath: '', ffprobePath: '', browserVisible: true,
     providers: Object.fromEntries(['image', 'video', 'text', 'voice', 'asr', 'market', 'shopee', 'license'].map(key => [key, { baseUrl: '', model: '', hasKey: false }])),
     museSelectors: {
-      composer: '[data-hatch-composer-root] [contenteditable="true"]', submit: '[data-hatch-composer-action-slot] button',
+      composer: MUSE_COMPOSER, submit: '[data-hatch-composer-action-slot] button',
       response: '[data-message-item][data-message-role="assistant"]', fileInput: '[data-hatch-composer-root] input[type="file"]',
       stop: '[data-testid="hatch-composer-stop-button"]',
     },
@@ -142,7 +143,11 @@ export class Store {
     this.put('proxies', value.id, value); return value;
   }
   deleteProxy(id: string): void { this.proxy(id); if (this.accounts().some(account => account.proxyId === id)) throw new Error('Proxy còn đang gắn với tài khoản'); this.remove('proxies', id); }
-  settings(): Settings { return this.get<Settings>('settings', 'app')!; }
+  settings(): Settings {
+    const settings = this.get<Settings>('settings', 'app')!;
+    if (settings.museSelectors.composer === '[data-hatch-composer-root] [contenteditable="true"]') settings.museSelectors.composer = MUSE_COMPOSER;
+    return settings;
+  }
   queuePaused(): boolean { return this.get<{ paused: boolean }>('settings', 'queue')?.paused === true; }
   setQueuePaused(paused: boolean): void { this.put('settings', 'queue', { paused }); }
   setSettings(patch: Partial<Settings>): Settings {

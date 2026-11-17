@@ -1,5 +1,6 @@
 import type { Character, Project, Shot } from '../shared/studio';
 import { parseSrt } from './media';
+import { readAffiliateSettings, affiliateMode } from '../shared/affiliate';
 
 const MAX_ITEMS = 1000;
 const MAX_TEXT = 32768;
@@ -48,6 +49,10 @@ export function buildShots(input: { script?: string; subtitle?: string; shots?: 
         if (item[key] !== undefined) shot[key] = text(item[key], `shot ${key}`);
       }
       for (const key of ['sceneId', 'shotType', 'videoPrompt'] as const) if (item[key] !== undefined) shot[key] = text(item[key], `shot ${key}`);
+      for (const key of ['caption', 'beat'] as const) if (item[key] !== undefined && item[key] !== '') shot[key] = text(item[key], `shot ${key}`, key === 'caption' ? 512 : 256);
+      if (item.outfitIndex !== undefined) { if (!Number.isInteger(item.outfitIndex) || Number(item.outfitIndex) < 0 || Number(item.outfitIndex) > 3) throw new Error('Invalid shot outfit index'); shot.outfitIndex = Number(item.outfitIndex); }
+      if (item.transition !== undefined) { if (!['cut', 'flash', 'whip'].includes(String(item.transition))) throw new Error('Invalid shot transition'); shot.transition = item.transition as Shot['transition']; }
+      for (const key of ['action', 'acting', 'camera', 'environment'] as const) if (item[key] !== undefined) shot[key] = text(item[key], `shot ${key}`, 4000);
       for (const key of ['characterIds', 'listenerIds'] as const) if (item[key] !== undefined) shot[key] = list(item[key], key, true).map(value => text(value, key, 256));
       return shot;
     }), 'shot');
@@ -94,22 +99,40 @@ export function validateEpisodes(value: unknown): Array<{ id: string; name: stri
   }), 'episode');
 }
 
+export function affiliateDubbing(project: Pick<Project, 'kind' | 'data'>): { voiceId: string; speed: number } | undefined {
+  if (project.kind !== 'affiliate' || project.data.affiliate === undefined) return;
+  const data = project.data;
+  if (data.affiliateDub !== undefined && typeof data.affiliateDub !== 'boolean') throw new Error('Invalid Affiliate dub: expected boolean');
+  const speed = data.affiliateVoiceSpeed ?? 1;
+  if (typeof speed !== 'number' || !Number.isFinite(speed) || speed < 0.8 || speed > 1.25) throw new Error('Invalid Affiliate voice speed: expected 0.8–1.25');
+  if (data.voiceVolume !== undefined && (typeof data.voiceVolume !== 'number' || !Number.isFinite(data.voiceVolume) || data.voiceVolume < 0 || data.voiceVolume > 1)) throw new Error('Invalid Affiliate voiceVolume: expected 0–1');
+  if (data.affiliateDub !== true) return;
+  if (!affiliateMode(readAffiliateSettings(data.affiliate)).spoken) throw new Error('Affiliate dubbing requires spoken mode; silent and ASMR cannot be dubbed');
+  if (data.renderMode === 'slideshow') throw new Error('Affiliate dubbing requires video clips');
+  return { voiceId: text(data.voiceId, 'Affiliate voice ID', 256), speed };
+}
+
 export function pipelineSteps(project: Project, options: { speech?: boolean } = {}): Array<{ id: string; kind: 'image' | 'video' | 'speech'; prompt: string; duration: number; start?: number; refIds: string[]; voiceId?: string; dialogue?: string; speaker?: string; shotType?: string; videoAssetId?: string }> {
   const data = record(project.data, 'project data');
   const characters = new Map(validateCharacters(data.characters).map(character => [character.id, character]));
   const productRefs = data.productAssetIds === undefined ? [] : list(data.productAssetIds, 'product references', true).map(id => text(id, 'product reference ID', 256));
+  const affiliate = project.kind === 'affiliate' && data.affiliate !== undefined ? readAffiliateSettings(data.affiliate) : undefined;
+  const mode = affiliate ? affiliateMode(affiliate) : undefined;
+  const dubbing = affiliateDubbing(project);
   const style = [data.style, data.styleText].filter(value => typeof value === 'string' && value.trim()).join('. ');
   const steps: ReturnType<typeof pipelineSteps> = [];
-  function addShots(source: Record<string, unknown>, scope: string, cast: unknown = undefined): void {
+  function addShots(source: Record<string, unknown>, scope: string, sceneCast: unknown = undefined): void {
     const shots = buildShots(source);
     for (const [index, shot] of shots.entries()) {
       const raw = Array.isArray(source.shots) ? record(source.shots[index], 'shot') : {};
-      const scene = Array.isArray(source.scenes) && shot.sceneId ? source.scenes.map(value => record(value, 'scene')).find(scene => scene.id === shot.sceneId) : undefined;
-      const ids = raw.characterIds ?? scene?.characterIds ?? cast;
+      const scene = Array.isArray(source.scenes) && shot.sceneId ? source.scenes.map(value => record(value, 'scene')).find(scene => scene.id === shot.sceneId) : source;
+      const ids = raw.characterIds ?? scene?.characterIds ?? sceneCast;
       const selected = ids === undefined ? [] : list(ids, 'characterIds', true).map(id => text(id, 'character id', 256));
       if (shot.speaker) selected.push(shot.speaker);
       if (shot.listenerIds) selected.push(...shot.listenerIds);
-      const refs = [...(shot.assetId ? [shot.assetId] : []), ...productRefs];
+      const chosenProductRefs = affiliate?.contentStyle === 'lookbook' && shot.outfitIndex !== undefined && affiliate.outfitAssetIds.length ? [affiliate.outfitAssetIds[shot.outfitIndex]] : productRefs;
+      if (chosenProductRefs.some(id => !id)) throw new Error('Shot refers to an unavailable outfit image');
+      const refs = [...(shot.assetId ? [shot.assetId] : []), ...chosenProductRefs, ...(affiliate?.backgroundAssetId ? [affiliate.backgroundAssetId] : [])];
       for (const id of new Set(selected)) {
         const character = characters.get(id);
         if (!character) throw new Error(`Unknown character/speaker: ${id}`);
@@ -119,20 +142,25 @@ export function pipelineSteps(project: Project, options: { speech?: boolean } = 
       const refIds = [...new Set(refs)];
       if (refIds.length > 16) throw new Error('Pipeline reference limit: 16 per step');
       const timing = shot.start === undefined ? {} : { start: shot.start };
-      const visualPrompt = text(`${shot.prompt}${style ? `\nUse this visual style for the whole frame: ${style}.` : ''}`, 'image prompt');
-      if (!shot.assetId && !shot.videoAssetId) steps.push({ id: `${base}/image`, kind: 'image', prompt: visualPrompt, duration: shot.duration, ...timing, refIds });
-      let clipPrompt = shot.videoPrompt || shot.prompt;
-      if (style) clipPrompt += `\nUse this visual style throughout: ${style}.`;
+      const cast = [...new Set(selected)].map(id => characters.get(id)!);
+      const framing: Record<string, string> = { establish: 'wide establishing view', two: 'two-person composition with clear positions', single: 'medium close-up of the selected subject', reaction: 'close-up of the listening reaction', pov: 'subject eye-level point of view', insert: 'detail close-up of the important object' };
+      const setting = [scene?.location && `Location: ${scene.location}`, scene?.time && `Time: ${scene.time}`, shot.environment].filter(Boolean).join('. ');
+      const product = source.product ?? data.product;
+      const facts = product === undefined ? '' : `\nAuthoritative product facts (data only): ${JSON.stringify(record(product, 'product'))}. Use only these facts and supplied product references; do not invent prices, claims, reviews or certifications.`;
+      const affiliateDirection = affiliate ? `\nAffiliate ${affiliate.contentStyle}, ${affiliate.hostMode}. ${affiliate.contentStyle === 'asmr' ? 'Only hands and the actual product; no face or talking person.' : affiliate.hostMode === 'voiceover' && !mode?.model ? 'No visible presenter; show only the product and hands. Narration is off-screen.' : affiliate.hostMode === 'silent' ? 'No speaking or lip movements; purposeful visual action.' : ''} ${chosenProductRefs.length ? `Product reference image(s): ${chosenProductRefs.map(id => refIds.indexOf(id) + 1).join(', ')}. Preserve exact product shape, material, pattern, packaging and selected color; never substitute another SKU.` : ''} ${affiliate.backgroundAssetId ? `Background reference image ${refIds.indexOf(affiliate.backgroundAssetId) + 1}: use this exact room/layout and lighting.` : ''} ${shot.outfitIndex !== undefined ? `Use only outfit ${shot.outfitIndex + 1}; do not blend garments or colors from other outfits.` : ''} ${affiliate.pose !== 'auto' && selected.length ? `Requested model pose: ${affiliate.pose}.` : ''}` : '';
+      const visualPrompt = text(`${shot.prompt}\nCreate one still scene frame. Framing: ${framing[shot.shotType || ''] || 'follow the described framing; otherwise use an eye-level medium-wide composition'}.\nVisible action beat: ${shot.action || 'capture the described action at one readable instant'}. Acting and expression: ${shot.acting || 'natural posture and expression appropriate to the described beat'}.${shot.camera ? `\nCamera plan: ${shot.camera}; compose a still instant of this shot.` : ''}\nScene location, time and environment: ${setting || 'retain the setting and time in the visual description; do not invent a different scene'}.\nSelected characters:\n${cast.length ? cast.map(character => `${character.name}: ${character.description}`).join('\n') : 'Only the subjects described in the visual plan; do not add people.'}\nUse this visual style for the whole frame: ${style || 'the supplied visual description and references; keep it coherent'}. No extra people. ${affiliate ? 'No added on-screen text, subtitles, watermarks or invented logos; preserve real labels printed on the product.' : 'No on-screen text, subtitles or logos.'}${facts}`, 'image prompt');
+      if (!shot.assetId && !shot.videoAssetId) steps.push({ id: `${base}/image`, kind: 'image', prompt: text(visualPrompt + affiliateDirection, 'image prompt'), duration: shot.duration, ...timing, refIds });
+      let clipPrompt = `Animate the supplied single scene anchor frame. Use that exact image as the first frame; lock each face, hair, outfit, background, composition and visual style to the anchor. Do not redesign or replace them.\nMotion and action: ${shot.action || 'continue the visible action established in the anchor naturally'}.${shot.videoPrompt || !shot.action ? ` Motion plan: ${shot.videoPrompt || shot.prompt}.` : ''}\nActing: ${shot.acting || 'natural expression and body mechanics consistent with the anchored pose'}.\nCamera: ${shot.camera || 'follow any camera movement in the motion plan; otherwise hold the camera steady'}.\nEnvironment: ${setting || 'preserve the anchored location and time; allow only natural ambient motion consistent with it'}.\nMaintain natural continuity from the anchored pose with coherent movement and object contact through one continuous take. No extra people. No cuts, transitions or scene changes. ${affiliate ? 'No added on-screen text, subtitles or watermarks; keep genuine product labels and branding.' : 'No on-screen text, subtitles or logos.'}${style ? `\nKeep the anchored ${style} style throughout.` : ''}${facts}`;
       if (source.nativeAudio === true || data.nativeAudio === true) {
-        const cast = [...new Set(selected)].map(id => characters.get(id)!);
-        clipPrompt += `\nPreserve the reference frame and character identities. ${scene ? `Location: ${scene.location || ''}; time: ${scene.time || ''}.` : ''}\n${cast.map(character => `${character.name}: ${character.description}. Stable voice: ${character.voiceProfile || 'keep the same voice throughout the film'}.`).join('\n')}`;
+        clipPrompt += `\nPreserve the reference frame and character identities.\n${cast.map(character => `${character.name}: ${character.description}. Stable voice: ${character.voiceProfile || 'keep the same voice throughout the film'}.`).join('\n')}`;
         clipPrompt += shot.dialogue ? `\n${shot.speaker ? characters.get(shot.speaker)?.name || shot.speaker : 'Narrator'} speaks exactly: ${JSON.stringify(shot.dialogue)}. ${shot.listenerIds?.length ? `Listeners: ${shot.listenerIds.map(id => characters.get(id)!.name).join(', ')} react naturally and remain silent.` : ''}` : '\nSilent visual action; no invented speech.';
-        clipPrompt += '\nNo subtitles, logos or background music. Keep natural scene sound and the requested dialogue.';
-      }
-      steps.push({ id: `${base}/video`, kind: 'video', prompt: text(clipPrompt, 'video prompt'), duration: shot.duration, ...timing, refIds,
-        ...(shot.dialogue ? { dialogue: shot.dialogue } : {}), ...(shot.speaker ? { speaker: shot.speaker } : {}), ...(shot.shotType ? { shotType: shot.shotType } : {}), ...(shot.videoAssetId ? { videoAssetId: shot.videoAssetId } : {}) });
-      if (shot.dialogue && options.speech !== false && source.nativeAudio !== true && data.nativeAudio !== true && !['none', 'source'].includes(String(source.narrationMode ?? data.narrationMode))) {
-        const voiceId = shot.voiceId ?? (shot.speaker ? characters.get(shot.speaker)?.voiceId : undefined) ?? source.voiceId ?? data.voiceId;
+        clipPrompt += affiliate ? '\nNo added subtitles, watermarks or background music. Preserve real product labels, natural scene sound and the requested dialogue.' : '\nNo subtitles, logos or background music. Keep natural scene sound and the requested dialogue.';
+      } else clipPrompt += `\nThe edit uses the first ${shot.duration.toFixed(3)} seconds. Start the requested visible action immediately and make it readable within that interval; continue naturally afterward. Do not spend the opening interval on an unrequested static hold. No invented speech or background music.`;
+      if (affiliate) clipPrompt += `\nAffiliate audio and host direction: ${affiliate.contentStyle === 'asmr' ? 'Record only natural close-mic handling/packaging/assembly sounds synchronized to the visible hands. No human voice, humming, narration or music.' : mode?.spoken ? `${affiliate.hostMode === 'voiceover' ? 'Use one stable off-screen narrator; no lip movement or talking face.' : 'Only the intended host speaks; everyone else remains silent.'} Voice: ${affiliate.gender}, ${affiliate.age}, ${affiliate.accent} accent when speaking Vietnamese; language ${data.language || 'vi'}.` : 'No human speech, humming or invented voices.'} Product identity remains locked to the scene anchor. ${shot.transition === 'whip' ? 'Finish with a brief motivated lateral camera pan for the edit; keep one continuous take.' : ''}`;
+      steps.push({ id: `${base}/video`, kind: 'video', prompt: text(clipPrompt, 'video prompt'), duration: shot.duration, ...timing, refIds: shot.assetId ? [shot.assetId] : [],
+        ...(shot.dialogue ? { dialogue: shot.dialogue } : {}), ...(shot.speaker ? { speaker: shot.speaker } : affiliate?.hostMode === 'voiceover' && shot.dialogue ? { speaker: 'affiliate-voice' } : {}), ...(shot.shotType ? { shotType: shot.shotType } : {}), ...(shot.videoAssetId ? { videoAssetId: shot.videoAssetId } : {}) });
+      if (shot.dialogue && options.speech !== false && (dubbing || source.nativeAudio !== true && data.nativeAudio !== true && !['none', 'source'].includes(String(source.narrationMode ?? data.narrationMode)))) {
+        const voiceId = dubbing?.voiceId ?? shot.voiceId ?? (shot.speaker ? characters.get(shot.speaker)?.voiceId : undefined) ?? source.voiceId ?? data.voiceId;
         if (!voiceId) throw new Error(`Speech voice required for shot ${shot.id}`);
         steps.push({ id: `${base}/speech`, kind: 'speech', prompt: shot.dialogue, duration: shot.duration, ...timing, refIds: [], voiceId: text(voiceId, 'voice id', 256) });
       }

@@ -18,15 +18,26 @@ test('derives shots from SRT cues and accented script paragraphs without invente
   assert.deepEqual(api().buildShots({ product: { name: 'Cà phê', price: 125000, origin: 'Đắk Lắk' } }).map(s => s.prompt), ['name: Cà phê\nprice: 125000\norigin: Đắk Lắk']);
 });
 
-test('affiliate image and video steps retain selected real product photos alongside host references', () => {
+test('affiliate image steps retain product and host references while video waits for its scene anchor', () => {
   const steps = api().pipelineSteps(project({ productAssetIds: ['product-photo'], characters: [{ id: 'host', name: 'Host', description: 'Presenter', assetId: 'host-photo' }], shots: [{ id: 'one', prompt: 'Demonstrate the product', duration: 2, characterIds: ['host'] }] }, 'affiliate'));
-  assert.deepEqual(steps.map(step => step.refIds), [['product-photo', 'host-photo'], ['product-photo', 'host-photo']]);
+  assert.deepEqual(steps.map(step => step.refIds), [['product-photo', 'host-photo'], []]);
   assert.throws(() => api().pipelineSteps(project({ productAssetIds: 'wrong', script: 'Product' }, 'affiliate')), /product|array|reference/i);
 });
 
 test('global visual style and custom style text reach generated frames and clips', () => {
   const steps = api().pipelineSteps(project({ style: 'watercolor', styleText: 'Soft paper texture', shots: [{ id: 'one', prompt: 'A lake', videoPrompt: 'Slow pan', duration: 1 }] }));
   for (const step of steps) { assert.ok(step.prompt.includes('watercolor')); assert.ok(step.prompt.includes('Soft paper texture')); }
+});
+
+test('legacy shots retain their requested action when no separate motion prompt was provided', () => {
+  for (const data of [
+    { shots: [{ id: 'pour', prompt: 'Tilt the teapot and pour tea into the cup', duration: 2 }] },
+    { script: 'Tilt the teapot and pour tea into the cup' }
+  ]) {
+    const video = api().pipelineSteps(project(data)).find(step => step.kind === 'video')!;
+    assert.match(video.prompt, /Tilt the teapot and pour tea into the cup/);
+    assert.match(video.prompt, /single scene anchor/);
+  }
 });
 
 test('SRT absolute cue starts survive shot building and every executable step', () => {
@@ -44,9 +55,12 @@ test('raw shots align omitted starts to source subtitles while preserving edited
   const shots = [{ id: 'a', prompt: 'Đã sửa một', duration: 0.75, dialogue: 'Xin chào', voiceId: 'voice' }, { id: 'b', prompt: 'Đã sửa hai', duration: 0.5 }];
   assert.deepEqual(api().buildShots({ shots, subtitle }), [{ ...shots[0], start: 1 }, { ...shots[1], start: 4 }]);
   const steps = api().pipelineSteps(project({ shots, subtitle }));
-  assert.deepEqual(steps.map(step => [step.prompt, step.start, step.duration]), [
-    ['Đã sửa một', 1, 0.75], ['Đã sửa một', 1, 0.75], ['Xin chào', 1, 0.75], ['Đã sửa hai', 4, 0.5], ['Đã sửa hai', 4, 0.5]
+  assert.deepEqual(steps.map(step => [step.kind, step.start, step.duration]), [
+    ['image', 1, 0.75], ['video', 1, 0.75], ['speech', 1, 0.75], ['image', 4, 0.5], ['video', 4, 0.5]
   ]);
+  assert.ok(steps[0].prompt.startsWith('Đã sửa một\n')); assert.ok(steps[3].prompt.startsWith('Đã sửa hai\n'));
+  assert.equal(steps[2].prompt, 'Xin chào');
+  for (const step of steps.filter(step => step.kind === 'video')) assert.match(step.prompt, /single scene anchor frame/);
   assert.throws(() => api().buildShots({ shots: shots.slice(0, 1), subtitle }), /count|match|cue/i);
   assert.throws(() => api().pipelineSteps(project({ shots: shots.slice(0, 1), subtitle })), /count|match|cue/i);
 });
@@ -85,24 +99,29 @@ test('plans executable image, video and speech steps with references scoped to t
     { id: 'b', prompt: 'Nam trên phố', duration: 3, speaker: 'nam', dialogue: 'Chào Mai', voiceId: 'override', assetId: 'existing-image' },
     { id: 'c', prompt: 'Cảnh hồ', duration: 1 }
   ] }));
-  assert.deepEqual(plan.map(s => [s.kind, s.prompt, s.duration, s.refIds, s.voiceId]), [
-    ['image', 'Mai bên hồ', 2.5, ['mai-ref'], undefined],
-    ['video', 'Mai bên hồ', 2.5, ['mai-ref'], undefined],
-    ['speech', 'Xin chào', 2.5, [], 'mai-voice'],
-    ['video', 'Nam trên phố', 3, ['existing-image', 'nam-ref'], undefined],
-    ['speech', 'Chào Mai', 3, [], 'override'],
-    ['image', 'Cảnh hồ', 1, [], undefined],
-    ['video', 'Cảnh hồ', 1, [], undefined]
+  assert.deepEqual(plan.map(s => [s.kind, s.duration, s.refIds, s.voiceId]), [
+    ['image', 2.5, ['mai-ref'], undefined],
+    ['video', 2.5, [], undefined],
+    ['speech', 2.5, [], 'mai-voice'],
+    ['video', 3, ['existing-image'], undefined],
+    ['speech', 3, [], 'override'],
+    ['image', 1, [], undefined],
+    ['video', 1, [], undefined]
   ]);
+  assert.ok(plan[0].prompt.startsWith('Mai bên hồ\n')); assert.ok(plan[5].prompt.startsWith('Cảnh hồ\n'));
+  assert.equal(plan[2].prompt, 'Xin chào'); assert.equal(plan[4].prompt, 'Chào Mai');
+  for (const step of plan.filter(step => step.kind === 'video')) assert.match(step.prompt, /single scene anchor frame/);
   assert.equal(new Set(plan.map(s => s.id)).size, plan.length);
   assert.deepEqual(api().pipelineSteps(project({ shots: [{ id: 's', prompt: 'x', duration: 1, dialogue: 'y', voiceId: 'v' }] })), api().pipelineSteps(project({ shots: [{ id: 's', prompt: 'x', duration: 1, dialogue: 'y', voiceId: 'v' }] })));
 });
 
 test('reads scene shots and series episodes, rejects dangling cast and missing speech voices', () => {
   const scene = { scenes: [{ id: 'scene1', shots: [{ id: 's', prompt: 'Hoàng hôn', duration: 2 }] }] };
-  assert.equal(api().pipelineSteps(project(scene))[0].prompt, 'Hoàng hôn');
+  assert.ok(api().pipelineSteps(project(scene))[0].prompt.startsWith('Hoàng hôn\n'));
   const series = api().pipelineSteps(project({ episodes: [{ id: 'e1', name: 'Tập 1', script: 'Biển xanh' }, { id: 'e2', name: 'Tập 2', script: 'Núi cao' }] }, 'series'));
-  assert.deepEqual(series.map(s => s.prompt), ['Biển xanh', 'Biển xanh', 'Núi cao', 'Núi cao']);
+  assert.deepEqual(series.map(s => s.kind), ['image', 'video', 'image', 'video']);
+  assert.ok(series[0].prompt.startsWith('Biển xanh\n')); assert.ok(series[2].prompt.startsWith('Núi cao\n'));
+  for (const step of series.filter(step => step.kind === 'video')) assert.match(step.prompt, /single scene anchor frame/);
   for (const data of [{ shots: [{ prompt: 'x', duration: 1, speaker: 'unknown' }] }, { shots: [{ prompt: 'x', duration: 1, dialogue: 'speech without voice' }] }, { scenes: [{}] }, { scenes: [] }]) assert.throws(() => api().pipelineSteps(project(data)), /speaker|character|voice|scene|required/i);
 });
 
@@ -111,7 +130,9 @@ test('series honors edited episode scene shots and scene cast without leaking ot
     { id: 'mai', name: 'Mai', description: 'Host', assetId: 'mai-ref' },
     { id: 'nam', name: 'Nam', description: 'Guest', assetId: 'nam-ref' }
   ], episodes: [{ id: 'e1', name: 'Tập', script: 'Original script', scenes: [{ id: 'scene', characterIds: ['mai'], shots: [{ id: 's', prompt: 'Edited prompt', duration: 2.25 }] }] }] }, 'series'));
-  assert.deepEqual(steps.map(step => [step.prompt, step.duration, step.refIds]), [['Edited prompt', 2.25, ['mai-ref']], ['Edited prompt', 2.25, ['mai-ref']]]);
+  assert.deepEqual(steps.map(step => [step.kind, step.duration, step.refIds]), [['image', 2.25, ['mai-ref']], ['video', 2.25, []]]);
+  assert.ok(steps[0].prompt.startsWith('Edited prompt\n')); assert.ok(steps[0].prompt.includes('Mai: Host')); assert.ok(!steps[0].prompt.includes('Nam: Guest'));
+  assert.match(steps[1].prompt, /single scene anchor frame/);
 });
 
 test('narrative limits apply to UTF-8 bytes, derived durations and total executable steps', () => {
@@ -136,12 +157,73 @@ test('rejects a 1000-shot narrated plan whose generation expands beyond the exec
 
 test('local stress: validates 1000 Unicode shots repeatedly and creates bounded, stable step plans', () => {
   const started = Date.now();
-  const shots = Array.from({ length: 1000 }, (_, index) => ({ id: `s${index}`, prompt: `Cảnh Việt ${index}`, duration: 1.25 }));
+  const shots = Array.from({ length: 1000 }, (_, index) => ({ id: `s${index}`, prompt: `Cảnh Việt ${index}`, duration: 1.25,
+    action: `Bước tới bàn ${index}`, acting: 'Chăm chú', camera: 'Slow push in', environment: 'Hồ lúc bình minh' }));
   for (let round = 0; round < 20; round++) {
     const result = api().buildShots({ shots });
     assert.equal(result.length, 1000); assert.equal(result[999].prompt, 'Cảnh Việt 999');
+    assert.deepEqual(result[999], shots[999]);
     const steps = api().pipelineSteps(project({ shots: shots.slice(0, 500) }));
     assert.equal(steps.length, 1000); assert.equal(new Set(steps.map(step => step.id)).size, 1000);
+    assert.ok(steps.filter(step => step.kind === 'video').every(step => step.refIds.length === 0 && step.prompt.includes('Hồ lúc bình minh')));
   }
   console.log(JSON.stringify({ stress: 'narrative', rounds: 20, shotsPerRound: 1000, stepsPerRound: 1000, elapsedMs: Date.now() - started }));
+});
+
+test('structured shot directions survive validation with bounded UTF-8 strings', () => {
+  const directions = { action: 'Mai lifts a red cup', acting: 'A hesitant smile', camera: 'Slow push in', environment: 'Quiet lakeside cafe at dawn' };
+  const shot = { id: 'one', prompt: 'Mai at the table', duration: 2.75, ...directions };
+  assert.deepEqual(api().buildShots({ shots: [shot] }), [shot]);
+  for (const field of Object.keys(directions)) {
+    for (const value of [123, null, {}, 'x'.repeat(4001), 'ế'.repeat(1334), 'bad\0text']) {
+      assert.throws(() => api().buildShots({ shots: [{ ...shot, [field]: value }] }), new RegExp(field, 'i'));
+    }
+    assert.doesNotThrow(() => api().buildShots({ shots: [{ ...shot, [field]: 'ế'.repeat(1333) + 'x' }] }));
+  }
+});
+
+test('image and video prompts independently express the frame and its anchored continuous action', () => {
+  const data = { style: 'watercolor', styleText: 'Soft paper texture', product: { name: 'Red cup', material: 'ceramic', price: 125000 }, productAssetIds: ['cup-photo'],
+    characters: [{ id: 'mai', name: 'Mai', description: 'Oval face, short black hair, green silk dress', assetId: 'mai-photo' },
+      { id: 'nam', name: 'Nam', description: 'Square face, grey hair, white linen shirt', assetId: 'nam-photo' },
+      { id: 'other', name: 'Other', description: 'UNSELECTED IDENTITY', assetId: 'other-photo' }],
+    scenes: [{ id: 'cafe', location: 'Lakeside cafe', time: 'Dawn', characterIds: ['mai', 'nam'] }],
+    shots: [{ id: 'one', sceneId: 'cafe', shotType: 'two', prompt: 'Mai and Nam sit across a table', videoPrompt: 'Raise the cup gently, then set it down',
+      action: 'Mai lifts the red cup', acting: 'Mai hesitates; Nam watches calmly', camera: 'Slow push in', environment: 'Steam drifts above the table', duration: 3.25 }] };
+  const [image, video] = api().pipelineSteps(project(data));
+  assert.deepEqual(image.refIds, ['cup-photo', 'mai-photo', 'nam-photo']); assert.deepEqual(video.refIds, []);
+  for (const value of ['Mai and Nam sit across a table', 'Mai lifts the red cup', 'Mai hesitates; Nam watches calmly', 'Lakeside cafe', 'Dawn', 'Oval face, short black hair, green silk dress', 'Square face, grey hair, white linen shirt', 'watercolor', 'Soft paper texture', 'ceramic', '125000', 'Steam drifts above the table']) assert.ok(image.prompt.includes(value), value);
+  assert.match(image.prompt, /framing.*two|two.*framing/i);
+  assert.ok(!image.prompt.includes('UNSELECTED IDENTITY')); assert.ok(!image.prompt.includes('Raise the cup gently, then set it down'));
+  for (const value of ['Raise the cup gently, then set it down', 'Mai lifts the red cup', 'Mai hesitates; Nam watches calmly', 'Slow push in', 'Steam drifts above the table', 'ceramic', '125000']) assert.ok(video.prompt.includes(value), value);
+  for (const contract of [/single.*anchor frame/i, /exact.*first frame/i, /face/i, /outfit/i, /background/i, /style/i, /continuous/i, /no (?:extra|additional) people/i, /no cuts/i, /no (?:on-screen )?text/i]) assert.match(video.prompt, contract);
+  assert.notEqual(image.prompt, video.prompt);
+});
+
+test('video references contain only an explicit scene anchor and supplied video sources skip image generation', () => {
+  for (const source of [{ assetId: 'scene-frame' }, { videoAssetId: 'source-video' }, { assetId: 'scene-frame', videoAssetId: 'source-video' }]) {
+    const steps = api().pipelineSteps(project({ productAssetIds: ['product'], characters: [{ id: 'mai', name: 'Mai', description: 'Green dress', assetId: 'portrait', voiceId: 'voice' }],
+      shots: [{ id: 'source', prompt: 'Mai at the lake', start: 2, duration: 1.5, speaker: 'mai', dialogue: 'Hello', ...source }] }));
+    assert.deepEqual(steps.map(step => step.kind), ['video', 'speech']);
+    assert.deepEqual(steps[0].refIds, source.assetId ? ['scene-frame'] : []);
+    assert.equal(steps[0].videoAssetId, source.videoAssetId);
+    assert.deepEqual(steps.map(step => [step.start, step.duration]), [[2, 1.5], [2, 1.5]]);
+    assert.equal(steps[1].voiceId, 'voice'); assert.equal(steps[1].prompt, 'Hello');
+  }
+});
+
+test('nested scenes carry their location, time and cast into the image prompt', () => {
+  const [image, video] = api().pipelineSteps(project({ characters: [{ id: 'mai', name: 'Mai', description: 'Green dress', assetId: 'portrait' }],
+    scenes: [{ id: 'scene', location: 'Train platform', time: 'Midnight', characterIds: ['mai'], shots: [{ id: 'one', prompt: 'Mai waits', duration: 2 }] }] }));
+  for (const value of ['Train platform', 'Midnight', 'Green dress']) assert.ok(image.prompt.includes(value), value);
+  assert.deepEqual(image.refIds, ['portrait']); assert.deepEqual(video.refIds, []);
+});
+
+test('native audio keeps exact dialogue, stable voices and silent listeners alongside anchor constraints', () => {
+  const data = { nativeAudio: true, characters: [{ id: 'mai', name: 'Mai', description: 'Green dress', voiceProfile: 'Low northern voice' }, { id: 'nam', name: 'Nam', description: 'White shirt' }],
+    shots: [{ id: 'one', prompt: 'Mai faces Nam', duration: 3, speaker: 'mai', listenerIds: ['nam'], dialogue: 'Anh về rồi à?' }, { id: 'two', prompt: 'Nam thinks', duration: 2, characterIds: ['nam'] }] };
+  const steps = api().pipelineSteps(project(data)); const clips = steps.filter(step => step.kind === 'video');
+  assert.equal(steps.filter(step => step.kind === 'speech').length, 0);
+  for (const value of ['Mai speaks exactly: "Anh về rồi à?"', 'Listeners: Nam react naturally and remain silent.', 'Low northern voice', 'Keep natural scene sound and the requested dialogue.']) assert.ok(clips[0].prompt.includes(value), value);
+  assert.match(clips[1].prompt, /Silent visual action; no invented speech/);
 });

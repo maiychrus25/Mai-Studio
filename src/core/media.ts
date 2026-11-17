@@ -1,6 +1,6 @@
 import { spawn } from 'node:child_process';
 import { constants } from 'node:fs';
-import { copyFile, lstat, mkdtemp, readFile, rename, rm, statfs } from 'node:fs/promises';
+import { copyFile, lstat, mkdir, mkdtemp, readFile, rename, rm, statfs } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { dirname, extname, join, resolve } from 'node:path';
 import type { MediaInput, MediaOptions, TaskContext } from '../shared/studio';
@@ -152,6 +152,8 @@ function renderOptions(options: MediaOptions): RenderOptions {
   if (!Number.isInteger(width) || !Number.isInteger(height) || width % 2 || height % 2 || width * height > 4096 * 2160) throw new Error('Invalid width/height: even integers, at most 8847360 pixels');
   const fps = number(options.fps ?? 30, 1, 60, 'fps');
   const volume = number(options.volume ?? 1, 0, 4, 'volume');
+  if (options.voiceVolume !== undefined) number(options.voiceVolume, 0, 1, 'voiceVolume');
+  if (options.voiceSpeed !== undefined) number(options.voiceSpeed, 0.8, 1.25, 'voiceSpeed');
   if (options.fit !== undefined && options.fit !== 'pad' && options.fit !== 'crop') throw new Error('Invalid fit: expected pad or crop');
   if (options.ducking !== undefined && typeof options.ducking !== 'boolean') throw new Error('Invalid ducking: expected a boolean');
   if (options.motion !== undefined && options.motion !== 'none' && options.motion !== 'kenburns') throw new Error('Invalid motion: expected none or kenburns');
@@ -172,6 +174,32 @@ export class MediaTools {
   }
 
   get executablePath(): string { return this.ffmpegPath; }
+
+  async validateImage(source: string, signal?: AbortSignal): Promise<void> {
+    signal?.throwIfAborted(); const input = await file(source);
+    await run(this.ffmpegPath, ['-hide_banner', '-nostdin', '-v', 'error', '-xerror', '-threads', '1', '-max_pixels', '33554432', '-protocol_whitelist', 'file,pipe', '-i', input, '-map', '0:v:0', '-frames:v', '1', '-f', 'null', '-'], signal, 30000);
+  }
+
+  async sampleFrames(source: string, directory: string, times: number[], signal?: AbortSignal): Promise<string[]> {
+    signal?.throwIfAborted();
+    if (!Array.isArray(times) || times.length !== 4) throw new Error('Video review requires four ordered sample times');
+    const input = await file(source), info = await this.probe(input, signal);
+    if (!info.width || !info.height) throw new Error('Video review requires a video stream');
+    let previous = -1;
+    for (const time of times) { number(time, 0, info.duration - 0.000001, 'sample time'); if (time <= previous) throw new Error('Sample times must be increasing'); previous = time; }
+    await mkdir(directory, { recursive: true });
+    const entry = await lstat(directory); if (!entry.isDirectory() || entry.isSymbolicLink()) throw new Error('Frame directory must be a real directory');
+    const work = await mkdtemp(join(directory, 'frames-')), paths: string[] = [];
+    try {
+      for (const [index, time] of times.entries()) {
+        const output = join(work, `${index + 1}.jpg`);
+        await run(this.ffmpegPath, ['-hide_banner', '-nostdin', '-v', 'error', '-n', '-threads', '1', '-ss', String(time), '-protocol_whitelist', 'file,pipe', '-i', input,
+          '-map', '0:v:0', '-frames:v', '1', '-vf', 'scale=640:640:force_original_aspect_ratio=decrease', '-q:v', '3', output], signal, 30000);
+        const frame = await lstat(output); if (!frame.isFile() || frame.size > 2 * 1024 ** 2 || !frame.size) throw new Error('Invalid sampled frame'); paths.push(output);
+      }
+      return paths;
+    } catch (error) { await rm(work, { recursive: true, force: true }); throw error; }
+  }
 
   async probe(path: string, signal?: AbortSignal): Promise<MediaInfo> {
     signal?.throwIfAborted();
@@ -379,7 +407,7 @@ export class MediaTools {
         const start = number(input.start, 0, duration, 'audio start');
         const length = number(input.duration ?? audio.duration, 0.001, MAX_DURATION, 'audio duration');
         if (start + length > duration + 0.001) throw new Error('Audio duration/start exceeds video timeline');
-        const source = work ? await this.fittedVoice(path, audio.duration, length, join(work, `${index}.wav`), context) : path;
+        const source = work ? await this.fittedVoice(path, audio.duration, length, join(work, `${index}.wav`), context, settings.voiceSpeed ?? 1) : path;
         paths.push(path); args.push('-threads', '1', '-protocol_whitelist', 'file,pipe', '-i', source);
         filters.push(`[${index + 1}:a:0]atrim=duration=${length},asetpts=PTS-STARTPTS,aresample=48000,aformat=channel_layouts=stereo,adelay=${Math.round(start * 1000)}:all=1,apad,atrim=duration=${duration}[dub${index}]`);
         labels.push(`[dub${index}]`);
@@ -389,17 +417,17 @@ export class MediaTools {
     } finally { if (work) await rm(work, { recursive: true, force: true }); }
   }
 
-  private async fittedVoice(source: string, duration: number, slot: number, output: string, context: TaskContext): Promise<string> {
+  private async fittedVoice(source: string, duration: number, slot: number, output: string, context: TaskContext, speed = 1): Promise<string> {
     number(duration, 0.001, MAX_DURATION, 'voice duration');
     // Original align: min(1.15, max(0.85, source / target)). A fixed slot must reject overflow instead of clipping speech.
-    let tempo = Math.max(VOICE_TEMPO_MIN, duration / slot);
+    let tempo = Math.max(VOICE_TEMPO_MIN, duration / speed / slot);
     for (let attempt = 0; attempt < 3; attempt++) {
       if (tempo > VOICE_TEMPO_MAX + 1e-9) throw new Error('Voice fit tempo exceeds 1.15; lengthen the audio slot or shorten the voice');
       tempo = Math.min(tempo, VOICE_TEMPO_MAX);
       context.signal.throwIfAborted(); context.progress(0, 'Rendering fitted voice');
       // No -t / atrim: feed the entire voice through atempo and measure its actual output before admitting it to the video slot.
       await run(this.ffmpegPath, ['-hide_banner', '-nostdin', '-v', 'error', '-y', '-threads', '1', '-protocol_whitelist', 'file,pipe', '-i', source,
-        '-map', '0:a:0', '-af', `atempo=${tempo}`, '-vn', '-ar', '48000', '-ac', '2', '-c:a', 'pcm_s16le', '-f', 'wav', output], context.signal, 15 * 60 * 1000);
+        '-map', '0:a:0', '-af', `${speed === 1 ? '' : `atempo=${speed},`}atempo=${tempo}`, '-vn', '-ar', '48000', '-ac', '2', '-c:a', 'pcm_s16le', '-f', 'wav', output], context.signal, 15 * 60 * 1000);
       const fitted = await this.probe(output, context.signal);
       if (fitted.duration <= slot) return output;
       // Local correction for FFmpeg window rounding; stay within the source bound and never trim an overlong result.
@@ -420,6 +448,9 @@ export class MediaTools {
     if (!format) throw new Error('Output format must be .mp4, .mov or .mkv (H.264/AAC)');
     const videoFades = fades(options, duration, false);
     const audioFades = fades(options, duration, true);
+    if (audio && options.voiceVolume !== undefined) {
+      filters.push(`[${audio}]volume=${options.voiceVolume}[voiceLevel]`); audio = 'voiceLevel';
+    }
     if (options.musicPath !== undefined) {
       const music = await file(options.musicPath);
       if (music === target) throw new Error('Output cannot overwrite music input');
@@ -447,6 +478,26 @@ export class MediaTools {
       args.push('-threads', '1', '-f', 'image2', '-pattern_type', 'none', '-c:v', 'png', '-protocol_whitelist', 'file,pipe', '-i', overlay);
       filters.push(`[${video}][${inputCount}:v:0]overlay=x=0:y=0:eof_action=repeat:repeatlast=1[overlaid]`);
       video = 'overlaid';
+      inputCount++;
+    }
+    if (options.overlays !== undefined) {
+      if (!Array.isArray(options.overlays) || options.overlays.length > 4) throw new Error('Timed overlay limit: 4');
+      for (const [index, item] of options.overlays.entries()) {
+        if (!item || typeof item !== 'object') throw new Error('Invalid timed overlay');
+        number(item.start, 0, duration, 'overlay start'); number(item.end, item.start + 0.001, duration, 'overlay end');
+        const overlay = await file(item.path); if (overlay === target) throw new Error('Output cannot overwrite overlay input');
+        args.push('-threads', '1', '-f', 'image2', '-pattern_type', 'none', '-c:v', 'png', '-protocol_whitelist', 'file,pipe', '-i', overlay);
+        filters.push(`[${video}][${inputCount++}:v:0]overlay=x=0:y=0:eof_action=repeat:repeatlast=1:enable='between(t,${item.start},${item.end})'[timedOverlay${index}]`);
+        video = `timedOverlay${index}`;
+      }
+    }
+    if (options.flashes !== undefined) {
+      if (!Array.isArray(options.flashes) || options.flashes.length > 16) throw new Error('Flash transition limit: 16');
+      for (const [index, time] of options.flashes.entries()) {
+        number(time, 0, duration, 'flash time');
+        filters.push(`[${video}]drawbox=color=white@0.65:t=fill:enable='between(t,${time},${Math.min(duration, time + 0.067)})'[flash${index}]`);
+        video = `flash${index}`;
+      }
     }
     // Conservative free-space floor; FFmpeg still reports actual ENOSPC without publishing.
     for (const directory of new Set([tmpdir(), dirname(target)])) {
@@ -463,7 +514,15 @@ export class MediaTools {
         parseSrt(await readFile(subtitle, 'utf8'));
         // A controlled basename avoids both levels of FFmpeg filter escaping on every OS.
         await copyFile(subtitle, join(work, 'subtitles.srt'));
-        filters.push(`[${video}]subtitles=filename=subtitles.srt[subtitled]`); video = 'subtitled';
+        const subtitleStyle = options.subtitleMarginV === undefined ? '' : `:force_style='FontSize=14,MarginV=${number(options.subtitleMarginV, 0, 144, 'subtitle margin')}'`;
+        filters.push(`[${video}]subtitles=filename=subtitles.srt${subtitleStyle}[subtitled]`); video = 'subtitled';
+      }
+      if (options.captionPath !== undefined) {
+        const caption = await file(options.captionPath); if (caption === target) throw new Error('Output cannot overwrite caption input');
+        if ((await lstat(caption)).size > 10 * 1024 ** 2) throw new Error('Caption file limit: 10 MiB');
+        parseSrt(await readFile(caption, 'utf8')); await copyFile(caption, join(work, 'captions.srt'));
+        // Keep scene copy below faces, with separate speech and compact-footer bands.
+        filters.push(`[${video}]subtitles=filename=captions.srt:force_style='Alignment=2,FontSize=14,MarginV=95,Outline=2,Shadow=1'[captioned]`); video = 'captioned';
       }
       if (videoFades.length) { filters.push(`[${video}]${videoFades.join(',')}[fadedVideo]`); video = 'fadedVideo'; }
       if (audio && audioFades.length) { filters.push(`[${audio}]${audioFades.join(',')}[fadedAudio]`); audio = 'fadedAudio'; }

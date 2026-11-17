@@ -1,8 +1,8 @@
 export type ProjectKind = 'studio' | 'srt' | 'film' | 'series' | 'affiliate' | 'dub';
 export type TaskStatus = 'draft' | 'queued' | 'running' | 'waiting_input' | 'paused' | 'succeeded' | 'failed' | 'cancelled' | 'interrupted';
-export type TaskKind = 'image' | 'video' | 'image-to-video' | 'music' | 'merge' | 'slideshow' | 'dub' | 'speech' | 'pipeline' | 'plan' | 'extract-audio' | 'model-prepare';
+export type TaskKind = 'image' | 'video' | 'image-to-video' | 'music' | 'merge' | 'slideshow' | 'dub' | 'speech' | 'pipeline' | 'plan' | 'extract-audio' | 'model-prepare' | 'product-import';
 export type StudioStage = 'plan' | 'music' | 'characters' | 'images' | 'videos' | 'speech' | 'check' | 'render' | 'all';
-export interface Shot { id: string; prompt: string; duration: number; start?: number; dialogue?: string; speaker?: string; assetId?: string; videoAssetId?: string; voiceId?: string; sceneId?: string; shotType?: string; videoPrompt?: string; characterIds?: string[]; listenerIds?: string[] }
+export interface Shot { id: string; prompt: string; duration: number; start?: number; dialogue?: string; speaker?: string; assetId?: string; videoAssetId?: string; voiceId?: string; sceneId?: string; shotType?: string; videoPrompt?: string; action?: string; acting?: string; camera?: string; environment?: string; characterIds?: string[]; listenerIds?: string[]; caption?: string; beat?: string; outfitIndex?: number; transition?: 'cut' | 'flash' | 'whip' }
 export interface Character { id: string; name: string; description: string; assetId?: string; voiceId?: string; voiceProfile?: string }
 export interface Project { id: string; name: string; kind: ProjectKind; createdAt: number; updatedAt: number; data: Record<string, unknown> }
 export interface Task {
@@ -35,7 +35,7 @@ export type StudioCommand =
   | 'studio.plan' | 'studio.run' | 'srt.parse' | 'srt.export' | 'media.merge' | 'media.extractAudio' | 'project.import.products'
   | 'voice.list' | 'voice.sample' | 'voice.favorite' | 'voice.transcribe' | 'voice.translate' | 'voice.offline.prepare'
   | 'market.catalog' | 'market.login' | 'market.logout' | 'market.buy' | 'market.library' | 'market.download'
-  | 'shopee.product' | 'codex.status' | 'codex.run' | 'codex.cancel' | 'codex.approve'
+  | 'shopee.product' | 'shopee.open' | 'shopee.bookmarklet' | 'shopee.import' | 'codex.status' | 'codex.run' | 'codex.cancel' | 'codex.approve'
   | 'license.activate' | 'license.deactivate' | 'license.trial' | 'update.check' | 'update.install' | 'diagnostics';
 export interface StudioBridge {
   invoke<T = unknown>(command: StudioCommand, input?: Record<string, unknown>): Promise<T>;
@@ -53,10 +53,13 @@ export interface TaskResult { outputIds: string[]; message?: string }
 export interface MediaInput { path: string; duration?: number; start?: number; caption?: string; trimStart?: number; trimEnd?: number }
 export interface MediaOptions {
   width?: number; height?: number; fps?: number; musicPath?: string; volume?: number; keepAudio?: boolean;
-  subtitlePath?: string; title?: string;
+  subtitlePath?: string; subtitleMarginV?: number; captionPath?: string; title?: string;
   overlayPath?: string;
+  overlays?: Array<{ path: string; start: number; end: number }>;
+  flashes?: number[];
   fit?: 'pad' | 'crop'; fadeIn?: number; fadeOut?: number; audioFadeIn?: number; audioFadeOut?: number;
   ducking?: boolean;
   fitVoice?: boolean;
+  voiceSpeed?: number; voiceVolume?: number;
   motion?: 'none' | 'kenburns';
 }

@@ -442,6 +442,55 @@ test('ducking lowers music RMS during narration and preserves voice and legacy d
   }
 });
 
+test('fitted voice speed changes the complete audible duration while preserving pitch and rejecting overflow', async () => {
+  const voice = join(root, 'voice-speed.wav'), native = join(root, 'voice-speed.mp4');
+  await exec(ffmpegPath, ['-v', 'error', '-f', 'lavfi', '-i', 'sine=frequency=400:sample_rate=48000:duration=1.4', voice]);
+  await exec(ffmpegPath, ['-v', 'error', '-f', 'lavfi', '-i', 'color=c=red:s=64x64:r=10:d=2', '-c:v', 'libx264', '-pix_fmt', 'yuv420p', native]);
+  const spans: number[] = [];
+  for (const speed of [0.8, 1, 1.25]) {
+    const output = join(root, `voice-speed-${speed}.mp4`);
+    await tools().dub(native, [{ path: voice, start: 0, duration: 2 }], output, { width: 64, height: 64, fps: 10, keepAudio: false, fitVoice: true, voiceSpeed: speed }, context());
+    const pcm = await pcmAudio(output); let last = 0, crossings = 0;
+    for (let i = 1; i < pcm.length / 4; i++) {
+      const current = pcm.readFloatLE(i * 4), prior = pcm.readFloatLE((i - 1) * 4);
+      if (Math.abs(current) > 0.01) last = i / 48000;
+      if (i >= 4800 && i < 24000 && prior < 0 && current >= 0) crossings++;
+    }
+    assert.ok(crossings >= 155 && crossings <= 165, `speed ${speed} retains 400Hz pitch: ${crossings / 0.4}`);
+    spans.push(last);
+  }
+  assert.ok(spans[0] > spans[1] * 1.12 && spans[1] > spans[2] * 1.15, `actual audible endpoints: ${spans}`);
+  await assert.rejects(tools().dub(native, [{ path: voice, start: 0, duration: 0.5 }], join(root, 'voice-speed-overflow.mp4'), { ...options, fitVoice: true, voiceSpeed: 0.8 }, context()), /Voice fit/);
+});
+
+test('voiceVolume scales native source and dubbed speech before music without changing legacy defaults', async () => {
+  const native = join(root, 'voice-volume-native.mp4'), voice = join(root, 'voice-volume.wav'), music = join(root, 'voice-volume-music.wav');
+  await exec(ffmpegPath, ['-v', 'error', '-f', 'lavfi', '-i', 'sine=frequency=1600:sample_rate=48000:duration=2', voice]);
+  await exec(ffmpegPath, ['-v', 'error', '-f', 'lavfi', '-i', 'sine=frequency=150:sample_rate=48000:duration=2', music]);
+  await exec(ffmpegPath, ['-v', 'error', '-f', 'lavfi', '-i', 'color=c=red:s=64x64:r=10:d=2', '-i', voice, '-c:v', 'libx264', '-pix_fmt', 'yuv420p', '-c:a', 'aac', '-shortest', native]);
+  const rms = async (path: string, filter: string) => {
+    const pcm = (await exec(ffmpegPath, ['-v', 'error', '-i', path, '-af', filter, '-f', 'f32le', '-ac', '1', '-ar', '8000', 'pipe:1'], { encoding: 'buffer' })).stdout;
+    let sum = 0; for (let i = 0; i < pcm.length; i += 4) sum += pcm.readFloatLE(i) ** 2;
+    return Math.sqrt(sum / (pcm.length / 4));
+  };
+  for (const kind of ['merge', 'dub'] as const) {
+    const outputs: string[] = [];
+    for (const volume of [undefined, 1, 0.25, 0]) {
+      const output = join(root, `voice-volume-${kind}-${volume}.mp4`); outputs.push(output);
+      const settings = { width: 64, height: 64, fps: 10, musicPath: music, volume: 0.8, voiceVolume: volume };
+      if (kind === 'merge') await tools().merge([{ path: native }], output, settings, context());
+      else await tools().dub(native, [{ path: voice, start: 0 }], output, { ...settings, keepAudio: false }, context());
+    }
+    const levels = await Promise.all(outputs.map(path => rms(path, 'highpass=f=900:p=2')));
+    assert.ok(Math.abs(levels[0] / levels[1] - 1) < 0.02, `${kind}: omitted volume preserves unity`);
+    assert.ok(Math.abs(levels[2] / levels[1] - 0.25) < 0.025, `${kind}: quarter volume affects actual PCM`);
+    assert.ok(levels[3] < levels[1] * 0.04, `${kind}: zero mutes the source/voice`);
+    const musicLevels = await Promise.all(outputs.map(path => rms(path, 'lowpass=f=250:p=2')));
+    assert.ok(musicLevels.every(level => Math.abs(level / musicLevels[0] - 1) < 0.04), `${kind}: music volume stays independent`);
+    for (const invalid of [-0.1, 1.1, NaN]) await assert.rejects(tools().merge([{ path: native }], outputs[0], { ...options, voiceVolume: invalid }, context()), /voiceVolume/);
+  }
+});
+
 test('ducking is inactive without music or foreground audio and invalid flags preserve output', async () => {
   const on = join(root, 'duck-no-base-on.mp4'); const off = join(root, 'duck-no-base-off.mp4');
   for (const render of ['merge', 'slideshow'] as const) {
@@ -804,4 +853,28 @@ test('local stress: concurrent real renders, queued cancellation and repeated na
     }
     console.log(JSON.stringify({ stress: 'media', jobs: 8, succeeded: 6, cancelled: 2, elapsedMs: Date.now() - started, nodeRssBaseline: baseline, nodeRssPeak: peak }));
   } finally { clearInterval(sampler); for (const controller of controllers) controller.abort(); }
+});
+
+
+test('Affiliate captions stay below the face and above the dialogue and footer in portrait video', async () => {
+  const captionPath = join(root, 'affiliate-position.srt'), output = join(root, 'affiliate-position.mp4');
+  await writeFile(captionPath, '1\n00:00:00,000 --> 00:00:01,000\nXem sản phẩm trong giỏ hàng\n');
+  await tools().merge([{ path: silent, duration: 1 }], output, { width: 240, height: 426, fps: 10, captionPath }, context());
+  const result = await exec(ffmpegPath, ['-v', 'error', '-i', output, '-frames:v', '1', '-f', 'rawvideo', '-pix_fmt', 'rgb24', 'pipe:1'], { encoding: 'buffer', maxBuffer: 1024 ** 2 });
+  const pixels = result.stdout, rows: number[] = [];
+  for (let y = 0; y < 426; y++) for (let x = 0; x < 240; x++) { const offset = (y * 240 + x) * 3; if (pixels[offset] > 200 && pixels[offset + 1] > 200 && pixels[offset + 2] > 200) { rows.push(y); break; } }
+  assert.ok(rows.length > 5, 'caption glyphs are present in the rendered frame');
+  assert.ok(Math.min(...rows) > 426 * 0.5 && Math.max(...rows) < 426 * 0.75, 'scene caption stays in the lower third, away from face, dialogue and footer');
+});
+
+
+test('a reserved subtitle margin keeps spoken words above the Affiliate price footer', async () => {
+  const subtitlePath = join(root, 'affiliate-dialogue.srt'), output = join(root, 'affiliate-dialogue.mp4');
+  await writeFile(subtitlePath, '1\n00:00:00,000 --> 00:00:01,000\nNative dialogue\n');
+  const safeOptions = { width: 240, height: 426, fps: 10, subtitlePath, subtitleMarginV: 52 };
+  await tools().merge([{ path: silent, duration: 1 }], output, safeOptions, context());
+  const result = await exec(ffmpegPath, ['-v', 'error', '-i', output, '-frames:v', '1', '-f', 'rawvideo', '-pix_fmt', 'rgb24', 'pipe:1'], { encoding: 'buffer', maxBuffer: 1024 ** 2 });
+  const pixels = result.stdout, rows: number[] = [];
+  for (let y = 0; y < 426; y++) for (let x = 0; x < 240; x++) { const offset = (y * 240 + x) * 3; if (pixels[offset] > 200 && pixels[offset + 1] > 200 && pixels[offset + 2] > 200) { rows.push(y); break; } }
+  assert.ok(rows.length > 5); assert.ok(Math.min(...rows) > 426 * 0.7 && Math.max(...rows) < 426 * 0.83, 'spoken subtitle has a dedicated band above the footer');
 });

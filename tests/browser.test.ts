@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import { createServer } from 'node:http';
 import { mkdtempSync, rmSync, writeFileSync, readFileSync } from 'node:fs';
 import { setTimeout as delay } from 'node:timers/promises';
+import { once } from 'node:events';
 import { NeedsInputError } from '../src/core/queue';
 import type { Task, TaskContext } from '../src/shared/studio';
 import { tmpdir } from 'node:os';
@@ -10,18 +11,18 @@ import { join } from 'node:path';
 import { Store } from '../src/core/store';
 import { BrowserManager } from '../src/core/browser';
 
-test('real browser submits once, downloads its new result and checkpoints remote acceptance', async () => {
+for (const hydrationDelay of [0, 600]) test(`real browser submits once after ${hydrationDelay}ms composer hydration, downloads its new result and checkpoints remote acceptance`, async () => {
   const png = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+j04sAAAAASUVORK5CYII=', 'base64');
   let submissions = 0;
   const server = createServer((req, res) => {
     if (req.url === '/result.png') { res.setHeader('content-type', 'image/png'); res.end(png); return; }
     if (req.url === '/submit') { submissions++; res.end('{}'); return; }
-    res.setHeader('content-type', 'text/html'); res.end(`<textarea id="prompt"></textarea><button id="send">Send</button><section id="replies"></section><script>document.querySelector('button').onclick=async()=>{await fetch('/submit');document.querySelector('section').innerHTML='<article class="reply"><img src="/result.png"></article>'}</script>`);
+    res.setHeader('content-type', 'text/html'); res.end(`<main data-hatch-composer-root><textarea id="prompt"></textarea><span data-hatch-composer-action-slot><button id="send" hidden>Send</button></span></main><section id="replies"></section><script>if (${hydrationDelay}) { document.querySelector('textarea').hidden=true; setTimeout(()=>document.querySelector('textarea').hidden=false, ${hydrationDelay}); } document.querySelector('textarea').oninput=e=>{document.querySelector('button').hidden=!e.target.value};document.querySelector('button').onclick=async()=>{await fetch('/submit');document.querySelector('section').innerHTML='<article data-message-item data-message-role="assistant"><img src="/result.png"></article>'}</script>`);
   });
   await new Promise<void>(resolve => server.listen(0, '127.0.0.1', resolve));
   const address = server.address(); assert.ok(address && typeof address !== 'string');
   const root = mkdtempSync(join(tmpdir(), 'maistudio-browser-')); const store = new Store(root);
-  store.setSettings({ browserVisible: false, museSelectors: { composer: '#prompt', submit: '#send', response: '.reply', fileInput: 'input[type=file]', stop: '.stop' } });
+  store.setSettings({ browserVisible: false });
   const browsers = new BrowserManager(store);
   try {
     const project = store.saveProject({ name: 'browser' });
@@ -39,7 +40,7 @@ const png = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR
 async function textFixture(run: (fixture: {
   store: Store; browsers: BrowserManager; task: Task; context: TaskContext; controller: AbortController;
   submitted: string[]; checkpoints: Record<string, unknown>[]; stopped: () => number; disconnected: () => number;
-}) => Promise<void>, options: { stream?: boolean; missing?: boolean; error?: boolean; oversize?: boolean; budget?: boolean; noBusy?: boolean; delayedReply?: boolean; emptyComposer?: boolean } = {}) {
+}) => Promise<void>, options: { stream?: boolean; missing?: boolean; error?: boolean; oversize?: boolean; budget?: boolean; noBusy?: boolean; delayedReply?: boolean; emptyComposer?: boolean; liveComposer?: boolean; lazySubmit?: boolean; delayedComposer?: boolean } = {}) {
   const submitted: string[] = []; let stops = 0; let disconnected = 0; let threadReply = ''; let threadBusy = false;
   const server = createServer((req, res) => {
     if (req.url === '/submit') {
@@ -52,11 +53,12 @@ async function textFixture(run: (fixture: {
     if (req.url === '/stop') { stops++; threadBusy = false; res.end('{}'); return; }
     if (req.url === '/stream') { res.writeHead(200, { 'content-type': 'text/plain' }); res.write('partial'); res.on('close', () => { disconnected++; }); return; }
     res.setHeader('content-type', 'text/html; charset=utf-8');
-    res.end(`<main><textarea id="prompt"></textarea><input type="file" multiple><button id="send">Send</button><button id="stop" hidden>Stop</button>
-      <section id="replies"><article class="reply">OLD PLAN</article></section></main><script>
+    res.end(`<main data-hatch-composer-root><textarea id="prompt"></textarea><input type="file" multiple><span data-hatch-composer-action-slot><button id="send">Send</button></span><button id="stop" data-testid="hatch-composer-stop-button" hidden>Stop</button>
+      <section id="replies"><article class="reply" data-message-item data-message-role="assistant">OLD PLAN</article></section></main><script>
       const send = document.querySelector('#send'), stop = document.querySelector('#stop'), replies = document.querySelector('#replies');
       const old = ${JSON.stringify(threadReply)}; if (old) { const reply = document.createElement('article'); reply.className = 'reply'; reply.textContent = old; replies.append(reply); }
       stop.hidden = ${!threadBusy}; send.disabled = ${threadBusy};
+      if (${!!(options.liveComposer || options.lazySubmit)}) { send.hidden = true; document.querySelector('#prompt').oninput = event => { send.hidden = !event.target.value.trim(); }; }
       document.cookie = 'profile=shared; SameSite=Lax';
       document.querySelector('input').onchange = () => { send.disabled = true; setTimeout(() => { send.disabled = false; }, 2300); };
       stop.onclick = async () => { await fetch('/stop'); window.streamController?.abort(); stop.hidden = true; };
@@ -66,18 +68,19 @@ async function textFixture(run: (fixture: {
         history.replaceState({}, '', '/thread/plan');
         if (${!!options.error}) { replies.innerHTML += '<div data-testid="assistant-response-error-notice">Provider refused</div>'; stop.hidden = true; send.disabled = false; return; }
         if (${!!options.delayedReply}) await new Promise(resolve=>setTimeout(resolve, 1800));
-        const reply = document.createElement('article'); reply.className = 'reply'; replies.append(reply); reply.textContent = 'PARTIAL';
+        const reply = document.createElement('article'); reply.className = 'reply'; reply.setAttribute('data-message-item', ''); reply.setAttribute('data-message-role', 'assistant'); replies.append(reply); reply.textContent = 'PARTIAL';
         if (${!!options.stream}) { window.streamController = new AbortController(); fetch('/stream',{signal:window.streamController.signal}).then(r=>r.text()).catch(()=>{}); return; }
         setTimeout(() => { reply.textContent = ${options.oversize ? "'界'.repeat(180000)" : options.budget ? "'x'.repeat(480000)" : "'新计划 — FINAL PLAN'"}; }, 1400);
         setTimeout(() => { fetch('/complete', { method: 'POST', body: reply.textContent }); stop.hidden = true; send.disabled = ${!!options.emptyComposer}; if (${!!options.emptyComposer}) document.querySelector('#prompt').value = ''; }, 2600);
       };
+      ${options.delayedComposer ? "document.querySelector('#prompt').hidden = true; setTimeout(() => { document.querySelector('#prompt').hidden = false; }, 600);" : ''}
       ${options.missing ? "document.querySelector('main').remove();" : ''}
     </script>`);
   });
   await new Promise<void>(resolve => server.listen(0, '127.0.0.1', resolve));
   const address = server.address(); assert.ok(address && typeof address !== 'string');
   const root = mkdtempSync(join(tmpdir(), 'maistudio-text-')); const store = new Store(root); const browsers = new BrowserManager(store);
-  store.setSettings({ browserVisible: false, museSelectors: { composer: '#prompt', submit: '#send', response: '.reply', fileInput: 'input[type=file]', stop: '#stop' } });
+  store.setSettings({ browserVisible: false, ...(options.liveComposer ? {} : { museSelectors: { composer: '#prompt', submit: '#send', response: '.reply', fileInput: 'input[type=file]', stop: '#stop' } }) });
   const project = store.saveProject({ name: 'planning' }); const account = store.saveAccount({ name: 'fixture', url: `http://127.0.0.1:${address.port}/` });
   const [task] = store.createTasks({ projectId: project.id, prompts: ['Plan a film — giữ nguyên Unicode'], kind: 'plan', accountId: account.id });
   task.input.timeoutMs = 7000;
@@ -99,6 +102,46 @@ test('text plan uses the persistent account and returns only a new, completed Un
     assert.match(String(task.checkpoint.threadUrl), /\/thread\/plan$/); assert.equal(task.checkpoint.textResult, text);
   });
 });
+
+test('cold text planning waits for the logged-in composer to hydrate before admitting one request', async () => {
+  await textFixture(async ({ browsers, task, context, submitted }) => {
+    assert.equal(await browsers.completeText(task, context), '新计划 — FINAL PLAN');
+    assert.equal(submitted.length, 1);
+  }, { delayedComposer: true });
+});
+
+for (const kind of ['plan', 'image'] as const) test(`cancelling ${kind} during composer hydration prevents remote admission`, async () => {
+  await textFixture(async ({ store, browsers, task, context, controller, submitted }) => {
+    const page = (await browsers.open(store.account(task.accountId))).pages()[0];
+    assert.equal(await page.locator('#prompt').isVisible(), false);
+    task.kind = kind; const started = Date.now();
+    const pending = kind === 'plan' ? browsers.completeText(task, context) : browsers.generate(task, context);
+    const timer = setTimeout(() => controller.abort(), 100);
+    try { await assert.rejects(pending, { name: 'AbortError' }); } finally { clearTimeout(timer); }
+    assert.ok(Date.now() - started < 2000); assert.equal(submitted.length, 0);
+    assert.equal(task.checkpoint.remoteSubmitted, undefined);
+  }, { delayedComposer: true });
+});
+
+test('text plan fills a custom composer before its lazy send button appears', async () => {
+  await textFixture(async ({ browsers, task, context, submitted }) => {
+    assert.equal(await browsers.completeText(task, context), '新计划 — FINAL PLAN'); assert.equal(submitted.length, 1);
+  }, { lazySubmit: true });
+});
+
+for (const width of [1280, 390]) for (const colorScheme of ['light', 'dark'] as const) {
+  test(`live Muse textarea defaults submit once at ${width}px in ${colorScheme} mode`, async () => {
+    await textFixture(async ({ store, browsers, task, context, submitted }) => {
+      const page = (await browsers.open(store.account(task.accountId))).pages()[0];
+      await page.setViewportSize({ width, height: width === 390 ? 844 : 900 }); await page.emulateMedia({ colorScheme });
+      assert.equal((await browsers.check(task.accountId)).ready, true);
+      assert.equal(await page.locator(store.settings().museSelectors.submit).isVisible(), false);
+      assert.equal(await browsers.completeText(task, context), '新计划 — FINAL PLAN');
+      assert.equal(submitted.length, 1); assert.equal(JSON.parse(submitted[0]).prompt, task.prompt);
+      assert.equal(task.checkpoint.remoteSubmitted, true);
+    }, { liveComposer: true });
+  });
+}
 
 test('text plan resolves reference IDs to validated images and waits until uploads permit sending', async () => {
   await textFixture(async ({ store, browsers, task, context, submitted }) => {
@@ -309,7 +352,7 @@ async function musicFixture(run: (fixture: {
   for (let i = 0; i < 1600; i++) wav.writeInt16LE(Math.round(Math.sin(i * 2 * Math.PI * 440 / 8000) * 8000), 44 + i * 2);
   const controller = new AbortController(); const submissions: string[] = []; let downloads = 0; let videoDownloads = 0; let acceptedAt = 0;
   const source = `/new.${variant.split('.').at(-1)}?signed=fixture`;
-  const media = variant.startsWith('audio') ? `<audio preload="none" src="${source}"></audio>` : variant.startsWith('source') ? `<audio preload="none"><source src="${source}" type="audio/wav"></audio>` : `<a href="${source}">Download music</a>`;
+  const media = variant.startsWith('menu') ? `<button aria-label="Audio options">Options</button><button aria-label="More options" onclick="this.nextElementSibling.hidden=false">More</button><div role="menu" hidden><div role="menuitem" data-pel-click="chat_audio_download" onclick="const a=document.createElement('a');a.href='${source}';a.download='result.wav';a.click()">Download</div></div>` : variant.startsWith('audio') ? `<audio preload="none" src="${source}"></audio>` : variant.startsWith('source') ? `<audio preload="none"><source src="${source}" type="audio/wav"></audio>` : `<a href="${source}">Download music</a>`;
   const reply = `<article class="reply"><video preload="none" src="/decoy.mp4"></video><a href="/decoy.mp4">Video</a><a href="/old.wav">Previous music</a>${media}</article>`;
   const server = createServer((req, res) => {
     if (req.url?.startsWith('/new.')) {
@@ -322,10 +365,10 @@ async function musicFixture(run: (fixture: {
     const active = acceptedAt > 0 && Date.now() - acceptedAt < 1800;
     res.writeHead(200, { 'content-type': 'text/html; charset=utf-8' });
     res.end(`<textarea id="prompt"></textarea><button id="send">Send</button><button id="stop" ${active ? '' : 'hidden'}>Stop</button>
-      <section><article class="reply"><a href="/old.wav">Old completed music</a></article>${acceptedAt ? reply : ''}</section><script>
+      <section><article class="reply"><a href="/old.wav">Old completed music</a></article>${acceptedAt ? '<div data-message-item data-message-role="user">'+submissions[0]+'</div>'+reply : ''}</section><script>
       const send=document.querySelector('#send'),stop=document.querySelector('#stop');
       stop.onclick=()=>{stop.hidden=true};
-      send.onclick=async()=>{stop.hidden=false;await fetch('/submit',{method:'POST',body:document.querySelector('#prompt').value});history.replaceState({},'', '/thread/music');document.querySelector('section').insertAdjacentHTML('beforeend',${JSON.stringify(reply)});setTimeout(()=>{stop.hidden=true},1800)};
+      send.onclick=async()=>{stop.hidden=false;await fetch('/submit',{method:'POST',body:document.querySelector('#prompt').value});history.replaceState({},'', '/thread/music');const user=document.createElement('div');user.dataset.messageItem='';user.dataset.messageRole='user';user.textContent=document.querySelector('#prompt').value;document.querySelector('section').append(user);document.querySelector('section').insertAdjacentHTML('beforeend',${JSON.stringify(reply)});setTimeout(()=>{stop.hidden=true},1800)};
       </script>`);
   });
   await new Promise<void>(resolve => server.listen(0, '127.0.0.1', resolve)); const address = server.address(); assert.ok(address && typeof address !== 'string');
@@ -338,7 +381,7 @@ async function musicFixture(run: (fixture: {
   finally { await browsers.shutdown(); store.close(); server.closeAllConnections(); await new Promise<void>(resolve => server.close(() => resolve())); rmSync(root, { recursive: true, force: true }); }
 }
 
-for (const variant of ['link.wav', 'link.mp3', 'link.m4a', 'link.ogg', 'audio.wav', 'source.wav']) {
+for (const variant of ['link.wav', 'link.mp3', 'link.m4a', 'link.ogg', 'audio.wav', 'source.wav', 'menu.wav']) {
   test(`music ${variant} downloads new PCM audio once after streaming, never video or an old reply`, async () => {
     await musicFixture(async ({ store, browsers, task, context, submissions, downloads, videoDownloads, wav }) => {
       const page = (await browsers.open(store.account(task.accountId))).pages()[0];
@@ -347,7 +390,7 @@ for (const variant of ['link.wav', 'link.mp3', 'link.m4a', 'link.ogg', 'audio.wa
       const started = Date.now(); const result = await browsers.generate(task, context);
       assert.ok(Date.now() - started >= 1800); assert.deepEqual(submissions, [task.prompt]); assert.equal(downloads(), 1); assert.equal(videoDownloads(), 0);
       assert.equal(result.outputIds.length, 1); const asset = store.asset(result.outputIds[0]); assert.equal(asset.mime, 'audio/wav'); assert.match(asset.name, /\.wav$/);
-      assert.deepEqual(readFileSync(store.assetPath(asset.id)), wav); assert.equal(task.checkpoint.remoteSubmitted, true); assert.match(String(task.checkpoint.downloadUrl), /\/new\./);
+      assert.deepEqual(readFileSync(store.assetPath(asset.id)), wav); assert.equal(task.checkpoint.remoteSubmitted, true); if (variant !== 'menu.wav') assert.match(String(task.checkpoint.downloadUrl), /\/new\./); else assert.equal(task.checkpoint.musicAttachmentDownloaded, true);
       if (variant === 'link.wav') {
         const duration = await page.evaluate(base64 => new Promise<number>((resolve, reject) => { const audio = new Audio(`data:audio/wav;base64,${base64}`); audio.onloadedmetadata = () => resolve(audio.duration); audio.onerror = () => reject(new Error('PCM WAV is not playable')); }), wav.toString('base64'));
         assert.ok(Math.abs(duration - 0.2) < 0.01);
@@ -372,4 +415,115 @@ test('music cancellation aborts its audio download and never imports partial out
     await assert.rejects(browsers.generate(task, context), { name: 'AbortError' });
     assert.ok(controller.signal.aborted); assert.equal(submissions.length, 1); assert.equal(downloads(), 1); assert.equal(store.assets().length, 0);
   }, 'link.wav', true);
+});
+
+
+test('legacy admitted music recovers its current audio-menu reply without another generation', async () => {
+  await musicFixture(async ({ store, browsers, task, context, submissions, downloads, wav }) => {
+    task.input.timeoutMs = 1000; await assert.rejects(browsers.generate(task, context), NeedsInputError);
+    assert.equal(submissions.length, 1); assert.equal(downloads(), 0);
+    await browsers.shutdown(); await delay(1000); delete task.checkpoint.beforeReplyCount; task.input.timeoutMs = 4500;
+    const reopened = new BrowserManager(store);
+    try { const result = await reopened.generate(task, context); assert.equal(submissions.length, 1); assert.equal(downloads(), 1); assert.deepEqual(readFileSync(store.assetPath(result.outputIds[0])), wav); }
+    finally { await reopened.shutdown(); }
+  }, 'menu.wav');
+});
+
+test('music menu cannot collect an attachment from a different latest user request', async () => {
+  await musicFixture(async ({ store, browsers, task, context, submissions, downloads }) => {
+    task.input.timeoutMs = 1000; await assert.rejects(browsers.generate(task, context), NeedsInputError); await browsers.shutdown(); await delay(1000);
+    submissions[0] = 'A different request'; delete task.checkpoint.beforeReplyCount; task.input.timeoutMs = 4500;
+    const reopened = new BrowserManager(store);
+    try { await assert.rejects(reopened.generate(task, context), NeedsInputError); assert.equal(submissions.length, 1); assert.equal(downloads(), 0); assert.equal(store.assets().length, 0); }
+    finally { await reopened.shutdown(); }
+  }, 'menu.wav');
+});
+
+test('cancelling an audio-menu download never imports its partial bytes', async () => {
+  await musicFixture(async ({ store, browsers, task, context, controller, downloads }) => {
+    await assert.rejects(browsers.generate(task, context)); assert.ok(controller.signal.aborted); assert.equal(downloads(), 1); assert.equal(store.assets().length, 0);
+  }, 'menu.wav', true);
+});
+
+async function downloadSafetyFixture(kind: 'declared' | 'chunked' | 'late' | 'extension' | 'url', run: (fixture: {
+  browsers: BrowserManager; store: Store; task: Task; context: TaskContext; page: import('playwright-core').Page;
+  transferred: () => number; closed: () => boolean;
+}) => Promise<void>) {
+  const root = mkdtempSync(join(tmpdir(), 'mai-download-safety-')), store = new Store(root), browsers = new BrowserManager(store);
+  const controller = new AbortController(); let bytes = 0, closed = false;
+  const timers: ReturnType<typeof setTimeout>[] = [];
+  const transfer: import('node:http').RequestListener = (_req, res) => {
+    res.on('close', () => { closed = true; });
+    const start = async () => {
+      res.writeHead(200, { 'content-type': 'audio/wav', 'content-disposition': `attachment; filename="result.${kind === 'extension' ? 'exe' : 'wav'}"`, ...(kind === 'declared' ? { 'content-length': String(256 * 1024 ** 2 + 1) } : {}) });
+      const block = Buffer.alloc(64 * 1024), limit = kind === 'chunked' ? 256 * 1024 ** 2 + block.length : block.length;
+      try {
+        while (!closed && bytes < limit) { bytes += block.length; if (!res.write(block)) await once(res, 'drain'); }
+      } catch { /* Cancellation closes the owned fixture stream. */ }
+    };
+    if (kind === 'late') { timers.push(setTimeout(() => controller.abort(), 50)); timers.push(setTimeout(() => { void start(); }, 300)); }
+    else void start();
+  };
+  let target = '/file';
+  const server = createServer((req, res) => {
+    if (req.url === '/file') { transfer(req, res); return; }
+    res.setHeader('content-type', 'text/html');
+    res.end(`<button id="stop" hidden>Stop</button><div data-message-item data-message-role="user">Safety music</div><article class="reply"><button aria-label="Audio options">Audio</button><button aria-label="More options" onclick="document.querySelector('[role=menu]').hidden=false">More</button><div role="menu" hidden><button role="menuitem" data-pel-click="chat_audio_download" onclick="const a=document.createElement('a');a.href='${target}';a.download='result.${kind === 'extension' ? 'exe' : 'wav'}';a.click()">Download</button></div></article>`);
+  });
+  const other = kind === 'url' ? createServer(transfer) : undefined;
+  try {
+    await new Promise<void>(resolve => server.listen(0, '127.0.0.1', resolve));
+    if (other) { await new Promise<void>(resolve => other.listen(0, '127.0.0.1', resolve)); target = `http://127.0.0.1:${(other.address() as import('node:net').AddressInfo).port}/file`; }
+    const account = store.saveAccount({ name: 'Owned safety fixture', url: `http://127.0.0.1:${(server.address() as import('node:net').AddressInfo).port}/` });
+    store.setSettings({ browserVisible: false, museSelectors: { response: '.reply', stop: '#stop', errorNotice: '#error' } });
+    const project = store.saveProject({ name: 'Safety' });
+    const task: Task = { ...store.createTasks({ projectId: project.id, prompts: ['Safety music'], accountId: account.id, kind: 'image' })[0], kind: 'music', checkpoint: { remoteSubmitted: true, threadUrl: account.url, beforeReplyCount: 0, beforeUrls: [] }, input: { timeoutMs: 4500 } };
+    const context: TaskContext = { signal: controller.signal, progress() {}, checkpoint(value) { task.checkpoint = { ...task.checkpoint, ...value }; } };
+    const page = (await browsers.open(account)).pages()[0];
+    timers.push(setTimeout(() => controller.abort(), 12000));
+    await run({ browsers, store, task, context, page, transferred: () => bytes, closed: () => closed });
+  } finally {
+    timers.forEach(clearTimeout); await browsers.shutdown(); store.close();
+    for (const listener of [server, other]) if (listener) { listener.closeAllConnections(); await new Promise<void>(resolve => listener.close(() => resolve())); }
+    rmSync(root, { recursive: true, force: true });
+  }
+}
+
+for (const kind of ['declared', 'chunked'] as const) test(`audio menu enforces its 256MiB bound in flight for ${kind} length`, async () => {
+  await downloadSafetyFixture(kind, async ({ browsers, store, task, context, closed, transferred }) => {
+    await assert.rejects(browsers.generate(task, context), /256 MiB/);
+    for (let n = 0; n < 100 && !closed(); n++) await delay(10);
+    assert.equal(closed(), true, 'the browser must stop its live transfer'); assert.equal(store.assets().length, 0);
+    if (kind === 'declared') assert.ok(transferred() < 256 * 1024 ** 2, 'known oversized length stops before receiving the body');
+  });
+});
+
+for (const kind of ['late', 'extension', 'url'] as const) test(`audio menu cancels an unaccepted ${kind} download handle`, async () => {
+  await downloadSafetyFixture(kind, async ({ browsers, store, task, context, page, closed }) => {
+    const arrived = page.waitForEvent('download', { timeout: 5000 });
+    await assert.rejects(browsers.generate(task, context));
+    const download = await arrived;
+    const failure = await Promise.race([download.failure(), delay(1500).then(() => 'still transferring')]);
+    assert.equal(failure, 'canceled');
+    for (let n = 0; n < 100 && !closed(); n++) await delay(10);
+    assert.equal(closed(), true); assert.equal(store.assets().length, 0); assert.equal(task.checkpoint.outputIds, undefined);
+  });
+});
+
+for (const accountWord of ['your', 'this', 'your MaiStudio'] as const) test(`an explicit regional video refusal for ${accountWord} account stops promptly and an admitted retry never submits again`, async () => {
+  const root = mkdtempSync(join(tmpdir(), 'mai-region-refusal-')), store = new Store(root); let submissions = 0;
+  const server = createServer((req, res) => {
+    if (req.url === '/submit') { submissions++; res.end('{}'); return; }
+    res.setHeader('content-type', 'text/html'); res.end(`<textarea id="prompt"></textarea><button id="send">Send</button><button id="stop" hidden>Stop</button><section></section><script>send.onclick=async()=>{await fetch('/submit');document.querySelector('section').innerHTML='<article class="reply">Video generation is not available for ${accountWord} account in your country or region, so I cannot create this clip.</article>'}</script>`);
+  });
+  await new Promise<void>(resolve => server.listen(0, '127.0.0.1', resolve));const address = server.address();assert.ok(address && typeof address !== 'string');
+  store.setSettings({ browserVisible: false, museSelectors: { composer: '#prompt', submit: '#send', response: '.reply', stop: '#stop', fileInput: 'input[type=file]' } });
+  const browsers = new BrowserManager(store);
+  try {
+    const project = store.saveProject({ name: 'Region refusal' }), account = store.saveAccount({ name: 'Owned fixture', url: `http://127.0.0.1:${address.port}/` });
+    const [task] = store.createTasks({ projectId: project.id, prompts: ['Create the video'], kind: 'video', accountId: account.id, input: { timeoutMs: 4500 } });
+    const context: TaskContext = { signal: new AbortController().signal, checkpoint(value) { task.checkpoint = { ...task.checkpoint, ...value }; }, progress() {} };
+    const started = Date.now(); await assert.rejects(browsers.generate(task, context), /quốc gia|khu vực/i);assert.ok(Date.now() - started < 3500);assert.equal(submissions, 1);
+    await assert.rejects(browsers.generate(task, context), /quốc gia|khu vực/i);assert.equal(submissions, 1);assert.equal(store.assets().length, 0);
+  } finally { await browsers.shutdown();store.close();server.closeAllConnections();await new Promise<void>(resolve => server.close(() => resolve()));rmSync(root,{recursive:true,force:true}); }
 });

@@ -1,7 +1,8 @@
-import { chromium, type BrowserContext, type Page } from 'playwright-core';
+import { chromium, type BrowserContext, type CDPSession, type Download, type Page } from 'playwright-core';
 import { existsSync, createWriteStream } from 'node:fs';
-import { mkdir, rm, writeFile } from 'node:fs/promises';
-import { join } from 'node:path';
+import { mkdir, mkdtemp, lstat, rm, writeFile } from 'node:fs/promises';
+import { extname, join } from 'node:path';
+import { MediaTools } from './media';
 import { homedir } from 'node:os';
 import { Readable, Transform } from 'node:stream';
 import { pipeline } from 'node:stream/promises';
@@ -55,6 +56,15 @@ export class BrowserManager {
     this.store.accountStatus(id, ready ? 'ready' : 'needs_login'); return { ready, message: ready ? 'Đã thấy ô nhập prompt' : 'Cần đăng nhập hoặc cập nhật selector' };
   }
   async shutdown(): Promise<void> { await Promise.allSettled([...this.contexts.keys()].map(id => this.close(id))); }
+  private async composerReady(page: Page, selector: string, signal: AbortSignal): Promise<boolean> {
+    const deadline = Date.now() + 15000;
+    while (Date.now() < deadline) {
+      signal.throwIfAborted();
+      if (await page.locator(selector).first().isVisible().catch(() => false)) return true;
+      await delay(100, undefined, { signal });
+    }
+    signal.throwIfAborted(); return false;
+  }
   async completeText(task: Task, context: TaskContext): Promise<string> {
     context.signal.throwIfAborted();
     const account = this.store.account(task.accountId); const selectors = this.store.settings().museSelectors;
@@ -96,7 +106,7 @@ export class BrowserManager {
       context.signal.throwIfAborted();
       if (page.url() !== (threadUrl || account.url)) await page.goto(threadUrl || account.url, { waitUntil: 'domcontentloaded', timeout: 15000 });
       const composer = page.locator(selectors.composer).first(); const submit = page.locator(selectors.submit).first();
-      if (!await composer.isVisible() || !await submit.isVisible()) throw new NeedsInputError('Cần đăng nhập Muse hoặc cập nhật selector trước khi tiếp tục.');
+      if (!await this.composerReady(page, selectors.composer, context.signal)) throw new NeedsInputError('Cần đăng nhập Muse hoặc cập nhật selector trước khi tiếp tục.');
       let before = Number(checkpoint.beforeReplyCount);
       if (checkpoint.remoteSubmitted !== true) {
         if (await page.locator(selectors.stop).first().isVisible()) throw new NeedsInputError('Thread đang có yêu cầu khác; chờ hoàn tất trước khi gửi kế hoạch.');
@@ -173,10 +183,11 @@ export class BrowserManager {
       if (new URL(checkpoint.threadUrl).origin !== new URL(account.url).origin) throw new Error('Checkpoint không thuộc tài khoản/provider này');
       if (page.url() !== checkpoint.threadUrl) await page.goto(checkpoint.threadUrl, { waitUntil: 'domcontentloaded' });
     } else if (page.url() === 'about:blank') await page.goto(account.url, { waitUntil: 'domcontentloaded' });
+    const beforeReplyCount = Number.isSafeInteger(checkpoint.beforeReplyCount) ? Number(checkpoint.beforeReplyCount) : checkpoint.remoteSubmitted === true ? undefined : await page.locator(selectors.response).count();
     const before = Array.isArray(checkpoint.beforeUrls) ? checkpoint.beforeUrls as string[] : await this.mediaUrls(page, selectors.response, task.kind);
     if (checkpoint.remoteSubmitted !== true) {
       const composer = page.locator(selectors.composer).first();
-      if (!await composer.isVisible().catch(() => false)) throw new NeedsInputError('Cần đăng nhập Muse hoặc cập nhật selector. Mở tài khoản rồi tiếp tục task.');
+      if (!await this.composerReady(page, selectors.composer, context.signal)) throw new NeedsInputError('Cần đăng nhập Muse hoặc cập nhật selector. Mở tài khoản rồi tiếp tục task.');
       const files = this.referencePaths(task);
       if (files.length) await this.attachReferences(page, files, selectors.fileInput, context.signal);
       const ratio = typeof task.input.ratio === 'string' ? task.input.ratio : '16:9';
@@ -186,7 +197,7 @@ export class BrowserManager {
         : `Create a video with aspect ratio ${ratio}${files.length ? ' from the attached image (image-to-video)' : ''}. Do not ask follow-up questions, just generate the video directly.\n\n${task.prompt}`;
       await composer.fill(prompt, { timeout: 15000 }); context.signal.throwIfAborted();
       const submit = page.locator(selectors.submit).first(); await submit.waitFor({ state: 'visible', timeout: 15000 });
-      context.checkpoint({ remoteSubmitted: true, beforeUrls: before, submittedAt: Date.now() });
+      context.checkpoint({ remoteSubmitted: true, beforeUrls: before, beforeReplyCount, submittedAt: Date.now() });
       await submit.click({ timeout: 15000 });
       context.checkpoint({ threadUrl: page.url() });
     }
@@ -208,12 +219,92 @@ export class BrowserManager {
           }
           this.store.accountStatus(account.id, 'ready'); return { outputIds: ids };
         }
+        if (!busy && !urls.length && ['video', 'image-to-video'].includes(task.kind) && beforeReplyCount !== undefined && await page.locator(selectors.response).count() > beforeReplyCount) {
+          const reply = (await page.locator(selectors.response).last().innerText()).trim();
+          if (/^Video generation (?:isn't|is not) available for (?:your|this)(?: [A-Za-z][A-Za-z0-9_-]{0,63})? account in your country or region\b/i.test(reply)) throw new NeedsInputError('Provider không cho phép tạo video cho tài khoản ở quốc gia/khu vực hiện tại. Giữ yêu cầu đã gửi để đối soát; không tự gửi lại.');
+        }
+        if (task.kind === 'music' && !busy && !urls.length) {
+          const id = await this.musicAttachment(page, selectors.response, task, context, beforeReplyCount);
+          if (id) { this.store.accountStatus(account.id, 'ready'); return { outputIds: [id] }; }
+        }
         context.progress(Math.min(0.9, 0.05 + (Date.now() - started) / timeout * 0.8), 'Đang chờ kết quả từ Muse');
         await delay(500, undefined, { signal: context.signal });
       }
       throw new NeedsInputError('Chưa nhận được media trong thời gian chờ. Kiểm tra thread và tiếp tục để tránh gửi trùng.');
     } finally {
       if (context.signal.aborted && selectors.stop) await page.locator(selectors.stop).first().click({ timeout: 1500 }).catch(() => {});
+    }
+  }
+  private async musicAttachment(page: Page, selector: string, task: Task, context: TaskContext, beforeReplyCount: number | undefined): Promise<string | undefined> {
+    const responses = page.locator(selector), count = await responses.count();
+    if (!count || beforeReplyCount !== undefined && count <= beforeReplyCount) return;
+    const reply = responses.last();
+    if (!await reply.getByRole('button', { name: 'Audio options', exact: true }).isVisible().catch(() => false)) return;
+    // Legacy admissions lack a reply baseline; bind recovery to the exact latest user prompt and DOM order.
+    const current = await reply.evaluate((element, prompt) => {
+      const users = document.querySelectorAll('[data-message-item][data-message-role="user"]'), user = users[users.length - 1];
+      const normalize = (value: string) => value.replace(/\s+/g, ' ').trim();
+      const text = normalize((user as HTMLElement | undefined)?.innerText || ''); const wanted = normalize(prompt);
+      return !!user && !!wanted && text.endsWith(wanted) && text.length - wanted.length <= 64 && !!(element.compareDocumentPosition(user) & Node.DOCUMENT_POSITION_PRECEDING);
+    }, task.prompt);
+    if (!current) throw new NeedsInputError('Reply nhạc không thuộc yêu cầu đang chạy; kiểm tra thread, không gửi lại.');
+    const folder = join(this.store.root, 'work', task.id); await mkdir(folder, { recursive: true, mode: 0o700 });
+    const temporary = await mkdtemp(join(folder, 'audio-'));
+    let download: Download | undefined, session: CDPSession | undefined;
+    let guid = '', finished = false, accepted = false;
+    const maxBytes = 256 * 1024 * 1024;
+    let rejectAbort!: (reason: unknown) => void;
+    const aborted = new Promise<never>((_resolve, reject) => { rejectAbort = reject; });
+    void aborted.catch(() => {});
+    const cancel = async () => {
+      if (download) await download.cancel().catch(() => {});
+      else if (session && guid) await session.send('Browser.cancelDownload', { guid }).catch(() => {});
+    };
+    const fail = (reason: unknown) => { finished = true; rejectAbort(reason); void cancel(); };
+    const deadline = setTimeout(() => fail(new NeedsInputError('Tải audio quá thời gian chờ; kiểm tra tệp đã tạo trước khi tiếp tục')), 600000);
+    const stop = () => fail(context.signal.reason);
+    context.signal.addEventListener('abort', stop, { once: true });
+    try {
+      context.signal.throwIfAborted();
+      session = await page.context().newCDPSession(page);
+      // Browser CDP sessions do not receive Playwright's root download events; Page events preserve its behavior/path.
+      await session.send('Page.enable');
+      let began!: () => void; const started = new Promise<void>(resolve => { began = resolve; });
+      session.on('Page.downloadWillBegin', (event: { guid: string }) => { if (!guid) { guid = event.guid; began(); } });
+      session.on('Page.downloadProgress', (event: { guid: string; totalBytes: number; receivedBytes: number }) => {
+        if (!finished && event.guid === guid && (event.totalBytes > maxBytes || event.receivedBytes > maxBytes)) fail(new NeedsInputError('Tệp nhạc vượt giới hạn 256 MiB; đã hủy tải đang chạy'));
+      });
+      context.signal.throwIfAborted();
+      await reply.getByRole('button', { name: 'More options', exact: true }).click({ timeout: 5000 });
+      const button = page.locator('[role="menuitem"][data-pel-click="chat_audio_download"]');
+      if (!await button.isVisible()) throw new NeedsInputError('Menu nhạc chưa có nút tải xuống được xác minh');
+      const pending = page.waitForEvent('download', { timeout: 60000 }).then(value => {
+        download = value; if (finished) void value.cancel().catch(() => {}); return value;
+      });
+      void pending.catch(() => {});
+      await button.click({ timeout: 5000 });
+      await Promise.race([Promise.all([pending, started]), aborted]); context.signal.throwIfAborted();
+      if (!download) throw new NeedsInputError('Chưa nhận được download audio đã xác minh');
+      const extension = extname(download.suggestedFilename()).toLowerCase();
+      if (!['.mp3', '.wav', '.m4a', '.ogg'].includes(extension)) throw new NeedsInputError('Tệp nhạc tải xuống không có định dạng audio được hỗ trợ');
+      const url = download.url();
+      if (!url.startsWith('blob:') && !url.startsWith('data:')) { const target = new URL(publicUrl(url, true)); if (target.protocol === 'http:' && target.origin !== new URL(page.url()).origin) throw new Error('Không tải audio từ loopback khác provider'); }
+      const output = join(temporary, 'result' + extension);
+      await Promise.race([download.saveAs(output), aborted]); context.signal.throwIfAborted();
+      const entry = await lstat(output); if (!entry.isFile() || entry.isSymbolicLink() || !entry.size || entry.size > maxBytes) throw new Error('Tệp nhạc rỗng hoặc vượt giới hạn 256 MiB');
+      const info = await new MediaTools({ ffmpegPath: this.store.settings().ffmpegPath || undefined }).probe(output, context.signal);
+      if (!info.hasAudio || info.width) throw new NeedsInputError('Tệp tải xuống không phải audio thuần hợp lệ');
+      const asset = await this.store.importAsset(output, { taskId: task.id, projectId: task.projectId }, context.signal);
+      context.checkpoint({ threadUrl: page.url(), musicAttachmentDownloaded: true, outputIds: [asset.id] });
+      accepted = true;
+      return asset.id;
+    } catch (error) { context.signal.throwIfAborted(); throw error; }
+    finally {
+      finished = true; clearTimeout(deadline); context.signal.removeEventListener('abort', stop);
+      if (!accepted) await cancel();
+      await session?.detach().catch(() => {});
+      await rm(temporary, { recursive: true, force: true });
+      if (!page.isClosed()) await page.keyboard.press('Escape').catch(() => {});
     }
   }
   private async mediaUrls(page: Page, selector: string, kind: string): Promise<string[]> {

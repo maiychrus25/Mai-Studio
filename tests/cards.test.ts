@@ -32,3 +32,17 @@ test('film title and end cards add real timeline clips rather than only metadata
     assert.ok(Math.abs(Number(studio.store.asset(done.outputIds[0]).duration) - 4.2) < 0.08);
   } finally { await studio.close(); rmSync(root, { recursive: true, force: true }); }
 });
+
+test('compact Affiliate footer fits all supported ratios below captions and speech', async () => {
+  const root = mkdtempSync(join(tmpdir(), 'maistudio-footer-'));
+  try {
+    for (const [width, height] of [[320, 568], [320, 180], [240, 240], [320, 240], [240, 320]]) {
+    const output = join(root, `footer-${width}-${height}.png`), card = { title: 'Combo 3 Áo Thun Nam Dài Tay Màu Đen', body: '112.686₫–120.000₫ · Quảng cáo · Hình ảnh AI', output, width, height, overlay: true, compact: true };
+    await renderCards([card], '', new AbortController().signal);
+    const decoded = spawnSync(require('ffmpeg-static'), ['-v', 'error', '-i', output, '-frames:v', '1', '-f', 'rawvideo', '-pix_fmt', 'rgba', 'pipe:1']); assert.equal(decoded.status, 0);
+    const rows: number[] = [];
+    for (let y = 0; y < height; y++) for (let x = 0; x < width; x++) if (decoded.stdout[(y * width + x) * 4 + 3] > 0) { rows.push(y); break; }
+    assert.ok(rows.length > 10); assert.ok(Math.min(...rows) > height * 0.82, 'footer does not occupy the caption or speech bands');
+    }
+  } finally { rmSync(root, { recursive: true, force: true }); }
+});

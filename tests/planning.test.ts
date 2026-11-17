@@ -56,3 +56,35 @@ test('keep-script preserves unlabelled supplied dialogue instead of accepting an
   const spoken = 'Xem hướng dẫn: https://example.com.'; raw.shots[0].dialogue = spoken;
   assert.doesNotThrow(() => planner().parsePlan(JSON.stringify(raw), project({ script: spoken, keepScript: true })), 'ordinary punctuation must not be mistaken for a speaker label');
 });
+
+test('planner asks for independent still and continuous anchor prompts plus structured directions', () => {
+  const prompt = planner().planningPrompt(project());
+  for (const field of ['action', 'acting', 'camera', 'environment']) assert.ok(prompt.includes(`"${field}"`), field);
+  for (const contract of [/framing/i, /visible action/i, /location/i, /time/i, /full.*character description/i, /single.*anchor frame/i, /face/i, /outfit/i, /background/i, /no cuts/i, /no (?:extra|additional) people/i, /no (?:on-screen )?text/i, /4000/i]) assert.match(prompt, contract);
+});
+
+test('parsePlan preserves bounded shot directions and rejects invalid fields before publishing', () => {
+  const directions = { action: 'Lift the cup', acting: 'Hesitant smile', camera: 'Slow push in', environment: 'Steam above a quiet table' };
+  const raw = result(); Object.assign(raw.shots[0], directions);
+  const data = planner().parsePlan(JSON.stringify(raw), project());
+  for (const [key, value] of Object.entries(directions)) assert.equal((data.shots as Record<string, unknown>[])[0][key], value);
+  for (const field of Object.keys(directions)) {
+    for (const value of [null, 42, 'x'.repeat(4001), 'ế'.repeat(1334), 'bad\0text']) {
+      const invalid = result(); Object.assign(invalid.shots[0], { [field]: value });
+      assert.throws(() => planner().parsePlan(JSON.stringify(invalid), project()), new RegExp(field, 'i'));
+    }
+  }
+});
+
+test('new plans enable bounded image and video review for every studio kind without overriding explicit opt-outs', () => {
+  for (const kind of ['film', 'series', 'affiliate', 'srt', 'studio', 'dub'] as Project['kind'][]) {
+    const source = project(); source.kind = kind;
+    if (kind === 'series') source.data.episodes = [{ id: 'e1', name: 'Episode', script: 'A lake' }];
+    const data = planner().parsePlan(JSON.stringify(result()), source);
+    assert.deepEqual([data.autoChecks, data.videoReview, data.qualityRetries], [true, true, 1], kind);
+    const optedOut = planner().parsePlan(JSON.stringify(result()), { ...source, data: { ...source.data, autoChecks: false, videoReview: false, qualityRetries: 0 } });
+    assert.deepEqual([optedOut.autoChecks, optedOut.videoReview, optedOut.qualityRetries], [false, false, 0]);
+  }
+  for (const qualityRetries of [0, 1, 2]) assert.equal(planner().parsePlan(JSON.stringify(result()), project({ qualityRetries })).qualityRetries, qualityRetries);
+  for (const qualityRetries of [-1, 3, 0.5, '1', null, false, Infinity, NaN]) assert.throws(() => planner().parsePlan(JSON.stringify(result()), project({ qualityRetries })), /qualityRetries|quality retries/i);
+});
