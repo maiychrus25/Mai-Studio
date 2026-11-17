@@ -211,16 +211,18 @@ Hosted CI follow-up: the first Linux x64 run reported406/407 due to a font-depen
 
 ### Native CI installer build — 17/11/2026
 
-**Status: IMPLEMENTED LOCALLY / NATIVE JOBS PENDING —** the operator requested CI build like automation-marketing. The existing MaiHub workflow was read as the reference: verification gate, native OS runners, macOS ad-hoc signing, installer-only artifacts, and 14-day retention. MaiStudio reuses its current five-platform matrix and its own build commands; no MaiHub-only runtime or release task is added.
+**Status: NATIVE BUILD VERIFIED —** run44049704483 for35f8d82 passed verify and all five native package jobs. The operator requested CI build like automation-marketing. The existing MaiHub workflow was read as the reference: verification gate, native OS runners, macOS ad-hoc signing, installer-only artifacts, and 14-day retention. MaiStudio reuses its current five-platform matrix and its own build commands; no MaiHub-only runtime or release task is added. Per the later time-priority request, dev packaging runs alongside verify; acceptance still requires both branches to pass.
 
 Initial workflow-only files: .github/workflows/build.yml, README.md, CONTRIBUTING.md, SYSTEM_DOCUMENTATION.md, CHANGELOG.md and this plan. That initial change had no application-source, version, schema, IPC, or dependency change; the observed regression follow-up is recorded below.
 
 Post-implementation note: the first manual native build44045714228 stopped at the existing subtitle render assertion before packaging (greenPeak143). Its FFmpeg/font hashes match an earlier successful runner, so font-family selection alone is not sufficient. The scoped follow-up adds x264 cpu-independent=1 only to final H.264 composition in src/core/media.ts, with matching system docs/changelog. CRF/preset/timing/typography/audio and FFV1 intermediates remain as before. Existing tests/thresholds stay unchanged; focused render and full407/407 pass locally after the change, but hosted RED→GREEN and native artifacts are still required.
 
 - [x] Review the scoped workflow diff; pass build/lint/docs/actionlint and both Electron desktop/mobile, light/dark stress rounds.
-- [ ] Commit/push the workflow, then dispatch build.yml on the exact main commit with package_artifacts=true; the new run must complete its full verification gate.
-- [ ] Inspect all five native package jobs and their installer artifacts. Fix observed packaging errors in dev, rerun the affected jobs, and distinguish package success from runtime acceptance.
-- [ ] Verify final main/remote state and provide the run/artifact download links. Do not create a tag, GitHub Release or production deployment during this installer-only task.
+- [x] Commit/push the workflow, then dispatch build.yml on the exact main commit with package_artifacts=true; the new run must complete its full verification gate.
+- [x] Inspect all five native package jobs and their installer artifacts. Fix observed packaging errors in dev, rerun the affected jobs, and distinguish package success from runtime acceptance.
+- [x] Verify final main/remote state and provide the run/artifact download links. Do not create a tag, GitHub Release or production deployment during this installer-only task.
+
+Final evidence: https://github.com/maiychrus25/Mai-Studio/actions/runs/44049704483, source commit `35f8d82`. Hosted full407/407 and all five installers passed. Artifact IDs: macOS ARM64 `14312489798`, macOS x64 `14313756003`, Linux ARM64 `14313630783`, Linux x64 `14313261763`, Windows x64 `14313371533`. macOS ARM64 installer DMG checksum and deep strict code signature verified locally; its63 compiled files and package contract match tested source; isolated app startup/bridge/layout pass with zero renderer errors. Linux AppImage headers match AArch64/x86-64. Local packages are under Downloads/MaiStudio-CI-35f8d82, with nine installers and SHA256SUMS.txt. This is installer verification, not all-platform/provider runtime acceptance; no Release or deployment was performed.
 
 Rollback is the scoped workflow/documentation commit; existing product commits and user data are preserved. Risks to report: ad-hoc/untrusted signing and runtime/provider coverage not established merely by building installers. Retain failure logs and actual platform results rather than promoting configured matrix entries to successful builds.
 
