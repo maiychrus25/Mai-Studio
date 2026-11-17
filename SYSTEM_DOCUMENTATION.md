@@ -223,6 +223,8 @@ Chuẩn bị cập nhật tạm dừng admission queue và khóa các command th
 
 ## Build, test và release
 
+Theo yêu cầu tiếp theo của anh về mục Releases/Packages, bộ cài đã qua CI Build 44049704483 được phát hành thủ công dưới dạng pre-release `v0.2.0-dev.1`, tag trỏ đúng commit nguồn `35f8d82185464e3701c77cb4a9c0593b7ac07f43`. Quy trình: kiểm SHA256 chín file cài từ năm native package jobs → tải lên draft Release → đối chiếu tên/kích thước/digest tài sản trên GitHub → công khai pre-release. Release chứa chín file cài và SHA256SUMS.txt với tên file tải về; không đưa update metadata/blockmap vào feed. Workflow Build vẫn chỉ tạo Actions artifacts và không tự publish. Không publish npm/container lên GitHub Packages vì ứng dụng desktop private không có registry package được yêu cầu. Không thay version, bật auto-update, deploy hoặc tăng phạm vi nghiệm thu OS/provider; signing vẫn là giới hạn bản dev. Khi cần gỡ bản phát hành, chuyển Release về draft; không sửa tag đã công khai để trỏ sang mã khác.
+
 `make build` chạy TypeScript + Vite rồi mới in Build succeeded. `make test` chạy node:test sau compile; `make lint` typecheck core/UI và diff whitespace, zero warnings. `scripts/check-docs.js` tái sử dụng từ MaiHub để kiểm version, docs-check constants và file paths.
 
 `scripts/stress.mjs` chạy 1.000 task/vòng qua renderer bridge/Electron thật và provider local, đo concurrency/status/memory, screenshot desktop/mobile/light/dark và reopen persistence. Báo cáo ở thư mục tạm hoặc MAISTUDIO_REPORT_DIR; không ghi dữ liệu debug vào source repo.

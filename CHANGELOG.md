@@ -2,6 +2,11 @@
 
 This file records development changes. No production release is declared by a development checkpoint.
 
+## 0.2.0-dev.1 — development pre-release distribution
+
+- Distribute the nine existing native installers from successful CI Build 44049704483 at source commit `35f8d82` through GitHub Releases, with SHA256 checksums. No application code, version, automatic updater, registry package, or deployment changes.
+- macOS remains ad-hoc signed and unnotarized; Windows remains without a trusted signing certificate. Five successful package jobs do not certify live provider or runtime coverage on every platform.
+
 ## Unreleased — 0.2.0-dev.1
 
 ### Added

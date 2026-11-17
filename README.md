@@ -6,6 +6,8 @@
 
 Đây là bản phát triển **0.2.0-dev.1**. Mã tích hợp và kiểm thử local không đồng nghĩa tài khoản Muse/VoiceTube/Market/Shopee hoặc mọi hệ điều hành đã được nghiệm thu live. Xem [tài liệu hệ thống](SYSTEM_DOCUMENTATION.md), [nghiệm thu](docs/reports/acceptance.md) và [giới hạn tương đương](docs/reports/parity.md).
 
+Tải bộ cài trong [Releases](https://github.com/maiychrus25/Mai-Studio/releases/tag/v0.2.0-dev.1): macOS Apple Silicon/Intel, Linux ARM64/x64 và Windows x64. Đây là pre-release từ CI Build 44049704483, commit `35f8d82`, kèm `SHA256SUMS.txt`. GitHub Packages dành cho registry npm/container, không chứa bộ cài desktop này.
+
 ## Phạm vi hiện tại
 
 | Nhóm | Khả năng hiện có | Giới hạn kiểm chứng |
