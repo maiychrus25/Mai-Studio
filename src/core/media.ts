@@ -532,7 +532,8 @@ export class MediaTools {
       if (audio) command.push('-map', `[${audio}]`, '-c:a', intermediate ? 'pcm_s16le' : 'aac', ...(intermediate ? [] : ['-b:a', '192k']), '-ar', '48000');
       else command.push('-an');
       // FFmpeg 7 otherwise infers a different rate from concat/timebase and drifts from the frame clock.
-      command.push('-r', String(options.fps), '-t', String(duration), '-c:v', intermediate ? 'ffv1' : 'libx264', '-threads', '2', ...(intermediate ? [] : ['-preset', 'veryfast', '-crf', '23']), '-pix_fmt', 'yuv420p');
+      // Canonical x264 decisions avoid CPU-dependent differences between native runners.
+      command.push('-r', String(options.fps), '-t', String(duration), '-c:v', intermediate ? 'ffv1' : 'libx264', '-threads', '2', ...(intermediate ? [] : ['-preset', 'veryfast', '-crf', '23', '-x264-params', 'cpu-independent=1']), '-pix_fmt', 'yuv420p');
       if (options.title !== undefined) command.push('-metadata', `title=${options.title}`);
       if (format !== 'matroska') command.push('-movflags', '+faststart');
       command.push('-f', format, rendered);

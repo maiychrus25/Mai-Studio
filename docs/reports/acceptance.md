@@ -1,3 +1,11 @@
+## Native CI installer build — 17/11/2026
+
+**Trạng thái: workflow đã triển khai; đang xác minh regression hosted trước tạo bản cài.** Anh yêu cầu CI build tương tự automation-marketing. Dùng verify gate của MaiStudio và năm runner native, ký ad-hoc macOS, artifact chỉ installer/update files trong14ngày, không tạo tag/Release/deploy. Run44045714228 của69275b4 dừng trước package ở pixel subtitle (peak143), với cùng hash FFmpeg/font như run trước đã qua; không tính matrix chưa chạy là build thành công.
+
+Follow-up chỉ thêm cpu-independent=1 vào nhánh libx264 cuối của MediaTools, không vào FFV1 trung gian; dùng quyết định canonical theo contract x264. Tham số chất lượng/format/audio và assertion gốc giữ nguyên. Review tĩnh không thấy blocker, nhưng không thay kết quả native CI. Build/lint/docs/actionlint qua, focused subtitle render và full407/407 trên macOS ARM64 qua sau sửa. Log full suite ở `/private/tmp/mai-studio-ci-packaging-20261117/cpu-independent-test.log`; stress và hosted/native package evidence được ghi riêng theo kết quả thực.
+
+Hai vòng stress sau đổi encoder dùng script được ship: round1 980 thành công/20 hủy; round2 877 thành công/72 lỗi429 fixture có chủ đích/51 hủy, mỗi vòng1000 task, peak2. Desktop/mobile và light/dark đủ bốn tổ hợp mỗi vòng, không tràn ngang/lỗi renderer, reopen không gửi lại. Kết quả và ảnh ở `/private/tmp/mai-studio-ci-packaging-20261117/cpu-independent-stress/`. Đây là kiểm local, chưa phải xác nhận installer/runtime của năm OS/architecture.
+
 ## Repository checkpoint và publication — 17/11/2026
 
 **Trạng thái: checkpoint sản phẩm đã lưu và push; cấu trúc/quy trình repo đã kiểm dev.** Anh đã chỉ định repo GitHub Mai-Studio, nhánh main và yêu cầu push. Remote main xác nhận đúng source checkpoint `bdbdf3f`; kết quả CI của các commit tiếp theo theo dõi trong GitHub Actions, không suy ra từ kiểm local. Các báo cáo nghiệm thu trước đây vẫn là lịch sử; publication mã nguồn không phải phát hành hoặc chứng nhận full parity.

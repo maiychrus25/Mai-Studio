@@ -213,7 +213,9 @@ Hosted CI follow-up: the first Linux x64 run reported406/407 due to a font-depen
 
 **Status: IMPLEMENTED LOCALLY / NATIVE JOBS PENDING —** the operator requested CI build like automation-marketing. The existing MaiHub workflow was read as the reference: verification gate, native OS runners, macOS ad-hoc signing, installer-only artifacts, and 14-day retention. MaiStudio reuses its current five-platform matrix and its own build commands; no MaiHub-only runtime or release task is added.
 
-Files: .github/workflows/build.yml, README.md, CONTRIBUTING.md, SYSTEM_DOCUMENTATION.md, CHANGELOG.md and this plan. There is no application-source, version, schema, IPC, or dependency change.
+Initial workflow-only files: .github/workflows/build.yml, README.md, CONTRIBUTING.md, SYSTEM_DOCUMENTATION.md, CHANGELOG.md and this plan. That initial change had no application-source, version, schema, IPC, or dependency change; the observed regression follow-up is recorded below.
+
+Post-implementation note: the first manual native build44045714228 stopped at the existing subtitle render assertion before packaging (greenPeak143). Its FFmpeg/font hashes match an earlier successful runner, so font-family selection alone is not sufficient. The scoped follow-up adds x264 cpu-independent=1 only to final H.264 composition in src/core/media.ts, with matching system docs/changelog. CRF/preset/timing/typography/audio and FFV1 intermediates remain as before. Existing tests/thresholds stay unchanged; focused render and full407/407 pass locally after the change, but hosted RED→GREEN and native artifacts are still required.
 
 - [x] Review the scoped workflow diff; pass build/lint/docs/actionlint and both Electron desktop/mobile, light/dark stress rounds.
 - [ ] Commit/push the workflow, then dispatch build.yml on the exact main commit with package_artifacts=true; the new run must complete its full verification gate.
