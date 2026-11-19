@@ -1,6 +1,6 @@
 # MaiStudio — tài liệu hệ thống
 
-Phiên bản ứng dụng được khảo sát: `0.2.0-dev.1`.
+Phiên bản ứng dụng được khảo sát: `0.2.0-dev.2`.
 
 Trạng thái: snapshot dev đang thực hiện functional parity P1–P5; có bằng chứng local theo từng phần, chưa phát hành, chưa chứng nhận full parity hoặc mọi nền tảng/provider. Các kết quả full-suite/stress/artifact của đợt mới do parent chốt riêng sau khi checkout ổn định. Anh đã duyệt thiết kế ngày 14/11/2026.
 
@@ -150,13 +150,15 @@ Capture giới hạn 8 MiB; product chuẩn hóa vẫn qua parser 32 KiB. Produc
 
 Sửa lỗi capture get_pc ngày 19/11/2026: riêng giá cache, -1 (number hoặc chuỗi số) là dấu không có giá. Mỗi đầu khoảng giá lấy giá hợp lệ đầu tiên theo thứ tự range_min/range_max → single_value hiện tại → item.price_min/item.price_max → item.price, rồi đổi đơn vị; không biến giá thiếu thành 0. Capture anh cung cấp có range_min/range_max=-1, single_value=5300000000 và item.price_min=5900000000 phải nhập giá hiện tại 53.000₫, giữ giá phân loại 59.000–65.999₫. Dấu -1 không áp dụng cho rating/sold hoặc giá API chính thức; các số âm khác, đơn vị cache không nguyên và giá vượt giới hạn vẫn bị chặn. Thiếu sold/capturedAt vẫn được giữ là thiếu; không đổi IPC/schema hoặc giới hạn nhập ảnh.
 
-Job có project lease cùng pipeline/plan; tải tối đa 8 ảnh từ CDN ảnh Shopee đã kiểm, tối đa 12 MiB/ảnh, ba redirect có kiểm host/MIME/magic. Không gửi credential/cookie lên CDN. FFmpeg giải mã một frame, timeout 30 giây, tối đa 33.554.432 pixel trước khi nhập asset Library có project/task owner. Checkpoint giữ từng ảnh tải xong; hủy trước apply giữ product cũ, retry chỉ tải phần còn thiếu. Nếu một số ảnh lỗi, lưu imageErrors và số ảnh đã nhập/tổng, hiển thị rõ nhập một phần. Không ảnh nào dùng được thì waiting_input, không thay product cũ. Nếu dự án bị chỉnh trong lúc nhập, giữ ảnh ở task và không ghi đè. Khi apply, cập nhật product/productAssetIds/productSource cùng transaction với output checkpoint; giữ toàn bộ output/file cũ và đánh dấu kế hoạch/output cần cập nhật.
+Job có project lease cùng pipeline/plan; tải tối đa 9 ảnh từ CDN ảnh Shopee đã kiểm, tối đa 12 MiB/ảnh, ba redirect có kiểm host/MIME/magic. Không gửi credential/cookie lên CDN. FFmpeg giải mã một frame, timeout 30 giây, tối đa 33.554.432 pixel trước khi nhập asset Library có project/task owner. Checkpoint giữ từng ảnh tải xong; hủy trước apply giữ product cũ, retry chỉ tải phần còn thiếu. Nếu một số ảnh lỗi, lưu imageErrors và số ảnh đã nhập/tổng, hiển thị rõ nhập một phần. Không ảnh nào dùng được thì waiting_input, không thay product cũ. Nếu dự án bị chỉnh trong lúc nhập, giữ ảnh ở task và không ghi đè. Khi apply, cập nhật product/productAssetIds/productSource cùng transaction với output checkpoint; giữ toàn bộ output/file cũ và đánh dấu kế hoạch/output cần cập nhật.
+
+Ghi chú sau phát hành 0.2.0-dev.1: giới hạn 8 ảnh là chính sách MaiStudio, không phải thiếu ảnh trong capture anh cung cấp. 0.2.0-dev.2 tăng giới hạn lên 9 để giữ đủ gallery này, dùng chung hằng số cho parser và worker. Vẫn loại ảnh trùng, giữ thứ tự nguồn, kiểm cả URL ngoài phần được chọn và cảnh báo cắt bớt nếu nguồn có hơn 9 ảnh; không tự mở rộng sang ảnh mô tả hoặc ảnh từng phân loại. Quy trình phát hành vẫn dùng native CI đã có, kiểm đủ verify và năm package jobs rồi đối chiếu SHA256 khi đưa chín installer lên pre-release mới; không ghi đè tag/bộ cài cũ, không bật auto-update hay triển khai service.
 
 `src/ui/ShopeeImport.tsx` được đặt đầu tab Sản phẩm: mở link → hướng dẫn/copy dấu trang → dán dữ liệu → nhập facts và ảnh, hoặc dùng API khi có cấu hình. UI hiển thị trạng thái, giá/thuộc tính/phân loại, số ảnh Library, nguồn và cảnh báo trường thiếu/ảnh lỗi; các nút hủy/thử lại dùng Project activity sẵn có. Không đổi cấu hình account/proxy Muse trên VPS và không thêm dependency.
 
 Nghiệm thu dev 16/11: anh lấy mới trang sản phẩm áo mẫu bằng bookmarklet và nhập qua UI đóng gói; đúng ID, giá/mô tả, 9 thuộc tính, 8 tổ hợp màu/size, 7/7 ảnh gallery đã tải/giải mã và mở lại qua Library. Trường sold không có trên nguồn được báo thiếu. Bằng chứng mới và kiểm tra metadata Muse lịch sử/CDN được lưu tách riêng trong Downloads/MaiStudio-shopee-dev-20261116/evidence. Chưa nghiệm thu API Shopee live, mọi layout/ngành hàng hoặc Linux desktop; xem docs/reports/acceptance.md. Đây là nghiệm thu intake một sản phẩm, không phải đầy đủ các kiểu video Affiliate.
 
-<!-- docs-check: src/core/shopee.ts#MAX_SHOPEE_IMAGES = 8 -->
+<!-- docs-check: src/core/shopee.ts#MAX_SHOPEE_IMAGES = 9 -->
 <!-- docs-check: src/core/shopee.ts#MAX_SHOPEE_IMAGE_BYTES = 12582912 -->
 <!-- docs-check: src/core/shopee.ts#MAX_SHOPEE_CAPTURE_BYTES = 8388608 -->
 

@@ -1,7 +1,7 @@
 import { parseProducts } from './products';
 import { object, text } from './store';
 
-export const MAX_SHOPEE_IMAGES = 8;
+export const MAX_SHOPEE_IMAGES = 9;
 export const MAX_SHOPEE_IMAGE_BYTES = 12 * 1024 * 1024;
 export const MAX_SHOPEE_CAPTURE_BYTES = 8 * 1024 * 1024;
 const PRODUCT_HOSTS = ['shopee.vn', 'www.shopee.vn'];

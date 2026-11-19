@@ -103,6 +103,17 @@ test('cached price markers fall back to supplied item prices without fabricating
   assert.throws(() => intake().shopeeOffer({ itemId: 456, shopId: 123, productName: 'Provided product', price: -1 }, url), /numeric/i);
 });
 
+test('a nine-image product gallery is kept in order without a truncation warning', () => {
+  const images = Array.from({ length: 9 }, (_, index) => image + '-' + index);
+  const result = intake().parseShopeeCapture(JSON.stringify(page({ images: [...images, images[0]] })), url);
+  assert.deepEqual(result.images, images);
+  assert.ok(!result.source.warnings.some((warning: string) => warning.includes('Imported first')));
+  const capped = intake().parseShopeeCapture(JSON.stringify(page({ images: [...images, image + '-extra'] })), url);
+  assert.deepEqual(capped.images, images);
+  assert.ok(capped.source.warnings.includes('Imported first 9 of 10 supplied product images'));
+  assert.throws(() => intake().parseShopeeCapture(JSON.stringify(page({ images: [...images, 'https://evil.test/photo.png'] })), url), /image URL/i);
+});
+
 test('capture rejects mismatched identities, unknown envelopes, private image URLs and oversized facts', () => {
   for (const value of [page({ url: 'https://shopee.vn/product/123/999' }), page({ _: 'foreign' }), page({ title: '' }), page({ images: ['https://evil.test/secret.png'] }), page({ images: ['https://down-vn.img.susercontent.com.evil.test/file/a'] }), page({ description: 'x'.repeat(40000) }), { ...page(), kind: 'get_pc', data: { item: { item_id: 999, shop_id: 123, title: 'Wrong' } } }]) assert.throws(() => intake().parseShopeeCapture(JSON.stringify(value), url), /product|Shopee|capture|image|limit|bytes|identity|name|title/i);
   for (const value of ['not JSON', '[]', '{"_":"maistudio-shopee","__proto__":{"polluted":true}}']) assert.throws(() => intake().parseShopeeCapture(value, url), /JSON|capture|product|prototype|object/i);
@@ -169,6 +180,22 @@ test('queued capture imports real image bytes, records provenance and preserves 
     assert.equal(studio.store.asset(done.outputIds[0]).mime, 'image/png'); assert.equal(data.productSource.method, 'page'); assert.equal(data.productSource.capturedAt, '2026-11-16T09:00:00.000Z');
     assert.equal(data.productSource.taskId, task.id); assert.equal(data.productSource.url, url); assert.equal(data.production.oldOutput, 'retained'); assert.equal(data.script, 'Keep my script'); assert.equal(data.productionStale, true);
     assert.equal(data.planningNeedsUpdate, true); assert.ok(data.productSource.missingFields.includes('variations'));
+  });
+});
+
+test('queued capture imports all nine gallery images and preserves the existing script and outputs', async t => {
+  await serviceFixture(t, async (studio, fixture) => {
+    const project = await sampleProject(studio);
+    const images = Array.from({ length: 9 }, (_, index) => image + '-' + index);
+    const task = await studio.invoke<Task>('shopee.import', { projectId: project.id, url, text: JSON.stringify(page({ images })) });
+    const done = await finish(studio, task); assert.equal(done.status, 'succeeded', done.error);
+    assert.equal(done.outputIds.length, 9); assert.equal(new Set(done.outputIds).size, 9);
+    const data = studio.store.project(project.id).data as any;
+    assert.equal(data.productSource.imageCount, 9); assert.equal(data.productSource.importedImageCount, 9);
+    assert.deepEqual(data.productAssetIds, done.outputIds);
+    assert.equal(data.script, 'Keep my script'); assert.equal(data.production.oldOutput, 'retained');
+    assert.deepEqual(fixture.requests, images.map(value => new URL(value).pathname));
+    assert.ok(!data.productSource.warnings.some((warning: string) => warning.includes('Imported first')));
   });
 });
 

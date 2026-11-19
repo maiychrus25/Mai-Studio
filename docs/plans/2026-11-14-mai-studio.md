@@ -231,3 +231,15 @@ Pre-dispatch evidence: Build succeeded, lint/docs/actionlint exit0; round1 980 s
 Time-priority update explicitly requested by the operator: manual native package jobs now run alongside verify to provide development installers sooner. This replaces the earlier sequential needs.verify order; the full suite is still required and the overall workflow must be green before acceptance. No Release/tag/deployment is added. Local407/407 and two post-encoder stress rounds are recorded in acceptance.md; installer availability is reported independently from verification.
 
 Rollback: each new change has its own Git commit; the historical three commits remain intact. Preserve the working tree and existing user data. A rejected push requires checking remote history, never automatic force-pushing.
+
+## Shopee fixes and 0.2.0-dev.2 publication — 19/11/2026
+
+**Status: RELEASE CANDIDATE / FULL VERIFICATION AND PUBLICATION PENDING.** The operator requested the fix in Releases and asked why the supplied nine-image gallery was truncated. This is a bounded extension of the existing importer: raise MAX_SHOPEE_IMAGES from8 to9 without changing per-image byte/pixel/URL limits, deduplication, ordering, partial-error handling or project checkpoints. Include the already-tested cached-price fix47b8839 and bump package/lock/system version together; reuse the existing native Build matrix and manual draft → digest verification → pre-release workflow. No new dependency, service deployment, auto-update feed or overwrite of v0.2.0-dev.1.
+
+- [x] Reproduce nine-image truncation in parser and actual queued import; apply the shared limit change and pass focused Shopee tests (19/19).
+- [ ] Review actual source/version/docs diff; run build, lint, full tests, docs check and two isolated desktop/mobile light/dark stress rounds.
+- [ ] Push the reviewable release candidate and dispatch native Build on its exact commit; wait for verify and all five package jobs.
+- [ ] Download into one temporary staging directory, inspect installer identities and hashes, upload nine installers plus checksum manifest to a draft v0.2.0-dev.2 Release, then publish only after verification.
+- [ ] Verify the public release and source tag; record actual CI/artifact evidence and remove owned temporary downloads/test data.
+
+Rollback: revert the scoped source/version/docs commits in dev; retain the prior release and user data. An unpublished or rejected candidate stays a draft. Published tags keep their original source identity. Installer success does not establish every OS/provider runtime or Muse artistic parity.
