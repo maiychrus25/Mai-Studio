@@ -1,3 +1,13 @@
+## 0.2.0-dev.2 native Release — 19/11/2026
+
+**Trạng thái: đã phát hành pre-release và xác minh digest.** [Release v0.2.0-dev.2](https://github.com/maiychrus25/Mai-Studio/releases/tag/v0.2.0-dev.2), source d6e179c33207d1d1a740fc6f3d18816b6d96bceb, [Build44501164595](https://github.com/maiychrus25/Mai-Studio/actions/runs/44501164595). Bảy job verify/năm native package/draft đều thành công; verify giữ đầy đủ build/lint/docs/subtitle guard/make test. Đã công khai lúc2026-11-19T10:05:44Z với chín installer và SHA256SUMS.txt. Đối chiếu chín hash trong notes do CI tạo với asset digest và hash manifest cả trước/sau public; tag đúng source, trang public HTTP200 và Release0.2.0-dev.1 không đổi.
+
+App thay đổi thêm duy nhất MAX_SHOPEE_IMAGES=9 cùng version2, giữ bản sửa giá -1. Hai test mới đã RED ở8ảnh trước thay đổi và GREEN ở9ảnh sau; focused19/19, local make test411pass/0fail/0skip/0cancelled, Build succeeded, lint/docs/actionlint qua. Hai vòng1.000task Electron: round1 980succeeded/20cancelled; round2 876succeeded/73 lỗi429 fixture có chủ đích/51cancelled; peak2, đủ desktop/mobile × light/dark, không lỗi renderer/tràn ngang và reopen không gửi lại.
+
+Thử riêng gallery công khai của sản phẩm anh gửi: nhập9/9ảnh thật, price53.000₫, không có cảnh báo cắt gallery; dùng thư mục dữ liệu cô lập đã tự dọn. Lượt411test và stress không dùng credential/tính phí. CI mới bỏ APT bị kẹt, dùng Chrome/DejaVu đã có và FFprobe upstream có SHA256 pin; draft upload nội bộ Actions sau các gate. Run44496775307 có5package success nhưng verify bị kẹt nên không dùng để phát hành. Các lượt tải artifact cũ về máy bị reset đã được kết thúc và dọn thư mục staging. Không ghi thêm bộ cài vào Downloads, không restart app/ngắt task của người dùng trong lượt phát hành.
+
+Giới hạn: đây là chứng cứ source/native packaging và local/CI integration; chưa chạy installer mới trực tiếp trên bare-metal Kubuntu ARM64, Intel Mac hoặc Windows. macOS vẫn ad-hoc/chưa notarized, Windows chưa ký chứng chỉ tin cậy; không bật auto-update/feed/deploy và chưa công nhận toàn bộ tính năng bằng Muse.
+
 ## Shopee unavailable cached price — 19/11/2026
 
 **Trạng thái: sửa và kiểm chứng local; bộ cài Release trước đó chưa cập nhật.** Capture sản phẩm anh cung cấp có range_min/range_max=-1 nhưng single_value=5300000000; parser cũ dừng với Invalid Shopee product numeric fact. Hai regression test tái hiện lỗi trước sửa, sau sửa lấy giá 53.000₫ trước item.price_min=5900000000, giữ giá model, không bịa giá thiếu bằng 0 và vẫn chặn số âm khác/rating âm/giá API âm/đơn vị cache không nguyên.

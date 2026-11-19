@@ -2,11 +2,11 @@
 
 This file records development changes. No production release is declared by a development checkpoint.
 
-## 0.2.0-dev.2 — pre-release candidate
+## 0.2.0-dev.2 — pre-release, 2026-11-19
 
 - Fix Shopee cached product prices when unavailable ranges are marked `-1`: use the supplied current single price before item fallback prices, preserving strict validation for other numeric facts.
 - Import up to nine gallery images instead of eight, preserving source order, duplicate removal, per-image validation and cancellable checkpoints. Captures with more than nine images retain a visible truncation warning.
-- Native installer publication is pending successful validation and packaging for macOS ARM64/x64, Linux ARM64/x64 and Windows x64. Trusted signing and live provider/platform acceptance remain separate requirements.
+- Published nine native installers and SHA256SUMS.txt for macOS ARM64/x64, Linux ARM64/x64 and Windows x64 after successful Build 44501164595 at source d6e179c. Trusted signing and live provider/platform acceptance remain separate requirements.
 
 ## 0.2.0-dev.1 — development pre-release distribution
 

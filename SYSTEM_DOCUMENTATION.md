@@ -2,7 +2,7 @@
 
 Phiên bản ứng dụng được khảo sát: `0.2.0-dev.2`.
 
-Trạng thái: snapshot dev đang thực hiện functional parity P1–P5; có bằng chứng local theo từng phần, chưa phát hành, chưa chứng nhận full parity hoặc mọi nền tảng/provider. Các kết quả full-suite/stress/artifact của đợt mới do parent chốt riêng sau khi checkout ổn định. Anh đã duyệt thiết kế ngày 14/11/2026.
+Trạng thái: pre-release 0.2.0-dev.2 đã công khai, vẫn đang thực hiện functional parity P1–P5; bằng chứng local/CI theo từng phần không chứng nhận full parity hoặc mọi nền tảng/provider. Nghiệm thu và nguồn artifact ghi tại docs/reports/acceptance.md. Anh đã duyệt thiết kế ngày 14/11/2026.
 
 ## Ranh giới và runtime
 
@@ -226,6 +226,8 @@ Updater yêu cầu public key và feed, đọc signed manifest từ Hub; ràng b
 Chuẩn bị cập nhật tạm dừng admission queue và khóa các command thay đổi dữ liệu/import native mới; vẫn cho đọc state/diagnostics. Mutation/import đang chờ I/O cũng ngăn cập nhật, gồm Codex đang nhận việc nhưng chưa có job record. Nếu chỉ đang tải hoặc bị lỗi thì phục hồi trạng thái pause ban đầu. Trước quitAndInstall có kiểm tra idle lần cuối sau hash verification, bao gồm Codex đang chạy; không coi khoảng chờ async là một lần kiểm idle còn hiệu lực.
 
 ## Build, test và release
+
+0.2.0-dev.2 đã công khai ngày 19/11/2026: https://github.com/maiychrus25/Mai-Studio/releases/tag/v0.2.0-dev.2, source d6e179c33207d1d1a740fc6f3d18816b6d96bceb, Build44501164595. Đủ bảy job gồm verify/năm native package/draft thành công; trước và sau công khai đã đối chiếu chín SHA256 installer cùng manifest qua digest trên GitHub. Có mười asset (chín bộ cài và SHA256SUMS.txt); tag nguồn và bản0.2.0-dev.1 được giữ nguyên. Đây không phải nghiệm thu runtime toàn bộ nền tảng hoặc bật updater.
 
 Khắc phục hạ tầng ngày 19/11/2026: run44496775307 build đủ năm installer nhưng verify kẹt ở APT và tải artifact về máy bị reset TCP từ Azure. Verify mới dùng Chrome/DejaVu Sans có sẵn trên runner (thiếu vẫn fail), FFmpeg của dependency hiện có và FFprobe Linux x64 từ https://github.com/eugeneware/ffmpeg-static/releases/tag/b6.1.1; gzip được pin SHA256 25d9b6ccb05e3d9de9e04e31e2506d8dd7f9f0418981965ac6df12e8d3afd067. Không đổi binary FFmpeg của ứng dụng hoặc bỏ kiểm pixel/subtitle/full-suite. Tạo draft ngay trong Actions tránh relay bộ cài lớn qua máy cá nhân; không ghi đè Release/tag đã công khai và không tự công khai draft.
 

@@ -6,7 +6,7 @@
 
 Đây là bản phát triển **0.2.0-dev.2**, sửa đọc giá Shopee có dấu không có khoảng giá và hỗ trợ nhập đủ chín ảnh gallery. Mã tích hợp và kiểm thử local không đồng nghĩa tài khoản Muse/VoiceTube/Market/Shopee hoặc mọi hệ điều hành đã được nghiệm thu live. Xem [tài liệu hệ thống](SYSTEM_DOCUMENTATION.md), [nghiệm thu](docs/reports/acceptance.md) và [giới hạn tương đương](docs/reports/parity.md).
 
-Tải bộ cài đã công khai trong [Releases](https://github.com/maiychrus25/Mai-Studio/releases): macOS Apple Silicon/Intel, Linux ARM64/x64 và Windows x64, kèm `SHA256SUMS.txt`. Bản 0.2.0-dev.2 chỉ được đưa lên sau khi CI verify và đủ năm job đóng gói thành công; trong lúc chuẩn bị, bộ cài cũ vẫn giữ nguyên. GitHub Packages dành cho registry npm/container, không chứa bộ cài desktop này.
+Tải bộ cài đã công khai trong [Releases](https://github.com/maiychrus25/Mai-Studio/releases): macOS Apple Silicon/Intel, Linux ARM64/x64 và Windows x64, kèm `SHA256SUMS.txt`. [Bản 0.2.0-dev.2](https://github.com/maiychrus25/Mai-Studio/releases/tag/v0.2.0-dev.2) đã công khai sau CI verify và đủ năm job đóng gói thành công; bộ cài cũ vẫn được giữ nguyên. GitHub Packages dành cho registry npm/container, không chứa bộ cài desktop này.
 
 ## Phạm vi hiện tại
 
