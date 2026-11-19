@@ -95,8 +95,14 @@ export function parseShopeeCapture(value: unknown, expected: string): ShopeeCapt
   const identity = shopeeLink(url);
   if (String(item.item_id) !== identity.itemId || String(item.shop_id) !== identity.shopId) throw new Error('Cached product identity does not match the requested link');
   const prices = object(object(data.product_price ?? {}).price ?? {}), reviews = object(data.product_review ?? {}), shop = object(data.shop_detailed ?? {});
-  const units = (value: unknown) => { const amount = numeric(value); if (amount !== undefined && !Number.isSafeInteger(amount)) throw new Error('Invalid cached product price units'); return amount === undefined ? undefined : amount / 100000; };
-  const priceMin = units(prices.range_min ?? prices.single_value ?? item.price_min ?? item.price), priceMax = units(prices.range_max ?? prices.single_value ?? item.price_max ?? item.price);
+  const units = (value: unknown) => {
+    // Shopee uses -1 for an unavailable cached price, not a negative selling price.
+    if (value === -1 || value === '-1') return undefined;
+    const amount = numeric(value); if (amount !== undefined && !Number.isSafeInteger(amount)) throw new Error('Invalid cached product price units');
+    return amount === undefined ? undefined : amount / 100000;
+  };
+  const priceMin = units(prices.range_min) ?? units(prices.single_value) ?? units(item.price_min) ?? units(item.price);
+  const priceMax = units(prices.range_max) ?? units(prices.single_value) ?? units(item.price_max) ?? units(item.price);
   const name = text(item.title, 'Shopee product title', 2000);
   const product: Record<string, unknown> = { name, title: name, description: text(item.description ?? '', 'Product description', 24000, true), price: money(priceMin, priceMax),
     ...(priceMin === undefined ? {} : { priceMin }), ...(priceMax === undefined ? {} : { priceMax }),

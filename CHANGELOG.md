@@ -18,6 +18,7 @@ This file records development changes. No production release is declared by a de
 
 ### Changed
 
+- Shopee cached captures accept the unavailable-price marker `-1` and fall back to the supplied current single price before item prices, preserving strict validation for other numeric facts and official API prices.
 - Affiliate navigation, project list, setup tabs, scene cards, and advanced tools.
 - Media preview byte-range handling and safe video seeking.
 - Browser composer readiness, audio-menu download recovery, and provider-refusal handling without duplicate submission.

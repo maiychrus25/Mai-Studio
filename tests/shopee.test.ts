@@ -66,6 +66,43 @@ test('cached Shopee capture converts documented price units and preserves attrib
   assert.deepEqual(result.images, [image]);
 });
 
+test('cached Shopee capture uses the current single price when range prices are unavailable', () => {
+  // Operator capture: range markers are -1, current price is 53,000 VND, item/model prices start at 59,000 VND.
+  const productUrl = 'https://shopee.vn/product/1338941959/52168604861';
+  for (const unavailable of [-1, '-1']) {
+    const result = intake().parseShopeeCapture(JSON.stringify({ _: 'musestudio-shopee', v: 1, kind: 'get_pc', url: productUrl, data: {
+      item: { item_id: 52168604861, shop_id: 1338941959, title: 'Dép xỏ ngón', currency: 'VND', price: 5900000000, price_min: 5900000000, price_max: 6599900000,
+        models: [{ name: 'Đen,4-6（34-35）', price: 5900000000 }, { name: 'Hồng,6-8（38-39）', price: 6599900000 }] },
+      product_price: { price: { single_value: 5300000000, range_min: unavailable, range_max: unavailable } },
+      product_images: { images: ['cn-11134207-820l4-mtqe1njbwmbu4f'] },
+      product_review: { rating_star: 4.646017699115045, total_rating_count: 113, historical_sold: null, global_sold: null }, shop_detailed: { name: 'lalafas.vn' }
+    } }), productUrl);
+    assert.equal(result.product.priceMin, 53000); assert.equal(result.product.priceMax, 53000);
+    assert.equal(result.product.price, (53000).toLocaleString('vi-VN') + '₫');
+    assert.deepEqual(result.product.variations.map((model: { price: number }) => model.price), [59000, 65999]);
+    assert.equal(result.product.ratingCount, 113); assert.equal(result.product.sold, undefined);
+    assert.equal(result.product.shopName, 'lalafas.vn'); assert.equal(result.source.capturedAt, undefined);
+  }
+});
+
+test('cached price markers fall back to supplied item prices without fabricating a missing price', () => {
+  const capture = (item: Record<string, unknown> = {}, prices: Record<string, unknown> = {}) => JSON.stringify({ _: 'maistudio-shopee', v: 1, kind: 'get_pc', url, data: {
+    item: { item_id: 456, shop_id: 123, title: 'Provided product', ...item }, product_price: { price: { range_min: -1, range_max: -1, single_value: -1, ...prices } }
+  } });
+  const fallback = intake().parseShopeeCapture(capture({ price_min: 5900000000, price_max: 6599900000 }), url);
+  assert.equal(fallback.product.priceMin, 59000); assert.equal(fallback.product.priceMax, 65999);
+  const missing = intake().parseShopeeCapture(capture(), url);
+  assert.equal(missing.product.price, ''); assert.equal(missing.product.priceMin, undefined); assert.equal(missing.product.priceMax, undefined);
+  assert.ok(missing.source.missingFields.includes('price'));
+  const zero = intake().parseShopeeCapture(capture({}, { single_value: 0 }), url);
+  assert.equal(zero.product.priceMin, 0); assert.equal(zero.product.priceMax, 0);
+  for (const invalid of [-2, '-2', '53.000₫', {}, 9007199254740992, 1.5]) {
+    assert.throws(() => intake().parseShopeeCapture(capture({}, { range_min: invalid }), url), /numeric|price units/i);
+  }
+  assert.throws(() => intake().parseShopeeCapture(capture({ item_rating: { rating_star: -1 } }), url), /numeric/i);
+  assert.throws(() => intake().shopeeOffer({ itemId: 456, shopId: 123, productName: 'Provided product', price: -1 }, url), /numeric/i);
+});
+
 test('capture rejects mismatched identities, unknown envelopes, private image URLs and oversized facts', () => {
   for (const value of [page({ url: 'https://shopee.vn/product/123/999' }), page({ _: 'foreign' }), page({ title: '' }), page({ images: ['https://evil.test/secret.png'] }), page({ images: ['https://down-vn.img.susercontent.com.evil.test/file/a'] }), page({ description: 'x'.repeat(40000) }), { ...page(), kind: 'get_pc', data: { item: { item_id: 999, shop_id: 123, title: 'Wrong' } } }]) assert.throws(() => intake().parseShopeeCapture(JSON.stringify(value), url), /product|Shopee|capture|image|limit|bytes|identity|name|title/i);
   for (const value of ['not JSON', '[]', '{"_":"maistudio-shopee","__proto__":{"polluted":true}}']) assert.throws(() => intake().parseShopeeCapture(value, url), /JSON|capture|product|prototype|object/i);

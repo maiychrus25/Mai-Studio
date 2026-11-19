@@ -1,3 +1,11 @@
+## Shopee unavailable cached price — 19/11/2026
+
+**Trạng thái: sửa và kiểm chứng local; bộ cài Release trước đó chưa cập nhật.** Capture sản phẩm anh cung cấp có range_min/range_max=-1 nhưng single_value=5300000000; parser cũ dừng với Invalid Shopee product numeric fact. Hai regression test tái hiện lỗi trước sửa, sau sửa lấy giá 53.000₫ trước item.price_min=5900000000, giữ giá model, không bịa giá thiếu bằng 0 và vẫn chặn số âm khác/rating âm/giá API âm/đơn vị cache không nguyên.
+
+make build đạt Build succeeded; make test 409 pass/0 fail/0 cancelled/0 skipped; make lint exit0 và docs-check OK. Shopee focused suite 17/17 bao gồm page/cached/API, image guards, cancel/retry/checkpoint, bảo toàn output và chống ghi đè chỉnh sửa đồng thời. Hai vòng Electron fixture 1.000 task/vòng đạt: round1 980 thành công/20 hủy; round2 886 thành công/63 lỗi429 có chủ đích/51 hủy, peak concurrency2. Mỗi vòng có desktop/mobile × light/dark, không lỗi renderer/tràn ngang và reopen không gửi lại.
+
+Replay các field sản phẩm được parser sử dụng từ JSON anh gửi trong StudioService cô lập, tải ảnh thật từ CDN công khai: nhập thành công giá 53.000₫, 24 models, 2 attributes, 8/9 ảnh theo giới hạn sẵn có. Không dùng credential/provider tạo sinh, không thay dữ liệu người dùng; không kiểm chứng lại giá đang bán ngoài capture hoặc mọi layout Shopee. Thư mục dữ liệu/log/screenshot của các lượt kiểm tra mới tự dọn sau khi kết thúc. Không đổi dependency, IPC/schema, version hay phát hành lại installer trong nhiệm vụ này.
+
 ## Native CI installer build — 17/11/2026
 
 **Trạng thái: native CI build đạt — verify và 5/5 package job thành công.** Anh yêu cầu CI build tương tự automation-marketing. Dùng verify của MaiStudio và năm runner native, ký ad-hoc macOS, artifact chỉ installer/update files trong14ngày, không tạo tag/Release/deploy. Theo yêu cầu có kết quả sớm, dev package chạy song song verify; chỉ công nhận đạt khi cả hai nhánh qua. Run44045714228 của69275b4 trước đó dừng ở pixel subtitle (peak143), với cùng hash FFmpeg/font như run trước đã qua; log lỗi vẫn giữ riêng.
