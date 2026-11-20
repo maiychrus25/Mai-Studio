@@ -4,6 +4,9 @@ This file records development changes. No production release is declared by a de
 
 ## 0.2.0-dev.4 — development candidate
 
+- Give native Affiliate generation its exact edit window and synchronize speech/action; keep empty-dialogue inserts free of voice directions.
+- Pass measured speech failures, unexpected words and failed visual evidence into bounded repair feedback instead of generic retries or passed checks.
+- Ask planning and independent review to reject product/action contradictions and unexplained anchor/framing changes, preserving existing saved scripts and exhausted repair limits.
 - Resume automatic quality control with the newest matching explicit image/video/speech assessment, preserving unresolved admission, source identity and quality gates.
 - Keep the current assessment/score for an existing take without counting a resume as another generation.
 - Add a confirmed reassessment action for failed/inconclusive shots within the waiting job's scope, reusing the existing review stage and saved media.

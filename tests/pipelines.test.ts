@@ -29,6 +29,28 @@ test('global visual style and custom style text reach generated frames and clips
   for (const step of steps) { assert.ok(step.prompt.includes('watercolor')); assert.ok(step.prompt.includes('Soft paper texture')); }
 });
 
+test('native Affiliate prompts carry the exact edit budget and keep silent inserts free of voice direction', () => {
+  const source = project({ affiliate: { hostMode: 'presenter' }, nativeAudio: true,
+    characters: [{ id: 'host', name: 'Presenter', description: 'White shirt', voiceProfile: 'Female northern accent' }],
+    shots: [{ id: 'spoken', prompt: 'Show the socks', duration: 3.333, dialogue: 'Đây là tất chữ C.', speaker: 'host' },
+      { id: 'insert', prompt: 'Turn the sock cuff', duration: 2.375, characterIds: ['host'] }] }, 'affiliate');
+  const clips = api().pipelineSteps(source).filter(step => step.kind === 'video');
+  assert.match(clips[0].prompt, /3\.333 seconds/);
+  assert.match(clips[0].prompt, /action and dialogue immediately/);
+  assert.match(clips[0].prompt, /Đây là tất chữ C\./);
+  assert.match(clips[0].prompt, /Female northern accent/);
+  assert.match(clips[1].prompt, /2\.375 seconds/);
+  assert.match(clips[1].prompt, /No human speech/);
+  assert.doesNotMatch(clips[1].prompt, /Stable voice:|Only the intended host speaks|Voice: female|final spoken word|requested dialogue/);
+  assert.deepEqual(clips.map(step => [step.duration, step.dialogue]), [[3.333, 'Đây là tất chữ C.'], [2.375, undefined]]);
+});
+
+test('Affiliate timing changes preserve legacy native Film reference prompts', () => {
+  const video = api().pipelineSteps(project({ nativeAudio: true, characters: [{ id: 'host', name: 'Host', description: 'White shirt', voiceProfile: 'Legacy Film voice' }], shots: [{ id: 'silent', prompt: 'A silent reaction', duration: 3, characterIds: ['host'] }] })).find(step => step.kind === 'video')!;
+  assert.match(video.prompt, /Stable voice: Legacy Film voice/); assert.match(video.prompt, /Silent visual action/);
+  assert.doesNotMatch(video.prompt, /The edit uses 3\.000 seconds/);
+});
+
 test('legacy shots retain their requested action when no separate motion prompt was provided', () => {
   for (const data of [
     { shots: [{ id: 'pour', prompt: 'Tilt the teapot and pour tea into the cup', duration: 2 }] },

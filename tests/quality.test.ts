@@ -16,6 +16,47 @@ const imageVerdict = Object.fromEntries(['scene', 'face', 'outfit'].map(key => [
 const videoVerdict = (status = 'pass') => Object.fromEntries(['action', 'motion', 'continuity', 'identity'].map(key => [key, { status: key === 'motion' ? status : key === 'identity' ? 'not_applicable' : 'pass', reason: key === 'motion' && status !== 'pass' ? 'The requested teapot movement is missing' : 'Controlled sampled observation' }]));
 type Port = { generate(task: Task, context: TaskContext): Promise<TaskResult>; executeReview(task: Task, project: Project, context: TaskContext): Promise<TaskResult> };
 
+test('repair feedback carries speech overflow evidence and the exact edit window without passed visual reasons', () => {
+  const feedback = require('../src/core/quality').qualityRepairFeedback({
+    speech: { status: 'fail', reason: 'Lời nói vượt thời lượng shot', expected: 'Đây là tất chữ C.', heard: 'Đây là tất chữ C.', transcript: { ok: true } },
+    image: { status: 'pass', checks: { scene: { status: 'pass', reason: 'Keep this successful scene unchanged' } } }
+  }, 3.333);
+  assert.match(feedback, /3\.333 seconds/); assert.match(feedback, /Lời nói vượt thời lượng shot/);
+  assert.match(feedback, /Đây là tất chữ C\./); assert.doesNotMatch(feedback, /Keep this successful/);
+});
+
+test('repair feedback removes unexpected speech and preserves speech corrections beside long visual failures', () => {
+  const feedback = require('../src/core/quality').qualityRepairFeedback({
+    speech: { status: 'fail', expected: '', heard: 'Invented narration' },
+    video: { status: 'fail', checks: { action: { status: 'fail', reason: 'Missing the cuff stretch. ' + 'x'.repeat(4000) }, identity: { status: 'pass', reason: 'Identity is correct' } } }
+  }, 2.375);
+  assert.match(feedback, /No human speech/); assert.match(feedback, /2\.375 seconds/);
+  assert.match(feedback, /Invented narration/); assert.match(feedback, /Missing the cuff stretch/);
+  assert.doesNotMatch(feedback, /Identity is correct/); assert.ok(feedback.length <= 2000);
+});
+
+test('repair feedback preserves transcript and speaker corrections instead of treating a speech failure as a visual retry', () => {
+  const feedback = require('../src/core/quality').qualityRepairFeedback({ speech: { status: 'fail', expected: 'Xin chào.', heard: 'Different words', transcript: { ok: false }, identity: { status: 'consistency_fail' } } }, 2);
+  assert.match(feedback, /2\.000 seconds/); assert.match(feedback, /Xin chào\./);
+  assert.match(feedback, /omitted, substituted and additional speech/); assert.match(feedback, /voice differs/);
+});
+
+test('repair feedback does not impose an Affiliate edit deadline on native Film dialogue', () => {
+  const feedback = require('../src/core/quality').qualityRepairFeedback({ speech: { status: 'fail', expected: 'Keep this complete Film line.', transcript: { ok: false } } });
+  assert.match(feedback, /Keep this complete Film line/); assert.match(feedback, /omitted, substituted and additional speech/);
+  assert.doesNotMatch(feedback, /within .*seconds|Start promptly|No long pauses/);
+});
+
+test('repair feedback retains every failed check when an earlier reason exceeds its category budget', () => {
+  const feedback = require('../src/core/quality').qualityRepairFeedback({
+    image: { status: 'fail', checks: { scene: { status: 'fail', reason: 'The framing is wrong. '.repeat(32) }, face: { status: 'fail', reason: 'Restore the requested face' } } },
+    video: { status: 'fail', checks: { action: { status: 'fail', reason: 'The action is missing. '.repeat(32) }, identity: { status: 'fail', reason: 'Restore the product pattern' } } },
+    speech: { status: 'fail', reason: 'Overflow. '.repeat(100), expected: 'Xin chào.', transcript: { ok: false }, identity: { status: 'consistency_fail' } }
+  }, 3.333);
+  for (const detail of ['Restore the requested face', 'Restore the product pattern', '3.333 seconds', 'Xin chào.', 'omitted, substituted and additional speech', 'voice differs']) assert.ok(feedback.includes(detail), detail);
+  assert.ok(feedback.length <= 2000);
+});
+
 test('temporal verdict rejects missing evidence, unknown motion and malformed model output', () => {
   assert.equal(parseVideoReview(JSON.stringify(videoVerdict())).status, 'pass');
   assert.equal(parseVideoReview(JSON.stringify(videoVerdict('unknown'))).status, 'unknown');

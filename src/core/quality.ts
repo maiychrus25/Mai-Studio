@@ -10,6 +10,33 @@ export function qualityRetries(value: unknown): number {
   return value;
 }
 
+export function qualityRepairFeedback(review: Record<string, unknown>, duration?: number): string {
+  if (duration !== undefined && (!Number.isFinite(duration) || duration <= 0)) throw new Error('Invalid repair duration');
+  const window = duration === undefined ? '' : ` within ${duration.toFixed(3)} seconds`;
+  const corrections: string[] = [];
+  for (const kind of ['speech', 'image', 'video']) {
+    const result = object(review[kind] ?? {});
+    if (result.status !== 'fail') continue;
+    const reasons = Object.values(object(result.checks ?? {})).map(object).filter(check => check.status === 'fail')
+      .map(check => check.reason).filter((reason): reason is string => typeof reason === 'string' && !!reason.trim());
+    if (typeof result.reason === 'string' && result.reason.trim()) reasons.unshift(result.reason);
+    if (kind === 'speech') {
+      const expected = typeof result.expected === 'string' ? result.expected.trim() : '';
+      reasons.unshift(expected
+        ? `Complete the exact requested dialogue${window}. ${duration === undefined ? 'Preserve the planned timing and natural pacing; do not clip words.' : 'Start promptly with the visible action. No long pauses, repetition or clipped words.'}`
+        : `No human speech, narration, humming or speaking lips. Preserve natural action/handling sounds${window}.`,
+      expected ? `Expected words: ${JSON.stringify(expected).slice(0, 160)}.` : `Remove unintended words: ${JSON.stringify(typeof result.heard === 'string' ? result.heard : '').slice(0, 160)}.`);
+      if (object(result.transcript ?? {}).ok === false) reasons.push('Match every requested word; remove omitted, substituted and additional speech.');
+      if (object(result.identity ?? {}).status === 'consistency_fail') reasons.push('The speaker voice differs from the other shots; restore the same requested speaker.');
+    }
+    if (reasons.length) {
+      const budget = Math.max(0, Math.floor((600 - 2 * (reasons.length - 1)) / reasons.length));
+      corrections.push(`${kind}: ${reasons.map(reason => reason.slice(0, budget)).join('; ')}`);
+    }
+  }
+  return corrections.join('\n').slice(0, 2000) || 'Correct the failed assessment without changing the requested action or dialogue.';
+}
+
 export function parseVideoReview(response: string) {
   let raw: Record<string, unknown>;
   try { raw = object(JSON.parse(response.trim().replace(/^```(?:json)?\s*\n?([\s\S]*?)\n?```$/i, '$1'))); } catch { throw new Error('Video review must return valid JSON'); }

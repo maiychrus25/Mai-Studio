@@ -24,7 +24,7 @@ import { parseProducts } from './products';
 import { splitStory, cuesFromDurations, groupNarration, alignScript } from './story';
 import { OfflineAsr } from './offline-asr';
 import { analyzeSpeech, compareTranscripts, compareSpeakers } from './acoustics';
-import { parseVideoReview, qualityRetries, reviewScore, videoReviewPrompt, VIDEO_REVIEW_FRAMES } from './quality';
+import { parseVideoReview, qualityRetries, qualityRepairFeedback, reviewScore, videoReviewPrompt, VIDEO_REVIEW_FRAMES } from './quality';
 import { downloadShopeeImage, parseShopeeCapture, resolveShopeeLink, shopeeImageUrl, shopeeLink, shopeeOffer, MAX_SHOPEE_IMAGES, MAX_SHOPEE_CAPTURE_BYTES } from './shopee';
 import { shopeeBookmarklet } from '../shared/shopee-capture';
 import { readAffiliateSettings, affiliateMode, MAX_AFFILIATE_REFERENCES } from '../shared/affiliate';
@@ -1359,9 +1359,7 @@ export class StudioService extends EventEmitter {
           const imageFailed = failed.includes('image');
           if (imageFailed && steps.some(value => value.id === `${base}/image`)) imageIds.push(base);
           if (project.data.renderMode !== 'slideshow' && !step.videoAssetId && (!imageFailed || imageIds.includes(base)) && (!affiliateDubbing(project) || failed.some(key => key !== 'speech'))) videoIds.push(base);
-          feedback[base] = failed.flatMap(kind => {
-            const result = object(review[kind]); return Object.values(object(result.checks ?? {})).map(value => object(value).reason).filter(value => typeof value === 'string');
-          }).join('; ').slice(0, 2000) || 'Correct the failed assessment without changing the requested action or dialogue.';
+          feedback[base] = qualityRepairFeedback(review, project.kind === 'affiliate' && project.data.affiliate !== undefined ? step.duration : undefined);
         }
       }
       production.qualityTakes = history; this.store.saveProject({ ...latest, data: { ...latest.data, production } });
