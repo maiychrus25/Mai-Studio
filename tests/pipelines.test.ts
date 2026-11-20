@@ -256,3 +256,63 @@ test('buildShots keeps productVisible', () => {
   assert.equal(api().buildShots({ shots: [{ ...shot, productVisible: true }] })[0].productVisible, true);
   for (const productVisible of ['no', 0, null]) assert.throws(() => api().buildShots({ shots: [{ ...shot, productVisible }] }), /productVisible/);
 });
+
+const legacyCases = () => JSON.parse(require('node:fs').readFileSync(require('node:path').join(__dirname, '../../tests/fixtures/legacy-affiliate-steps.json'), 'utf8')) as Array<{ project: Project; steps: unknown[] }>;
+const museProject = (affiliate: Record<string, unknown> = {}, extra: Record<string, unknown> = {}): Project => {
+  const source = legacyCases()[0].project;
+  return { ...source, id: 'muse', data: { ...source.data, affiliate: { ...(source.data.affiliate as object), backgroundAssetId: '', pose: 'auto', ...affiliate }, affiliatePlanVersion: 2, productLook: 'A white slip-on shoe with a thick sole.', ...extra } };
+};
+const stepOf = (steps: ReturnType<typeof import('../src/core/pipelines').pipelineSteps>, id: string, kind: string) => steps.find(step => step.id === `muse/${id}/${kind}`)!;
+
+test('legacy affiliate project keeps generic prompts', () => {
+  for (const { project, steps } of legacyCases()) {
+    assert.deepEqual(api().pipelineSteps(project), steps, project.id);
+    assert.notDeepEqual(api().pipelineSteps({ ...project, data: { ...project.data, affiliatePlanVersion: 2, productLook: 'A shoe.' } }), steps, `${project.id}: the marker switches paths`);
+  }
+});
+
+test('v2 project uses Muse templates', () => {
+  const steps = api().pipelineSteps(museProject()), legacy = api().pipelineSteps({ ...museProject(), data: { ...museProject().data, affiliatePlanVersion: undefined } });
+  for (const step of steps) {
+    if (step.kind === 'image') assert.ok(step.prompt.startsWith('Vertical 9:16 frame from a short social-media product video.'), step.prompt.slice(0, 80));
+    if (step.kind === 'video') assert.ok(step.prompt.startsWith('Create ONE continuous 10-second'), step.prompt.slice(0, 80));
+    assert.ok(!step.prompt.includes('The edit uses'));
+  }
+  assert.deepEqual(steps.map(({ id, kind, duration, start, dialogue, speaker, shotType, videoAssetId }) => ({ id, kind, duration, start, dialogue, speaker, shotType, videoAssetId })),
+    legacy.map(({ id, kind, duration, start, dialogue, speaker, shotType, videoAssetId }) => ({ id: id.replace('legacy-review', 'muse'), kind, duration, start, dialogue, speaker, shotType, videoAssetId })));
+  assert.match(stepOf(steps, 'one', 'video').prompt, /ONLY Minh speaks/);
+  assert.match(stepOf(steps, 'three', 'video').prompt, /an off-screen voice \(nobody visible speaks\)/);
+});
+
+test('v2 reference order follows Muse', () => {
+  const steps = api().pipelineSteps(museProject({ backgroundAssetId: 'room' }));
+  assert.deepEqual(stepOf(steps, 'one', 'image').refIds, ['p1', 'p2', 'portrait', 'room'], 'presenter with product');
+  assert.deepEqual(stepOf(steps, 'three', 'image').refIds, ['p1', 'p2', 'p3', 'room'], 'product shot');
+  assert.deepEqual(stepOf(steps, 'two', 'image').refIds, ['room'], 'product shot without the product');
+  const hidden = museProject({ backgroundAssetId: 'room' }); (hidden.data.shots as any[])[0].productVisible = false;
+  assert.deepEqual(stepOf(api().pipelineSteps(hidden), 'one', 'image').refIds, ['portrait', 'room'], 'presenter without product');
+  const look = legacyCases()[1].project, lookbook = { ...look, id: 'muse', data: { ...look.data, affiliatePlanVersion: 2, productLook: 'Linen dresses.', outfitLooks: [{ name: 'Blue', description: 'A blue dress.' }, { name: 'White', description: 'A white dress.' }], affiliate: { ...(look.data.affiliate as object), backgroundAssetId: 'room' } } };
+  const looks = api().pipelineSteps(lookbook);
+  assert.deepEqual(stepOf(looks, 'look1', 'image').refIds, ['white', 'portrait', 'room'], 'lookbook outfit then presenter');
+  assert.match(stepOf(looks, 'look1', 'image').prompt, /LOOK 2 — White/); assert.match(stepOf(looks, 'look1', 'image').prompt, /must look EXACTLY like the garment/);
+  for (const step of [...steps, ...looks].filter(step => step.kind === 'video')) assert.deepEqual(step.refIds, []);
+});
+
+test('v2 appends background and pose lines only when set', () => {
+  const plain = api().pipelineSteps(museProject());
+  for (const step of plain.filter(step => step.kind === 'image')) assert.ok(step.prompt.split('\n').at(-1)!.startsWith('Do not add any captions'), step.id);
+  const set = api().pipelineSteps(museProject({ backgroundAssetId: 'room', pose: 'sit' }));
+  assert.deepEqual(stepOf(set, 'one', 'image').prompt.split('\n').slice(-2), ['Background reference image 4: use this exact room/layout and lighting.', 'Requested model pose: sit.']);
+  assert.equal(stepOf(set, 'three', 'image').prompt.split('\n').at(-1), 'Background reference image 4: use this exact room/layout and lighting.');
+  assert.equal(stepOf(set, 'two', 'image').prompt.split('\n').at(-1), 'Background reference image 1: use this exact room/layout and lighting.');
+  for (const step of set.filter(step => step.kind === 'video')) assert.ok(!/Background reference|Requested model pose/.test(step.prompt));
+});
+
+test('v2 clip speaks numbers as words while subtitles keep the written line', () => {
+  const steps = api().pipelineSteps(museProject());
+  assert.match(stepOf(steps, 'one', 'video').prompt, /"Đế nâng ba xăng-ti-mét, tôn dáng!"/);
+  assert.match(stepOf(steps, 'one', 'image').prompt, /"Đế nâng 3cm, tôn dáng!"/);
+  assert.equal(stepOf(steps, 'one', 'video').dialogue, 'Đế nâng 3cm, tôn dáng!');
+  const english = api().pipelineSteps(museProject({}, { language: 'en' }));
+  assert.match(stepOf(english, 'one', 'video').prompt, /"Đế nâng 3cm, tôn dáng!"/); assert.match(stepOf(english, 'one', 'video').prompt, /in English/);
+});

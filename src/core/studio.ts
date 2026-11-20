@@ -13,7 +13,8 @@ import { SecretVault, type EncryptionPort } from './vault';
 import { BrowserManager, browserExecutable } from './browser';
 import { MediaTools, parseSrt, formatSrt } from './media';
 import { createRecap } from './series';
-import { buildShots, validateCharacters, validateEpisodes, pipelineSteps, affiliateDubbing } from './pipelines';
+import { buildShots, validateCharacters, validateEpisodes, pipelineSteps, affiliateDubbing, affiliatePromptContext } from './pipelines';
+import { affiliateHostRefPrompt } from './affiliate-prompts';
 import { IntegrationClient } from './integrations';
 import { CodexJobs } from './codex';
 import { verifyLicense } from '../../services/studio-hub';
@@ -27,7 +28,7 @@ import { analyzeSpeech, compareTranscripts, compareSpeakers } from './acoustics'
 import { parseVideoReview, qualityRetries, qualityRepairFeedback, reviewScore, videoReviewPrompt, VIDEO_REVIEW_FRAMES } from './quality';
 import { downloadShopeeImage, parseShopeeCapture, resolveShopeeLink, shopeeImageUrl, shopeeLink, shopeeOffer, MAX_SHOPEE_IMAGES, MAX_SHOPEE_CAPTURE_BYTES } from './shopee';
 import { shopeeBookmarklet } from '../shared/shopee-capture';
-import { readAffiliateSettings, affiliateMode, MAX_AFFILIATE_REFERENCES } from '../shared/affiliate';
+import { readAffiliateSettings, affiliateMode, affiliateTemplateGroup, MAX_AFFILIATE_REFERENCES } from '../shared/affiliate';
 import { affiliateReviewPrompt, parseAffiliateReview } from './affiliate';
 import { affiliateCaptionCues, affiliatePostText, affiliateSpeechWindow, alignAffiliateShots, detectAffiliateBeats } from './affiliate-edit';
 
@@ -787,6 +788,7 @@ export class StudioService extends EventEmitter {
       let rendered = object(task.checkpoint.qualityRender ?? {});
       return this.executePipeline({ ...task, input: { ...task.input, projectSnapshot: this.store.project(project.id), stage: 'render', force: false }, checkpoint: rendered }, { ...context, checkpoint: value => { rendered = { ...rendered, ...value }; context.checkpoint({ qualityRender: rendered }); } });
     }
+    if (measuredCuts && selected) throw new NeedsInputError('Video Aff kiểu mới nối các cảnh theo lời nói thật nên chỉ dựng toàn bộ video; bỏ chọn cảnh rồi dựng lại');
     const narration = object(production.narration ?? {});
     if (!dubbing && typeof narration.assetId === 'string' && project.data.narrationMode === 'source') {
       const path = this.store.assetPath(narration.assetId); const info = await this.media().probe(path, context.signal);
@@ -1066,7 +1068,9 @@ export class StudioService extends EventEmitter {
     this.store.transaction(() => {
       this.store.saveProject({ ...latest, data }); context.checkpoint({ planApplied: true, planFingerprint: this.contentFingerprint(data) });
     });
-    context.progress(1, 'Đã lưu kế hoạch AI: kiểm tra nhân vật và từng shot trước khi tạo media'); return { outputIds: [] };
+    context.progress(1, 'Đã lưu kế hoạch AI: kiểm tra nhân vật và từng shot trước khi tạo media');
+    if (affiliate && affiliateTemplateGroup(readAffiliateSettings(project.data.affiliate).contentStyle) && data.affiliatePlanVersion !== 2) return { outputIds: [], message: 'Đã lưu kế hoạch, nhưng AI trả về theo định dạng cũ nên video này sẽ dựng theo luồng cũ; chạy lập kế hoạch lại để dùng luồng mới' };
+    return { outputIds: [] };
   }
   private async planAffiliate(task: Task, project: Project, context: TaskContext, throughApi: boolean, reviewOnly = false) {
     const product = object(project.data.product ?? {});
@@ -1204,12 +1208,13 @@ export class StudioService extends EventEmitter {
   }
   private characterFingerprint(project: Project, character: Character): string {
     const data = project.data, affiliate = project.kind === 'affiliate' && data.affiliate !== undefined ? readAffiliateSettings(data.affiliate) : undefined;
-    return createHash('sha256').update(JSON.stringify({ character, style: data.style ?? '', styleText: data.styleText ?? '', ...(affiliate ? { product: data.product, productAssetIds: data.productAssetIds, outfits: affiliate.contentStyle === 'lookbook' ? affiliate.outfitAssetIds : [] } : {}) })).digest('hex');
+    return createHash('sha256').update(JSON.stringify({ character, style: data.style ?? '', styleText: data.styleText ?? '', ...(affiliate ? { product: data.product, productAssetIds: data.productAssetIds, outfits: affiliate.contentStyle === 'lookbook' ? affiliate.outfitAssetIds : [] } : {}), ...(affiliatePromptContext(project) ? { template: 'muse-v2' } : {}) })).digest('hex');
   }
   private async executeCharacters(task: Task, project: Project, context: TaskContext): Promise<TaskResult> {
     const characters = validateCharacters(project.data.characters);
     const affiliate = project.kind === 'affiliate' && project.data.affiliate !== undefined ? readAffiliateSettings(project.data.affiliate) : undefined;
-    const refs = affiliate ? affiliate.contentStyle === 'lookbook' && affiliate.outfitAssetIds.length ? [affiliate.outfitAssetIds[0]] : (project.data.productAssetIds as string[] ?? []) : [];
+    const muse = affiliatePromptContext(project);
+    const refs = muse ? [] : affiliate ? affiliate.contentStyle === 'lookbook' && affiliate.outfitAssetIds.length ? [affiliate.outfitAssetIds[0]] : (project.data.productAssetIds as string[] ?? []) : [];
     const states = object(task.checkpoint.characters ?? {}); const outputIds: string[] = []; const initialHash = this.contentFingerprint(project.data);
     const existing = (id: unknown): string => typeof id === 'string' && this.store.assets().some(asset => asset.id === id && asset.mime.startsWith('image/')) ? id : '';
     for (const [index, character] of characters.entries()) {
@@ -1227,7 +1232,7 @@ export class StudioService extends EventEmitter {
       // A fresh force task generates; a completed retry follows the latest matching portrait.
       let assetId = character.assetId || (currentPortrait && (task.input.force !== true || !!completed) ? currentPortrait : completed);
       if (!assetId) {
-        const prompt = text(`Create a clear full-body character reference on a neutral background. One consistent face, hair and outfit, ${affiliate ? 'no added text or watermarks; preserve real printed product branding from the supplied references' : 'no text or logo'}. Character: ${character.name}. Appearance: ${character.description}. Style: ${[project.data.style, project.data.styleText].filter(value => typeof value === 'string' && value.trim()).join('. ')}.${affiliate ? ` Wear the actual product from the supplied reference photos without redesigning its shape, material, pattern or color. Product data only: ${JSON.stringify(project.data.product)}.` : ''}`, 'Character prompt', 32768);
+        const prompt = muse ? text(affiliateHostRefPrompt({ ...muse, host: { name: character.name, look: character.description, voice: character.voiceProfile ?? '' } }), 'Character prompt', 32768) : text(`Create a clear full-body character reference on a neutral background. One consistent face, hair and outfit, ${affiliate ? 'no added text or watermarks; preserve real printed product branding from the supplied references' : 'no text or logo'}. Character: ${character.name}. Appearance: ${character.description}. Style: ${[project.data.style, project.data.styleText].filter(value => typeof value === 'string' && value.trim()).join('. ')}.${affiliate ? ` Wear the actual product from the supplied reference photos without redesigning its shape, material, pattern or color. Product data only: ${JSON.stringify(project.data.product)}.` : ''}`, 'Character prompt', 32768);
         const child: Task = { ...task, kind: 'image', prompt, input: { ratio: '3:4', refIds: refs }, checkpoint: saved };
         const result = await this.generate(child, { signal: context.signal, progress: (progress, message) => context.progress((index + progress) / Math.max(1, characters.length), message), checkpoint: value => { states[character.id] = { ...object(states[character.id] ?? {}), ...value, signature }; context.checkpoint({ characters: states }); } });
         assetId = result.outputIds[0]; saved = object(states[character.id] ?? {});
@@ -1364,7 +1369,7 @@ export class StudioService extends EventEmitter {
           const imageFailed = failed.includes('image');
           if (imageFailed && steps.some(value => value.id === `${base}/image`)) imageIds.push(base);
           if (project.data.renderMode !== 'slideshow' && !step.videoAssetId && (!imageFailed || imageIds.includes(base)) && (!affiliateDubbing(project) || failed.some(key => key !== 'speech'))) videoIds.push(base);
-          feedback[base] = qualityRepairFeedback(review, project.kind === 'affiliate' && project.data.affiliate !== undefined ? step.duration : undefined);
+          feedback[base] = qualityRepairFeedback(review, project.kind === 'affiliate' && project.data.affiliate !== undefined && (project.data.affiliatePlanVersion !== 2 || affiliateDubbing(project)) ? step.duration : undefined);
         }
       }
       production.qualityTakes = history; this.store.saveProject({ ...latest, data: { ...latest.data, production } });

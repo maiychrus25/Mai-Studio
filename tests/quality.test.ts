@@ -422,3 +422,28 @@ test('repairing one of two scenes reuses all unchanged reviews and leaves the pa
     assert.ok(generated[2].includes('teapot movement is missing'));
   });
 });
+
+test('v2 repair feedback states no planned duration', async t => {
+  await fixture(async (studio, _paths, _requests, decide) => {
+    decide(() => videoVerdict(), () => ({ ...imageVerdict, product: { status: 'pass', reason: 'Controlled fixture' } }));
+    const png = join(studio.store.root, 'shirt.png'); writeFileSync(png, Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+j04sAAAAASUVORK5CYII=', 'base64'));
+    const cut = join(studio.store.root, 'cut-line.mp4');
+    assert.equal(spawnSync(require('ffmpeg-static'), ['-v', 'error', '-f', 'lavfi', '-i', 'color=c=blue:s=64x64:r=24:d=3.5', '-f', 'lavfi', '-i', 'sine=frequency=180:sample_rate=16000:duration=2.5', '-filter_complex', '[1:a]adelay=1000:all=1,apad=whole_dur=3.5[a]', '-map', '0:v', '-map', '[a]', '-c:v', 'libx264', '-pix_fmt', 'yuv420p', '-c:a', 'aac', '-t', '3.5', cut]).status, 0);
+    const [frame, video] = await studio.importFiles([png, cut]);
+    const prompts: string[] = [];
+    t.mock.method(studio as unknown as Port, 'generate', async (task: Task) => { prompts.push(task.prompt); return { outputIds: [video.id] }; });
+    const run = async (extra: Record<string, unknown>) => {
+      prompts.length = 0;
+      const p = await studio.invoke<Project>('project.save', { name: 'Repair', kind: 'affiliate', data: { affiliate: { contentStyle: 'review', hostMode: 'voiceover', seconds: 15, screenText: false }, affiliateReview: { status: 'pass' },
+        product: { name: 'Shirt' }, nativeAudio: true, keepAudio: true, autoChecks: true, qualityRetries: 1, width: 64, height: 64,
+        shots: [{ id: 'one', prompt: 'Shirt on the cabinet', assetId: frame.id, duration: 3, dialogue: 'Áo cotton mềm mại.', beat: 'hook', shotType: 'insert' }], ...extra } });
+      await finish(studio, await studio.invoke<Task>('studio.run', { projectId: p.id, stage: 'videos' }));
+      return [...prompts];
+    };
+    const v2 = await run({ affiliatePlanVersion: 2, productLook: 'A white cotton shirt.' });
+    assert.equal(v2.length, 2, JSON.stringify(v2.map(prompt => prompt.slice(-200))));
+    assert.match(v2[1], /Correct the following observed problems/); assert.match(v2[1], /bị cắt ở cuối clip/); assert.doesNotMatch(v2[1], /within \d/);
+    const legacy = await run({});
+    assert.equal(legacy.length, 2); assert.match(legacy[1], /within 3\.000 seconds/, 'legacy repair keeps the planned edit window');
+  });
+});

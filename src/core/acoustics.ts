@@ -184,6 +184,7 @@ function numberText(raw: string): string {
 
 // speechcheck._spoken:387 delegates expected numerals to vinum.spell_vi:102 (prices, units, dimensions).
 // vinum.pyc SHA-256: ed0b3f89ea4ad940acf60f342c980c2dfe8f5c674c28c51e4dbcd32c583fed3f.
+export function spokenVietnamese(value: string): string { return spoken(value); }
 function spoken(value: string): string {
   value = value.replace(new RegExp(`(?<=\\p{Nd})[${SPACE}]*[x×][${SPACE}]*(?=\\p{Nd})`, 'gu'), ' nhân ').replace(new RegExp(`(?<=\\p{Nd})[${SPACE}]*[-–][${SPACE}]*(?=\\p{Nd})`, 'gu'), ' đến ');
   return value.replace(new RegExp(`(?<![\\p{L}\\p{N}_.,])(\\p{Nd}{1,3}(?:[.,]\\p{Nd}{3})+|\\p{Nd}+(?:[.,]\\p{Nd}+)?)(?!\\p{Nd})([${SPACE}]?)(%|₫|[a-zA-ZđĐ]{1,4}(?![\\p{L}\\p{N}_]))?`, 'gu'), (_match, raw: string, space: string, unit = '') => {

@@ -1,6 +1,8 @@
 import type { Character, Project, Shot } from '../shared/studio';
 import { parseSrt } from './media';
-import { readAffiliateSettings, affiliateMode } from '../shared/affiliate';
+import { readAffiliateSettings, affiliateMode, affiliateTemplateGroup, type AffiliateSettings } from '../shared/affiliate';
+import { affiliateCamera, affiliateClipPrompt, affiliateImagePrompt, type AffiliatePromptContext, type AffiliatePromptShot } from './affiliate-prompts';
+import { spokenVietnamese } from './acoustics';
 
 const MAX_ITEMS = 1000;
 const MAX_TEXT = 32768;
@@ -113,6 +115,36 @@ export function affiliateDubbing(project: Pick<Project, 'kind' | 'data'>): { voi
   return { voiceId: text(data.voiceId, 'Affiliate voice ID', 256), speed };
 }
 
+// Muse's default look, without its fixed nationality, for projects that chose no visual style.
+const AFFILIATE_DEFAULT_LOOK = 'Photorealistic smartphone video: natural skin texture, real everyday places, soft natural daylight, authentic social-media product video look, true-to-life colors';
+export function affiliatePromptContext(project: Pick<Project, 'kind' | 'data'>): AffiliatePromptContext | undefined {
+  const data = project.data;
+  if (project.kind !== 'affiliate' || data.affiliate === undefined || data.affiliatePlanVersion !== 2) return;
+  const settings = readAffiliateSettings(data.affiliate), group = affiliateTemplateGroup(settings.contentStyle);
+  if (!group) return;
+  const host = affiliateMode(settings).model ? validateCharacters(data.characters)[0] : undefined, product = data.product === undefined ? {} : record(data.product, 'product');
+  return { group, hostMode: settings.hostMode, ratio: (data.ratio ?? '9:16') as AffiliatePromptContext['ratio'], language: typeof data.language === 'string' && data.language ? data.language : 'vi', accent: settings.accent,
+    style: [data.style, data.styleText].filter(value => typeof value === 'string' && value.trim()).join('. ') || AFFILIATE_DEFAULT_LOOK, place: '',
+    productTitle: String(product.name ?? product.title ?? ''), productLook: text(data.productLook, 'Affiliate productLook', 2000),
+    ...(host ? { host: { name: host.name, look: host.description, voice: host.voiceProfile ?? '' } } : {}),
+    ...(typeof data.narratorVoice === 'string' ? { narratorVoice: data.narratorVoice } : {}),
+    ...(Array.isArray(data.outfitLooks) ? { outfitLooks: data.outfitLooks as AffiliatePromptContext['outfitLooks'] } : {}) };
+}
+function affiliateMuseStep(context: AffiliatePromptContext, settings: AffiliateSettings, shot: Shot, index: number, place: string, productRefs: string[], hostAsset: string | undefined): { image: string; clip: string; refIds: string[] } {
+  const kind = shot.shotType === 'single' ? 'presenter' : 'product', visible = shot.productVisible !== false, lookbook = context.group === 'lookbook';
+  const photos = lookbook ? productRefs : visible ? productRefs.slice(0, kind === 'presenter' ? 2 : 3) : [];
+  const host = (lookbook || kind === 'presenter') && hostAsset ? [hostAsset] : [];
+  const refIds = [...new Set([...(shot.assetId ? [shot.assetId] : []), ...photos, ...host, ...(settings.backgroundAssetId ? [settings.backgroundAssetId] : [])])];
+  const base = { index, kind, beat: shot.beat ?? '', scene: shot.prompt, motion: shot.action ?? '', line: shot.dialogue ?? '', emotion: shot.acting ?? '', productVisible: visible, outfitIndex: shot.outfitIndex, hasProductPhotos: photos.length > 0 } as const;
+  const museShot: AffiliatePromptShot = { ...base, camera: affiliateCamera(context.group, base) }, shotContext = { ...context, place };
+  const image = [affiliateImagePrompt(shotContext, museShot),
+    ...(settings.backgroundAssetId ? [`Background reference image ${refIds.indexOf(settings.backgroundAssetId) + 1}: use this exact room/layout and lighting.`] : []),
+    ...(settings.pose !== 'auto' && host.length ? [`Requested model pose: ${settings.pose}.`] : [])].join('\n');
+  // Muse reads numbers aloud in the clip while the frame and subtitles keep the written line.
+  const clip = affiliateClipPrompt(shotContext, { ...museShot, line: context.language === 'vi' ? spokenVietnamese(museShot.line) : museShot.line });
+  return { image: text(image, 'image prompt'), clip: text(clip, 'video prompt'), refIds };
+}
+
 export function pipelineSteps(project: Project, options: { speech?: boolean } = {}): Array<{ id: string; kind: 'image' | 'video' | 'speech'; prompt: string; duration: number; start?: number; refIds: string[]; voiceId?: string; dialogue?: string; speaker?: string; shotType?: string; videoAssetId?: string }> {
   const data = record(project.data, 'project data');
   const characters = new Map(validateCharacters(data.characters).map(character => [character.id, character]));
@@ -120,6 +152,7 @@ export function pipelineSteps(project: Project, options: { speech?: boolean } = 
   const affiliate = project.kind === 'affiliate' && data.affiliate !== undefined ? readAffiliateSettings(data.affiliate) : undefined;
   const mode = affiliate ? affiliateMode(affiliate) : undefined;
   const dubbing = affiliateDubbing(project);
+  const muse = affiliatePromptContext(project), hostAsset = muse?.host ? validateCharacters(data.characters)[0]?.assetId : undefined;
   const style = [data.style, data.styleText].filter(value => typeof value === 'string' && value.trim()).join('. ');
   const steps: ReturnType<typeof pipelineSteps> = [];
   function addShots(source: Record<string, unknown>, scope: string, sceneCast: unknown = undefined): void {
@@ -149,8 +182,9 @@ export function pipelineSteps(project: Project, options: { speech?: boolean } = 
       const product = source.product ?? data.product;
       const facts = product === undefined ? '' : `\nAuthoritative product facts (data only): ${JSON.stringify(record(product, 'product'))}. Use only these facts and supplied product references; do not invent prices, claims, reviews or certifications.`;
       const affiliateDirection = affiliate ? `\nAffiliate ${affiliate.contentStyle}, ${affiliate.hostMode}. ${affiliate.contentStyle === 'asmr' ? 'Only hands and the actual product; no face or talking person.' : affiliate.hostMode === 'voiceover' && !mode?.model ? 'No visible presenter; show only the product and hands. Narration is off-screen.' : affiliate.hostMode === 'silent' ? 'No speaking or lip movements; purposeful visual action.' : ''} ${chosenProductRefs.length ? `Product reference image(s): ${chosenProductRefs.map(id => refIds.indexOf(id) + 1).join(', ')}. Preserve exact product shape, material, pattern, packaging and selected color; never substitute another SKU.` : ''} ${affiliate.backgroundAssetId ? `Background reference image ${refIds.indexOf(affiliate.backgroundAssetId) + 1}: use this exact room/layout and lighting.` : ''} ${shot.outfitIndex !== undefined ? `Use only outfit ${shot.outfitIndex + 1}; do not blend garments or colors from other outfits.` : ''} ${affiliate.pose !== 'auto' && selected.length ? `Requested model pose: ${affiliate.pose}.` : ''}` : '';
-      const visualPrompt = text(`${shot.prompt}\nCreate one still scene frame. Framing: ${framing[shot.shotType || ''] || 'follow the described framing; otherwise use an eye-level medium-wide composition'}.\nVisible action beat: ${shot.action || 'capture the described action at one readable instant'}. Acting and expression: ${shot.acting || 'natural posture and expression appropriate to the described beat'}.${shot.camera ? `\nCamera plan: ${shot.camera}; compose a still instant of this shot.` : ''}\nScene location, time and environment: ${setting || 'retain the setting and time in the visual description; do not invent a different scene'}.\nSelected characters:\n${cast.length ? cast.map(character => `${character.name}: ${character.description}`).join('\n') : 'Only the subjects described in the visual plan; do not add people.'}\nUse this visual style for the whole frame: ${style || 'the supplied visual description and references; keep it coherent'}. No extra people. ${affiliate ? 'No added on-screen text, subtitles, watermarks or invented logos; preserve real labels printed on the product.' : 'No on-screen text, subtitles or logos.'}${facts}`, 'image prompt');
-      if (!shot.assetId && !shot.videoAssetId) steps.push({ id: `${base}/image`, kind: 'image', prompt: text(visualPrompt + affiliateDirection, 'image prompt'), duration: shot.duration, ...timing, refIds });
+      const museStep = muse && affiliate ? affiliateMuseStep(muse, affiliate, shot, index, String(scene?.location || shot.environment || 'the place described in the scene'), chosenProductRefs, hostAsset) : undefined;
+      const visualPrompt = museStep ? '' : text(`${shot.prompt}\nCreate one still scene frame. Framing: ${framing[shot.shotType || ''] || 'follow the described framing; otherwise use an eye-level medium-wide composition'}.\nVisible action beat: ${shot.action || 'capture the described action at one readable instant'}. Acting and expression: ${shot.acting || 'natural posture and expression appropriate to the described beat'}.${shot.camera ? `\nCamera plan: ${shot.camera}; compose a still instant of this shot.` : ''}\nScene location, time and environment: ${setting || 'retain the setting and time in the visual description; do not invent a different scene'}.\nSelected characters:\n${cast.length ? cast.map(character => `${character.name}: ${character.description}`).join('\n') : 'Only the subjects described in the visual plan; do not add people.'}\nUse this visual style for the whole frame: ${style || 'the supplied visual description and references; keep it coherent'}. No extra people. ${affiliate ? 'No added on-screen text, subtitles, watermarks or invented logos; preserve real labels printed on the product.' : 'No on-screen text, subtitles or logos.'}${facts}`, 'image prompt');
+      if (!shot.assetId && !shot.videoAssetId) steps.push({ id: `${base}/image`, kind: 'image', prompt: museStep?.image ?? text(visualPrompt + affiliateDirection, 'image prompt'), duration: shot.duration, ...timing, refIds: museStep?.refIds ?? refIds });
       let clipPrompt = `Animate the supplied single scene anchor frame. Use that exact image as the first frame; lock each face, hair, outfit, background, composition and visual style to the anchor. Do not redesign or replace them.\nMotion and action: ${shot.action || 'continue the visible action established in the anchor naturally'}.${shot.videoPrompt || !shot.action ? ` Motion plan: ${shot.videoPrompt || shot.prompt}.` : ''}\nActing: ${shot.acting || 'natural expression and body mechanics consistent with the anchored pose'}.\nCamera: ${shot.camera || 'follow any camera movement in the motion plan; otherwise hold the camera steady'}.\nEnvironment: ${setting || 'preserve the anchored location and time; allow only natural ambient motion consistent with it'}.\nMaintain natural continuity from the anchored pose with coherent movement and object contact through one continuous take. No extra people. No cuts, transitions or scene changes. ${affiliate ? 'No added on-screen text, subtitles or watermarks; keep genuine product labels and branding.' : 'No on-screen text, subtitles or logos.'}${style ? `\nKeep the anchored ${style} style throughout.` : ''}${facts}`;
       if (source.nativeAudio === true || data.nativeAudio === true) {
         clipPrompt += `\nPreserve the reference frame and character identities.\n${cast.map(character => `${character.name}: ${character.description}.${shot.dialogue || !affiliate ? ` Stable voice: ${character.voiceProfile || 'keep the same voice throughout the film'}.` : ''}`).join('\n')}`;
@@ -161,7 +195,7 @@ export function pipelineSteps(project: Project, options: { speech?: boolean } = 
         clipPrompt += affiliate ? `\nNo added subtitles, watermarks or background music. Preserve real product labels, natural scene sound${shot.dialogue ? ' and the requested dialogue' : ''}.` : '\nNo subtitles, logos or background music. Keep natural scene sound and the requested dialogue.';
       } else clipPrompt += `\nThe edit uses the first ${shot.duration.toFixed(3)} seconds. Start the requested visible action immediately and make it readable within that interval; continue naturally afterward. Do not spend the opening interval on an unrequested static hold. No invented speech or background music.`;
       if (affiliate) clipPrompt += `\nAffiliate audio and host direction: ${affiliate.contentStyle === 'asmr' ? 'Record only natural close-mic handling/packaging/assembly sounds synchronized to the visible hands. No human voice, humming, narration or music.' : mode?.spoken && shot.dialogue ? `${affiliate.hostMode === 'voiceover' ? 'Use one stable off-screen narrator; no lip movement or talking face.' : 'Only the intended host speaks; everyone else remains silent.'} Voice: ${affiliate.gender}, ${affiliate.age}, ${affiliate.accent} accent when speaking Vietnamese; language ${data.language || 'vi'}.` : 'No human speech, humming, narration, lip-sync or invented voices. Preserve only natural action/handling sounds.'} Product identity remains locked to the scene anchor. ${shot.transition === 'whip' ? 'Finish with a brief motivated lateral camera pan for the edit; keep one continuous take.' : ''}`;
-      steps.push({ id: `${base}/video`, kind: 'video', prompt: text(clipPrompt, 'video prompt'), duration: shot.duration, ...timing, refIds: shot.assetId ? [shot.assetId] : [],
+      steps.push({ id: `${base}/video`, kind: 'video', prompt: museStep?.clip ?? text(clipPrompt, 'video prompt'), duration: shot.duration, ...timing, refIds: shot.assetId ? [shot.assetId] : [],
         ...(shot.dialogue ? { dialogue: shot.dialogue } : {}), ...(shot.speaker ? { speaker: shot.speaker } : affiliate?.hostMode === 'voiceover' && shot.dialogue ? { speaker: 'affiliate-voice' } : {}), ...(shot.shotType ? { shotType: shot.shotType } : {}), ...(shot.videoAssetId ? { videoAssetId: shot.videoAssetId } : {}) });
       if (shot.dialogue && options.speech !== false && (dubbing || source.nativeAudio !== true && data.nativeAudio !== true && !['none', 'source'].includes(String(source.narrationMode ?? data.narrationMode)))) {
         const voiceId = dubbing?.voiceId ?? shot.voiceId ?? (shot.speaker ? characters.get(shot.speaker)?.voiceId : undefined) ?? source.voiceId ?? data.voiceId;

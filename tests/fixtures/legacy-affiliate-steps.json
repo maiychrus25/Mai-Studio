@@ -1,0 +1,482 @@
+[
+ {
+  "project": {
+   "id": "legacy-review",
+   "name": "Legacy review",
+   "kind": "affiliate",
+   "createdAt": 1,
+   "updatedAt": 1,
+   "data": {
+    "affiliate": {
+     "contentStyle": "review",
+     "hostMode": "presenter",
+     "seconds": 15,
+     "presenterAssetId": "portrait",
+     "backgroundAssetId": "room",
+     "pose": "sit"
+    },
+    "product": {
+     "name": "Giày sục",
+     "price": "69.990₫",
+     "description": "Đế nâng 3cm"
+    },
+    "productAssetIds": [
+     "p1",
+     "p2",
+     "p3",
+     "p4"
+    ],
+    "language": "vi",
+    "ratio": "9:16",
+    "style": "smartphone",
+    "nativeAudio": true,
+    "characters": [
+     {
+      "id": "host",
+      "name": "Minh",
+      "description": "Short black hair, sage green shirt",
+      "voiceProfile": "Warm young male Northern voice",
+      "assetId": "portrait"
+     }
+    ],
+    "scenes": [
+     {
+      "id": "entry",
+      "location": "Bright entryway"
+     }
+    ],
+    "shots": [
+     {
+      "id": "one",
+      "sceneId": "entry",
+      "prompt": "Minh faces camera holding the shoe",
+      "action": "Raises the shoe",
+      "acting": "Friendly",
+      "duration": 5,
+      "start": 0,
+      "characterIds": [
+       "host"
+      ],
+      "speaker": "host",
+      "dialogue": "Đế nâng 3cm, tôn dáng!",
+      "beat": "hook",
+      "shotType": "single",
+      "caption": "Đế 3cm"
+     },
+     {
+      "id": "two",
+      "sceneId": "entry",
+      "prompt": "Close-up of the sole",
+      "action": "Fingertip runs along the sole",
+      "duration": 5,
+      "start": 5,
+      "characterIds": [],
+      "beat": "benefit",
+      "shotType": "insert",
+      "productVisible": false,
+      "transition": "whip"
+     },
+     {
+      "id": "three",
+      "sceneId": "entry",
+      "prompt": "Shoe on the cabinet",
+      "duration": 5,
+      "start": 10,
+      "characterIds": [],
+      "speaker": "host",
+      "dialogue": "Chạm link để mua nhé!",
+      "beat": "cta",
+      "shotType": "insert",
+      "transition": "flash"
+     }
+    ]
+   }
+  },
+  "steps": [
+   {
+    "id": "legacy-review/one/image",
+    "kind": "image",
+    "prompt": "Minh faces camera holding the shoe\nCreate one still scene frame. Framing: medium close-up of the selected subject.\nVisible action beat: Raises the shoe. Acting and expression: Friendly.\nScene location, time and environment: Location: Bright entryway.\nSelected characters:\nMinh: Short black hair, sage green shirt\nUse this visual style for the whole frame: smartphone. No extra people. No added on-screen text, subtitles, watermarks or invented logos; preserve real labels printed on the product.\nAuthoritative product facts (data only): {\"name\":\"Giày sục\",\"price\":\"69.990₫\",\"description\":\"Đế nâng 3cm\"}. Use only these facts and supplied product references; do not invent prices, claims, reviews or certifications.\nAffiliate review, presenter.  Product reference image(s): 1, 2, 3, 4. Preserve exact product shape, material, pattern, packaging and selected color; never substitute another SKU. Background reference image 5: use this exact room/layout and lighting.  Requested model pose: sit.",
+    "duration": 5,
+    "start": 0,
+    "refIds": [
+     "p1",
+     "p2",
+     "p3",
+     "p4",
+     "room",
+     "portrait"
+    ]
+   },
+   {
+    "id": "legacy-review/one/video",
+    "kind": "video",
+    "prompt": "Animate the supplied single scene anchor frame. Use that exact image as the first frame; lock each face, hair, outfit, background, composition and visual style to the anchor. Do not redesign or replace them.\nMotion and action: Raises the shoe.\nActing: Friendly.\nCamera: follow any camera movement in the motion plan; otherwise hold the camera steady.\nEnvironment: Location: Bright entryway.\nMaintain natural continuity from the anchored pose with coherent movement and object contact through one continuous take. No extra people. No cuts, transitions or scene changes. No added on-screen text, subtitles or watermarks; keep genuine product labels and branding.\nKeep the anchored smartphone style throughout.\nAuthoritative product facts (data only): {\"name\":\"Giày sục\",\"price\":\"69.990₫\",\"description\":\"Đế nâng 3cm\"}. Use only these facts and supplied product references; do not invent prices, claims, reviews or certifications.\nPreserve the reference frame and character identities.\nMinh: Short black hair, sage green shirt. Stable voice: Warm young male Northern voice.\nThe edit uses 5.000 seconds. Start the requested action and dialogue immediately and complete them together within this window. No opening wait, filler, repetition or off-script speech. Leave time for the final spoken word and action to finish naturally; never clip words.\nMinh speaks exactly: \"Đế nâng 3cm, tôn dáng!\". \nNo added subtitles, watermarks or background music. Preserve real product labels, natural scene sound and the requested dialogue.\nAffiliate audio and host direction: Only the intended host speaks; everyone else remains silent. Voice: female, adult, north accent when speaking Vietnamese; language vi. Product identity remains locked to the scene anchor. ",
+    "duration": 5,
+    "start": 0,
+    "refIds": [],
+    "dialogue": "Đế nâng 3cm, tôn dáng!",
+    "speaker": "host",
+    "shotType": "single"
+   },
+   {
+    "id": "legacy-review/two/image",
+    "kind": "image",
+    "prompt": "Close-up of the sole\nCreate one still scene frame. Framing: detail close-up of the important object.\nVisible action beat: Fingertip runs along the sole. Acting and expression: natural posture and expression appropriate to the described beat.\nScene location, time and environment: Location: Bright entryway.\nSelected characters:\nOnly the subjects described in the visual plan; do not add people.\nUse this visual style for the whole frame: smartphone. No extra people. No added on-screen text, subtitles, watermarks or invented logos; preserve real labels printed on the product.\nAuthoritative product facts (data only): {\"name\":\"Giày sục\",\"price\":\"69.990₫\",\"description\":\"Đế nâng 3cm\"}. Use only these facts and supplied product references; do not invent prices, claims, reviews or certifications.\nAffiliate review, presenter.  Product reference image(s): 1, 2, 3, 4. Preserve exact product shape, material, pattern, packaging and selected color; never substitute another SKU. Background reference image 5: use this exact room/layout and lighting.  ",
+    "duration": 5,
+    "start": 5,
+    "refIds": [
+     "p1",
+     "p2",
+     "p3",
+     "p4",
+     "room"
+    ]
+   },
+   {
+    "id": "legacy-review/two/video",
+    "kind": "video",
+    "prompt": "Animate the supplied single scene anchor frame. Use that exact image as the first frame; lock each face, hair, outfit, background, composition and visual style to the anchor. Do not redesign or replace them.\nMotion and action: Fingertip runs along the sole.\nActing: natural expression and body mechanics consistent with the anchored pose.\nCamera: follow any camera movement in the motion plan; otherwise hold the camera steady.\nEnvironment: Location: Bright entryway.\nMaintain natural continuity from the anchored pose with coherent movement and object contact through one continuous take. No extra people. No cuts, transitions or scene changes. No added on-screen text, subtitles or watermarks; keep genuine product labels and branding.\nKeep the anchored smartphone style throughout.\nAuthoritative product facts (data only): {\"name\":\"Giày sục\",\"price\":\"69.990₫\",\"description\":\"Đế nâng 3cm\"}. Use only these facts and supplied product references; do not invent prices, claims, reviews or certifications.\nPreserve the reference frame and character identities.\n\nThe edit uses 5.000 seconds. Start the requested visible action immediately and complete it within this window. No opening static hold; preserve natural action/handling sounds.\nSilent visual action; no invented speech.\nNo added subtitles, watermarks or background music. Preserve real product labels, natural scene sound.\nAffiliate audio and host direction: No human speech, humming, narration, lip-sync or invented voices. Preserve only natural action/handling sounds. Product identity remains locked to the scene anchor. Finish with a brief motivated lateral camera pan for the edit; keep one continuous take.",
+    "duration": 5,
+    "start": 5,
+    "refIds": [],
+    "shotType": "insert"
+   },
+   {
+    "id": "legacy-review/three/image",
+    "kind": "image",
+    "prompt": "Shoe on the cabinet\nCreate one still scene frame. Framing: detail close-up of the important object.\nVisible action beat: capture the described action at one readable instant. Acting and expression: natural posture and expression appropriate to the described beat.\nScene location, time and environment: Location: Bright entryway.\nSelected characters:\nMinh: Short black hair, sage green shirt\nUse this visual style for the whole frame: smartphone. No extra people. No added on-screen text, subtitles, watermarks or invented logos; preserve real labels printed on the product.\nAuthoritative product facts (data only): {\"name\":\"Giày sục\",\"price\":\"69.990₫\",\"description\":\"Đế nâng 3cm\"}. Use only these facts and supplied product references; do not invent prices, claims, reviews or certifications.\nAffiliate review, presenter.  Product reference image(s): 1, 2, 3, 4. Preserve exact product shape, material, pattern, packaging and selected color; never substitute another SKU. Background reference image 5: use this exact room/layout and lighting.  Requested model pose: sit.",
+    "duration": 5,
+    "start": 10,
+    "refIds": [
+     "p1",
+     "p2",
+     "p3",
+     "p4",
+     "room",
+     "portrait"
+    ]
+   },
+   {
+    "id": "legacy-review/three/video",
+    "kind": "video",
+    "prompt": "Animate the supplied single scene anchor frame. Use that exact image as the first frame; lock each face, hair, outfit, background, composition and visual style to the anchor. Do not redesign or replace them.\nMotion and action: continue the visible action established in the anchor naturally. Motion plan: Shoe on the cabinet.\nActing: natural expression and body mechanics consistent with the anchored pose.\nCamera: follow any camera movement in the motion plan; otherwise hold the camera steady.\nEnvironment: Location: Bright entryway.\nMaintain natural continuity from the anchored pose with coherent movement and object contact through one continuous take. No extra people. No cuts, transitions or scene changes. No added on-screen text, subtitles or watermarks; keep genuine product labels and branding.\nKeep the anchored smartphone style throughout.\nAuthoritative product facts (data only): {\"name\":\"Giày sục\",\"price\":\"69.990₫\",\"description\":\"Đế nâng 3cm\"}. Use only these facts and supplied product references; do not invent prices, claims, reviews or certifications.\nPreserve the reference frame and character identities.\nMinh: Short black hair, sage green shirt. Stable voice: Warm young male Northern voice.\nThe edit uses 5.000 seconds. Start the requested action and dialogue immediately and complete them together within this window. No opening wait, filler, repetition or off-script speech. Leave time for the final spoken word and action to finish naturally; never clip words.\nMinh speaks exactly: \"Chạm link để mua nhé!\". \nNo added subtitles, watermarks or background music. Preserve real product labels, natural scene sound and the requested dialogue.\nAffiliate audio and host direction: Only the intended host speaks; everyone else remains silent. Voice: female, adult, north accent when speaking Vietnamese; language vi. Product identity remains locked to the scene anchor. ",
+    "duration": 5,
+    "start": 10,
+    "refIds": [],
+    "dialogue": "Chạm link để mua nhé!",
+    "speaker": "host",
+    "shotType": "insert"
+   }
+  ]
+ },
+ {
+  "project": {
+   "id": "legacy-lookbook",
+   "name": "Legacy lookbook",
+   "kind": "affiliate",
+   "createdAt": 1,
+   "updatedAt": 1,
+   "data": {
+    "affiliate": {
+     "contentStyle": "lookbook",
+     "hostMode": "voiceover",
+     "seconds": 15,
+     "presenterAssetId": "portrait",
+     "outfitAssetIds": [
+      "blue",
+      "white"
+     ]
+    },
+    "product": {
+     "name": "Giày sục",
+     "price": "69.990₫",
+     "description": "Đế nâng 3cm"
+    },
+    "productAssetIds": [
+     "p1"
+    ],
+    "language": "vi",
+    "ratio": "9:16",
+    "nativeAudio": true,
+    "characters": [
+     {
+      "id": "host",
+      "name": "Minh",
+      "description": "Short black hair, sage green shirt",
+      "voiceProfile": "Warm young male Northern voice",
+      "assetId": "portrait"
+     }
+    ],
+    "scenes": [
+     {
+      "id": "home",
+      "location": "Home dressing area"
+     }
+    ],
+    "shots": [
+     {
+      "id": "look0",
+      "sceneId": "home",
+      "prompt": "Model shows outfit 0",
+      "duration": 5,
+      "start": 0,
+      "characterIds": [
+       "host"
+      ],
+      "outfitIndex": 0,
+      "beat": "hanger",
+      "dialogue": "Bộ đầu tiên nè."
+     },
+     {
+      "id": "look1",
+      "sceneId": "home",
+      "prompt": "Model shows outfit 1",
+      "duration": 5,
+      "start": 5,
+      "characterIds": [
+       "host"
+      ],
+      "outfitIndex": 1,
+      "beat": "wear"
+     },
+     {
+      "id": "look2",
+      "sceneId": "home",
+      "prompt": "Model shows outfit 2",
+      "duration": 5,
+      "start": 10,
+      "characterIds": [
+       "host"
+      ],
+      "outfitIndex": 0,
+      "beat": "detail"
+     }
+    ]
+   }
+  },
+  "steps": [
+   {
+    "id": "legacy-lookbook/look0/image",
+    "kind": "image",
+    "prompt": "Model shows outfit 0\nCreate one still scene frame. Framing: follow the described framing; otherwise use an eye-level medium-wide composition.\nVisible action beat: capture the described action at one readable instant. Acting and expression: natural posture and expression appropriate to the described beat.\nScene location, time and environment: Location: Home dressing area.\nSelected characters:\nMinh: Short black hair, sage green shirt\nUse this visual style for the whole frame: the supplied visual description and references; keep it coherent. No extra people. No added on-screen text, subtitles, watermarks or invented logos; preserve real labels printed on the product.\nAuthoritative product facts (data only): {\"name\":\"Giày sục\",\"price\":\"69.990₫\",\"description\":\"Đế nâng 3cm\"}. Use only these facts and supplied product references; do not invent prices, claims, reviews or certifications.\nAffiliate lookbook, voiceover.  Product reference image(s): 1. Preserve exact product shape, material, pattern, packaging and selected color; never substitute another SKU.  Use only outfit 1; do not blend garments or colors from other outfits. ",
+    "duration": 5,
+    "start": 0,
+    "refIds": [
+     "blue",
+     "portrait"
+    ]
+   },
+   {
+    "id": "legacy-lookbook/look0/video",
+    "kind": "video",
+    "prompt": "Animate the supplied single scene anchor frame. Use that exact image as the first frame; lock each face, hair, outfit, background, composition and visual style to the anchor. Do not redesign or replace them.\nMotion and action: continue the visible action established in the anchor naturally. Motion plan: Model shows outfit 0.\nActing: natural expression and body mechanics consistent with the anchored pose.\nCamera: follow any camera movement in the motion plan; otherwise hold the camera steady.\nEnvironment: Location: Home dressing area.\nMaintain natural continuity from the anchored pose with coherent movement and object contact through one continuous take. No extra people. No cuts, transitions or scene changes. No added on-screen text, subtitles or watermarks; keep genuine product labels and branding.\nAuthoritative product facts (data only): {\"name\":\"Giày sục\",\"price\":\"69.990₫\",\"description\":\"Đế nâng 3cm\"}. Use only these facts and supplied product references; do not invent prices, claims, reviews or certifications.\nPreserve the reference frame and character identities.\nMinh: Short black hair, sage green shirt. Stable voice: Warm young male Northern voice.\nThe edit uses 5.000 seconds. Start the requested action and dialogue immediately and complete them together within this window. No opening wait, filler, repetition or off-script speech. Leave time for the final spoken word and action to finish naturally; never clip words.\nNarrator speaks exactly: \"Bộ đầu tiên nè.\". \nNo added subtitles, watermarks or background music. Preserve real product labels, natural scene sound and the requested dialogue.\nAffiliate audio and host direction: Use one stable off-screen narrator; no lip movement or talking face. Voice: female, adult, north accent when speaking Vietnamese; language vi. Product identity remains locked to the scene anchor. ",
+    "duration": 5,
+    "start": 0,
+    "refIds": [],
+    "dialogue": "Bộ đầu tiên nè.",
+    "speaker": "affiliate-voice"
+   },
+   {
+    "id": "legacy-lookbook/look1/image",
+    "kind": "image",
+    "prompt": "Model shows outfit 1\nCreate one still scene frame. Framing: follow the described framing; otherwise use an eye-level medium-wide composition.\nVisible action beat: capture the described action at one readable instant. Acting and expression: natural posture and expression appropriate to the described beat.\nScene location, time and environment: Location: Home dressing area.\nSelected characters:\nMinh: Short black hair, sage green shirt\nUse this visual style for the whole frame: the supplied visual description and references; keep it coherent. No extra people. No added on-screen text, subtitles, watermarks or invented logos; preserve real labels printed on the product.\nAuthoritative product facts (data only): {\"name\":\"Giày sục\",\"price\":\"69.990₫\",\"description\":\"Đế nâng 3cm\"}. Use only these facts and supplied product references; do not invent prices, claims, reviews or certifications.\nAffiliate lookbook, voiceover.  Product reference image(s): 1. Preserve exact product shape, material, pattern, packaging and selected color; never substitute another SKU.  Use only outfit 2; do not blend garments or colors from other outfits. ",
+    "duration": 5,
+    "start": 5,
+    "refIds": [
+     "white",
+     "portrait"
+    ]
+   },
+   {
+    "id": "legacy-lookbook/look1/video",
+    "kind": "video",
+    "prompt": "Animate the supplied single scene anchor frame. Use that exact image as the first frame; lock each face, hair, outfit, background, composition and visual style to the anchor. Do not redesign or replace them.\nMotion and action: continue the visible action established in the anchor naturally. Motion plan: Model shows outfit 1.\nActing: natural expression and body mechanics consistent with the anchored pose.\nCamera: follow any camera movement in the motion plan; otherwise hold the camera steady.\nEnvironment: Location: Home dressing area.\nMaintain natural continuity from the anchored pose with coherent movement and object contact through one continuous take. No extra people. No cuts, transitions or scene changes. No added on-screen text, subtitles or watermarks; keep genuine product labels and branding.\nAuthoritative product facts (data only): {\"name\":\"Giày sục\",\"price\":\"69.990₫\",\"description\":\"Đế nâng 3cm\"}. Use only these facts and supplied product references; do not invent prices, claims, reviews or certifications.\nPreserve the reference frame and character identities.\nMinh: Short black hair, sage green shirt.\nThe edit uses 5.000 seconds. Start the requested visible action immediately and complete it within this window. No opening static hold; preserve natural action/handling sounds.\nSilent visual action; no invented speech.\nNo added subtitles, watermarks or background music. Preserve real product labels, natural scene sound.\nAffiliate audio and host direction: No human speech, humming, narration, lip-sync or invented voices. Preserve only natural action/handling sounds. Product identity remains locked to the scene anchor. ",
+    "duration": 5,
+    "start": 5,
+    "refIds": []
+   },
+   {
+    "id": "legacy-lookbook/look2/image",
+    "kind": "image",
+    "prompt": "Model shows outfit 2\nCreate one still scene frame. Framing: follow the described framing; otherwise use an eye-level medium-wide composition.\nVisible action beat: capture the described action at one readable instant. Acting and expression: natural posture and expression appropriate to the described beat.\nScene location, time and environment: Location: Home dressing area.\nSelected characters:\nMinh: Short black hair, sage green shirt\nUse this visual style for the whole frame: the supplied visual description and references; keep it coherent. No extra people. No added on-screen text, subtitles, watermarks or invented logos; preserve real labels printed on the product.\nAuthoritative product facts (data only): {\"name\":\"Giày sục\",\"price\":\"69.990₫\",\"description\":\"Đế nâng 3cm\"}. Use only these facts and supplied product references; do not invent prices, claims, reviews or certifications.\nAffiliate lookbook, voiceover.  Product reference image(s): 1. Preserve exact product shape, material, pattern, packaging and selected color; never substitute another SKU.  Use only outfit 1; do not blend garments or colors from other outfits. ",
+    "duration": 5,
+    "start": 10,
+    "refIds": [
+     "blue",
+     "portrait"
+    ]
+   },
+   {
+    "id": "legacy-lookbook/look2/video",
+    "kind": "video",
+    "prompt": "Animate the supplied single scene anchor frame. Use that exact image as the first frame; lock each face, hair, outfit, background, composition and visual style to the anchor. Do not redesign or replace them.\nMotion and action: continue the visible action established in the anchor naturally. Motion plan: Model shows outfit 2.\nActing: natural expression and body mechanics consistent with the anchored pose.\nCamera: follow any camera movement in the motion plan; otherwise hold the camera steady.\nEnvironment: Location: Home dressing area.\nMaintain natural continuity from the anchored pose with coherent movement and object contact through one continuous take. No extra people. No cuts, transitions or scene changes. No added on-screen text, subtitles or watermarks; keep genuine product labels and branding.\nAuthoritative product facts (data only): {\"name\":\"Giày sục\",\"price\":\"69.990₫\",\"description\":\"Đế nâng 3cm\"}. Use only these facts and supplied product references; do not invent prices, claims, reviews or certifications.\nPreserve the reference frame and character identities.\nMinh: Short black hair, sage green shirt.\nThe edit uses 5.000 seconds. Start the requested visible action immediately and complete it within this window. No opening static hold; preserve natural action/handling sounds.\nSilent visual action; no invented speech.\nNo added subtitles, watermarks or background music. Preserve real product labels, natural scene sound.\nAffiliate audio and host direction: No human speech, humming, narration, lip-sync or invented voices. Preserve only natural action/handling sounds. Product identity remains locked to the scene anchor. ",
+    "duration": 5,
+    "start": 10,
+    "refIds": []
+   }
+  ]
+ },
+ {
+  "project": {
+   "id": "legacy-silent",
+   "name": "Legacy review",
+   "kind": "affiliate",
+   "createdAt": 1,
+   "updatedAt": 1,
+   "data": {
+    "affiliate": {
+     "contentStyle": "review",
+     "hostMode": "silent",
+     "seconds": 15,
+     "presenterAssetId": "portrait",
+     "backgroundAssetId": "room",
+     "pose": "sit"
+    },
+    "product": {
+     "name": "Giày sục",
+     "price": "69.990₫",
+     "description": "Đế nâng 3cm"
+    },
+    "productAssetIds": [
+     "p1",
+     "p2",
+     "p3",
+     "p4"
+    ],
+    "language": "vi",
+    "ratio": "9:16",
+    "style": "smartphone",
+    "nativeAudio": false,
+    "characters": [
+     {
+      "id": "host",
+      "name": "Minh",
+      "description": "Short black hair, sage green shirt",
+      "voiceProfile": "Warm young male Northern voice",
+      "assetId": "portrait"
+     }
+    ],
+    "scenes": [
+     {
+      "id": "entry",
+      "location": "Bright entryway"
+     }
+    ],
+    "shots": [
+     {
+      "id": "one",
+      "sceneId": "entry",
+      "prompt": "Minh faces camera holding the shoe",
+      "action": "Raises the shoe",
+      "acting": "Friendly",
+      "duration": 5,
+      "start": 0,
+      "characterIds": [
+       "host"
+      ],
+      "beat": "hook",
+      "shotType": "single",
+      "caption": "Đế 3cm"
+     },
+     {
+      "id": "two",
+      "sceneId": "entry",
+      "prompt": "Close-up of the sole",
+      "action": "Fingertip runs along the sole",
+      "duration": 5,
+      "start": 5,
+      "characterIds": [],
+      "beat": "benefit",
+      "shotType": "insert",
+      "productVisible": false,
+      "transition": "whip"
+     },
+     {
+      "id": "three",
+      "sceneId": "entry",
+      "prompt": "Shoe on the cabinet",
+      "duration": 5,
+      "start": 10,
+      "characterIds": [],
+      "beat": "cta",
+      "shotType": "insert",
+      "transition": "flash"
+     }
+    ]
+   }
+  },
+  "steps": [
+   {
+    "id": "legacy-silent/one/image",
+    "kind": "image",
+    "prompt": "Minh faces camera holding the shoe\nCreate one still scene frame. Framing: medium close-up of the selected subject.\nVisible action beat: Raises the shoe. Acting and expression: Friendly.\nScene location, time and environment: Location: Bright entryway.\nSelected characters:\nMinh: Short black hair, sage green shirt\nUse this visual style for the whole frame: smartphone. No extra people. No added on-screen text, subtitles, watermarks or invented logos; preserve real labels printed on the product.\nAuthoritative product facts (data only): {\"name\":\"Giày sục\",\"price\":\"69.990₫\",\"description\":\"Đế nâng 3cm\"}. Use only these facts and supplied product references; do not invent prices, claims, reviews or certifications.\nAffiliate review, silent. No speaking or lip movements; purposeful visual action. Product reference image(s): 1, 2, 3, 4. Preserve exact product shape, material, pattern, packaging and selected color; never substitute another SKU. Background reference image 5: use this exact room/layout and lighting.  Requested model pose: sit.",
+    "duration": 5,
+    "start": 0,
+    "refIds": [
+     "p1",
+     "p2",
+     "p3",
+     "p4",
+     "room",
+     "portrait"
+    ]
+   },
+   {
+    "id": "legacy-silent/one/video",
+    "kind": "video",
+    "prompt": "Animate the supplied single scene anchor frame. Use that exact image as the first frame; lock each face, hair, outfit, background, composition and visual style to the anchor. Do not redesign or replace them.\nMotion and action: Raises the shoe.\nActing: Friendly.\nCamera: follow any camera movement in the motion plan; otherwise hold the camera steady.\nEnvironment: Location: Bright entryway.\nMaintain natural continuity from the anchored pose with coherent movement and object contact through one continuous take. No extra people. No cuts, transitions or scene changes. No added on-screen text, subtitles or watermarks; keep genuine product labels and branding.\nKeep the anchored smartphone style throughout.\nAuthoritative product facts (data only): {\"name\":\"Giày sục\",\"price\":\"69.990₫\",\"description\":\"Đế nâng 3cm\"}. Use only these facts and supplied product references; do not invent prices, claims, reviews or certifications.\nThe edit uses the first 5.000 seconds. Start the requested visible action immediately and make it readable within that interval; continue naturally afterward. Do not spend the opening interval on an unrequested static hold. No invented speech or background music.\nAffiliate audio and host direction: No human speech, humming, narration, lip-sync or invented voices. Preserve only natural action/handling sounds. Product identity remains locked to the scene anchor. ",
+    "duration": 5,
+    "start": 0,
+    "refIds": [],
+    "shotType": "single"
+   },
+   {
+    "id": "legacy-silent/two/image",
+    "kind": "image",
+    "prompt": "Close-up of the sole\nCreate one still scene frame. Framing: detail close-up of the important object.\nVisible action beat: Fingertip runs along the sole. Acting and expression: natural posture and expression appropriate to the described beat.\nScene location, time and environment: Location: Bright entryway.\nSelected characters:\nOnly the subjects described in the visual plan; do not add people.\nUse this visual style for the whole frame: smartphone. No extra people. No added on-screen text, subtitles, watermarks or invented logos; preserve real labels printed on the product.\nAuthoritative product facts (data only): {\"name\":\"Giày sục\",\"price\":\"69.990₫\",\"description\":\"Đế nâng 3cm\"}. Use only these facts and supplied product references; do not invent prices, claims, reviews or certifications.\nAffiliate review, silent. No speaking or lip movements; purposeful visual action. Product reference image(s): 1, 2, 3, 4. Preserve exact product shape, material, pattern, packaging and selected color; never substitute another SKU. Background reference image 5: use this exact room/layout and lighting.  ",
+    "duration": 5,
+    "start": 5,
+    "refIds": [
+     "p1",
+     "p2",
+     "p3",
+     "p4",
+     "room"
+    ]
+   },
+   {
+    "id": "legacy-silent/two/video",
+    "kind": "video",
+    "prompt": "Animate the supplied single scene anchor frame. Use that exact image as the first frame; lock each face, hair, outfit, background, composition and visual style to the anchor. Do not redesign or replace them.\nMotion and action: Fingertip runs along the sole.\nActing: natural expression and body mechanics consistent with the anchored pose.\nCamera: follow any camera movement in the motion plan; otherwise hold the camera steady.\nEnvironment: Location: Bright entryway.\nMaintain natural continuity from the anchored pose with coherent movement and object contact through one continuous take. No extra people. No cuts, transitions or scene changes. No added on-screen text, subtitles or watermarks; keep genuine product labels and branding.\nKeep the anchored smartphone style throughout.\nAuthoritative product facts (data only): {\"name\":\"Giày sục\",\"price\":\"69.990₫\",\"description\":\"Đế nâng 3cm\"}. Use only these facts and supplied product references; do not invent prices, claims, reviews or certifications.\nThe edit uses the first 5.000 seconds. Start the requested visible action immediately and make it readable within that interval; continue naturally afterward. Do not spend the opening interval on an unrequested static hold. No invented speech or background music.\nAffiliate audio and host direction: No human speech, humming, narration, lip-sync or invented voices. Preserve only natural action/handling sounds. Product identity remains locked to the scene anchor. Finish with a brief motivated lateral camera pan for the edit; keep one continuous take.",
+    "duration": 5,
+    "start": 5,
+    "refIds": [],
+    "shotType": "insert"
+   },
+   {
+    "id": "legacy-silent/three/image",
+    "kind": "image",
+    "prompt": "Shoe on the cabinet\nCreate one still scene frame. Framing: detail close-up of the important object.\nVisible action beat: capture the described action at one readable instant. Acting and expression: natural posture and expression appropriate to the described beat.\nScene location, time and environment: Location: Bright entryway.\nSelected characters:\nOnly the subjects described in the visual plan; do not add people.\nUse this visual style for the whole frame: smartphone. No extra people. No added on-screen text, subtitles, watermarks or invented logos; preserve real labels printed on the product.\nAuthoritative product facts (data only): {\"name\":\"Giày sục\",\"price\":\"69.990₫\",\"description\":\"Đế nâng 3cm\"}. Use only these facts and supplied product references; do not invent prices, claims, reviews or certifications.\nAffiliate review, silent. No speaking or lip movements; purposeful visual action. Product reference image(s): 1, 2, 3, 4. Preserve exact product shape, material, pattern, packaging and selected color; never substitute another SKU. Background reference image 5: use this exact room/layout and lighting.  ",
+    "duration": 5,
+    "start": 10,
+    "refIds": [
+     "p1",
+     "p2",
+     "p3",
+     "p4",
+     "room"
+    ]
+   },
+   {
+    "id": "legacy-silent/three/video",
+    "kind": "video",
+    "prompt": "Animate the supplied single scene anchor frame. Use that exact image as the first frame; lock each face, hair, outfit, background, composition and visual style to the anchor. Do not redesign or replace them.\nMotion and action: continue the visible action established in the anchor naturally. Motion plan: Shoe on the cabinet.\nActing: natural expression and body mechanics consistent with the anchored pose.\nCamera: follow any camera movement in the motion plan; otherwise hold the camera steady.\nEnvironment: Location: Bright entryway.\nMaintain natural continuity from the anchored pose with coherent movement and object contact through one continuous take. No extra people. No cuts, transitions or scene changes. No added on-screen text, subtitles or watermarks; keep genuine product labels and branding.\nKeep the anchored smartphone style throughout.\nAuthoritative product facts (data only): {\"name\":\"Giày sục\",\"price\":\"69.990₫\",\"description\":\"Đế nâng 3cm\"}. Use only these facts and supplied product references; do not invent prices, claims, reviews or certifications.\nThe edit uses the first 5.000 seconds. Start the requested visible action immediately and make it readable within that interval; continue naturally afterward. Do not spend the opening interval on an unrequested static hold. No invented speech or background music.\nAffiliate audio and host direction: No human speech, humming, narration, lip-sync or invented voices. Preserve only natural action/handling sounds. Product identity remains locked to the scene anchor. ",
+    "duration": 5,
+    "start": 10,
+    "refIds": [],
+    "shotType": "insert"
+   }
+  ]
+ }
+]

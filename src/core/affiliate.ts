@@ -58,6 +58,9 @@ export function affiliatePlanningPrompt(project: Project): string {
     product: project.data.product, productSource: project.data.productSource, productAssetIds: project.data.productAssetIds,
     suppliedCharacters: characters, timeline };
   const group = affiliateTemplateGroup(settings.contentStyle), narrator = settings.hostMode === 'voiceover' && !mode.model;
+  // Muse's own fact sheet stops near 3800 characters; v2 keeps the request well inside the planning limit.
+  const product = input.product as Record<string, unknown> | undefined;
+  if (group && product && typeof product === 'object' && typeof product.description === 'string') input.product = { ...product, description: [...product.description].slice(0, 4000).join('') };
   const beats = (group === 'lookbook' ? AFFILIATE_LOOK_BEATS : AFFILIATE_BEATS).join('|');
   const frame = `${ratio === '1:1' ? 'Square' : ['9:16', '3:4'].includes(ratio) ? 'Vertical' : 'Horizontal'} ${ratio}`;
   const muse = group && [

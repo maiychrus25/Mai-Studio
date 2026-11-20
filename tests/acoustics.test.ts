@@ -214,3 +214,15 @@ test('regular-file, size, symlink, missing binary and cancellation boundaries re
     await truncate(file, 2 * 1024 ** 3 + 1); await assert.rejects(api().analyzeSpeech(file, ffmpeg), /size|limit/i);
   } finally { await rm(root, { recursive: true, force: true }); }
 });
+
+test('spokenVietnamese reproduces Muse spoken lines', () => {
+  const { spokenVietnamese } = require('../src/core/acoustics') as typeof import('../src/core/acoustics');
+  for (const [written, spoken] of [
+    ['Đế nâng 3cm, tôn dáng ngay khi xỏ vào!', 'Đế nâng ba xăng-ti-mét, tôn dáng ngay khi xỏ vào!'],
+    ['Đế độn khoảng 3cm giúp tôn dáng người đi.', 'Đế độn khoảng ba xăng-ti-mét giúp tôn dáng người đi.'],
+    ['Shop đạt 4.7 trên 5 từ 3925 lượt đánh giá.', 'Shop đạt bốn phẩy bảy trên năm từ ba nghìn chín trăm hai mươi lăm lượt đánh giá.'],
+    ['Có ba màu trắng, đen, nâu, size 36 đến 39.', 'Có ba màu trắng, đen, nâu, size ba mươi sáu đến ba mươi chín.'],
+    ['Giá trên shop từ 69.990 đồng đến 93.000 đồng.', 'Giá trên shop từ sáu mươi chín nghìn chín trăm chín mươi đồng đến chín mươi ba nghìn đồng.'],
+    ['Chạm link sản phẩm trong giỏ hàng để mua nhé!', 'Chạm link sản phẩm trong giỏ hàng để mua nhé!'],
+  ]) assert.equal(spokenVietnamese(written), spoken);
+});

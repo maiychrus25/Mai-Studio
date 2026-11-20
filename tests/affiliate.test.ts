@@ -362,3 +362,16 @@ test('edited legacy project is re-checked by legacy rules', () => {
   edited.shots[2].beat = 'demonstration-2';
   assert.throws(() => planning().parsePlan(JSON.stringify(edited), upgraded), /beat/);
 });
+
+test('v2 planning input caps the product description', () => {
+  const product = { name: 'Giày sục Hải Anh Shoes', price: '69.990₫ - 93.000₫', description: 'ế'.repeat(8000),
+    attributes: Array.from({ length: 30 }, (_, index) => ({ name: `Thuộc tính ${index}`, value: `Chất liệu da tổng hợp mềm, đế cao su ${index}` })),
+    variations: Array.from({ length: 20 }, (_, index) => ({ name: `Trắng, size ${36 + index % 4}`, price: 69990 + index, image: `https://down-vn.img.susercontent.com/file/vn-11134207-7r98o-lz${index}abcdefghijklmn` })) };
+  assert.equal(Buffer.byteLength(product.description), 24000);
+  const source = project({ contentStyle: 'review', seconds: 60 }, { product }), before = structuredClone(source.data);
+  const prompt = core().affiliatePlanningPrompt(source);
+  assert.ok(Buffer.byteLength(prompt) <= 32768 - 4096, String(Buffer.byteLength(prompt)));
+  assert.ok(prompt.includes('ế'.repeat(4000)) && !prompt.includes('ế'.repeat(4001)));
+  assert.deepEqual(source.data, before);
+  assert.ok(core().affiliatePlanningPrompt(project({ contentStyle: 'asmr' }, { product: { name: 'Hộp', description: 'x'.repeat(5000) } })).includes('x'.repeat(5000)), 'legacy input keeps the full description');
+});

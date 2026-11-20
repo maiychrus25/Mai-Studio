@@ -87,3 +87,18 @@ test('explicit owned portraits stay authoritative and cancelled force generation
     await characters(studio, p, taskFor(studio, p, true)); assert.equal(portrait(studio, p), explicit.id); assert.equal(calls, 2);
   });
 });
+
+test('v2 host reference uses the Muse portrait prompt without reference images', async () => {
+  const requests: Array<{ url: string; body: string }> = [];
+  await fixture(async (req, res) => { let body = ''; for await (const chunk of req) body += chunk; requests.push({ url: req.url!, body }); reply(res); }, async studio => {
+    const file = join(studio.store.root, 'product.png'); writeFileSync(file, png); const [photo] = await studio.importFiles([file]);
+    const legacy = studio.store.saveProject({ name: 'Host', kind: 'affiliate', data: { affiliate: { contentStyle: 'review', hostMode: 'presenter', seconds: 15 }, product: { name: 'Shirt' }, productAssetIds: [photo.id],
+      characters: [{ id: 'host', name: 'Minh', description: 'Short black hair, sage green shirt', voiceProfile: 'Warm young male voice' }], shots: [{ id: 'one', prompt: 'Minh talks', duration: 3, characterIds: ['host'] }] } });
+    assert.equal((await characters(studio, legacy, taskFor(studio, legacy))).outputIds.length, 1);
+    assert.equal(requests.length, 1); assert.equal(requests[0].url, '/v1/images/edits'); assert.ok(requests[0].body.includes('Create a clear full-body character reference'));
+    const upgraded = studio.store.saveProject({ ...studio.store.project(legacy.id), data: { ...studio.store.project(legacy.id).data, affiliatePlanVersion: 2, productLook: 'A white cotton shirt.' } });
+    await characters(studio, upgraded, taskFor(studio, upgraded));
+    assert.equal(requests.length, 2, 'the legacy portrait is not reused for a v2 plan'); assert.equal(requests[1].url, '/v1/images/generations');
+    assert.ok(JSON.parse(requests[1].body).prompt.startsWith('Photorealistic portrait photo of a real person — Minh, the presenter of a short product video: Short black hair, sage green shirt'));
+  });
+});

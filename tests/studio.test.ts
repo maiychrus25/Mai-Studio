@@ -742,3 +742,22 @@ test('v2 render places spoken clips by measured speech and stops on a cut-off li
     assert.equal(truncated.task.status, 'waiting_input'); assert.match(truncated.task.error, /bị cắt ở cuối clip/);
   } finally { await studio.close(); rmSync(root, { recursive: true, force: true }); }
 });
+
+test('partial v2 render stops with a clear message instead of misplacing cuts', async () => {
+  const root = mkdtempSync(join(tmpdir(), 'maistudio-v2-partial-')); const studio = new StudioService(root);
+  try {
+    const source = join(root, 'line.mp4');
+    assert.equal(spawnSync(require('ffmpeg-static') as string, ['-v', 'error', '-f', 'lavfi', '-i', 'color=c=blue:s=64x64:r=24:d=3.5', '-f', 'lavfi', '-i', 'sine=frequency=180:sample_rate=16000:duration=1', '-filter_complex', '[1:a]adelay=1000:all=1,apad=whole_dur=3.5[a]', '-map', '0:v', '-map', '[a]', '-c:v', 'libx264', '-pix_fmt', 'yuv420p', '-c:a', 'aac', '-t', '3.5', source]).status, 0);
+    const [clip] = await studio.importFiles([source]);
+    const data = { affiliate: { contentStyle: 'review', hostMode: 'voiceover', screenText: false, seconds: 15 }, nativeAudio: true, keepAudio: true, width: 64, height: 64, product: { name: 'Shirt' },
+      shots: ['one', 'two'].map((id, index) => ({ id, prompt: 'Shirt on the cabinet', videoAssetId: clip.id, duration: 0.5, start: index * 0.5, dialogue: 'Áo cotton mềm mại.', beat: 'hook', shotType: 'insert' })) };
+    const run = async (extra: Record<string, unknown>) => {
+      const p = await studio.invoke<Project>('project.save', { name: 'partial', kind: 'affiliate', data: { ...data, ...extra } });
+      await assert.rejects(studio.invoke('studio.run', { projectId: p.id, stage: 'render', shotIds: ['one'] }), /Chỉ chọn shot/, 'the public API never renders a subset');
+      const task = studio.store.createTasks({ projectId: p.id, kind: 'pipeline', prompts: ['Render'], input: { stage: 'render', projectSnapshot: p, shotIds: [`${encodeURIComponent(p.id)}/one`] } })[0];
+      return (studio as unknown as { executePipeline(task: Task, context: unknown): Promise<unknown> }).executePipeline(task, { signal: new AbortController().signal, progress() {}, checkpoint() {} });
+    };
+    await assert.rejects(run({ affiliatePlanVersion: 2, productLook: 'A white cotton shirt.' }), /dựng toàn bộ/);
+    await assert.rejects(run({}), /vượt khoảng dựng/, 'legacy partial render keeps its own behaviour');
+  } finally { await studio.close(); rmSync(root, { recursive: true, force: true }); }
+});
