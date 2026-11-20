@@ -1,7 +1,7 @@
 # Video Aff bám theo Muse: khuôn prompt, khung kịch bản và thời lượng theo lời nói
 
 Ngày: 20/11/2026
-Trạng thái: Đã được anh duyệt ngày 20/11/2026; chưa thực thi.
+Trạng thái: Đã được anh duyệt ngày 20/11/2026; đã thực thi trên nhánh `feat/affiliate-muse-parity` ngày 20/11/2026, chưa phát hành. Code khác thiết kế ở các điểm ghi trong "Ghi chú sau thực thi" cuối tài liệu.
 Nguồn bằng chứng: cơ sở dữ liệu Muse 1.13.18 của anh (`~/Downloads/muse_studio.db`, ba dự án Video Aff hoàn chỉnh: lookbook/voiceover, fashion/presenter, review/presenter) và bản dịch ngược tĩnh Muse 1.13.17.
 
 ## 1. Mục đích
@@ -374,3 +374,17 @@ Bốn cảnh đầu và ba cảnh cuối của dự án 16 cảnh, ghi theo trư
 | cta | single | Chạm link để mua | Chạm link sản phẩm trong giỏ hàng để mua nhé! | Friendly, inviting, energetic closing | Vertical 9:16 medium close-up in same entryway, subject in upper-middle, bottom quarter calm and uncluttered; Minh faces camera, face and mouth clearly visible, mouth closed about to speak, white sục held beside him, free hand ready to point down. | Points down toward the product link area, then smiles and nods to finish. |
 
 Trình tự nhịp đầy đủ của dự án này: hook, intro ×2, benefit, demo, benefit, demo ×2, benefit ×2, demo, benefit, proof ×2, offer, cta.
+
+## Ghi chú sau thực thi (20/11/2026)
+
+Thân tài liệu ở trên giữ nguyên bản đã duyệt. Code khác thiết kế ở các điểm sau:
+
+1. **v2 bắt buộc khi lập kế hoạch (5.1).** Như thiết kế, lập kế hoạch (lần đầu hoặc lập lại) cho chín kiểu luôn kiểm theo luật v2; câu trả lời thiếu hoặc sai yêu cầu v2 là lỗi lập kế hoạch, đi qua đúng một lượt sửa có sẵn rồi dừng. Bốn test quy trình Video Aff cũ ("Affiliate planning uploads…", "Run all plans…", "a failed Affiliate script is repaired once…", "ambiguous Affiliate provider admission…") trước đây đưa vào câu trả lời kiểu cũ cho `review`; theo chỉ đạo của anh ngày 20/11/2026, câu trả lời giả lập trong bốn test này được đổi sang dạng v2, các điều chúng kiểm giữ nguyên.
+2. **Tham số `planning`.** `parsePlan(value, project, planning = false)` và `finishAffiliatePlan(project, data, raw, planning = false)` thêm cờ để phân biệt lập kế hoạch mới với kiểm lại kế hoạch đã sửa tay; hai chỗ gọi khi lập kế hoạch trong `src/core/studio.ts` truyền `true`. Khi kiểm lại, `productLook`/`outfitLooks`/`narratorVoice` lấy từ `project.data` bên trong `finishAffiliatePlan`, nên JSON dựng lại cho dự án cũ không đổi.
+3. **Luật kiểm v2 bổ sung.** Nhóm có lời có tiếng (không `keepScript`) bắt buộc mỗi cảnh có lời; không kiểm số chữ 8–12 (chỉ nằm trong prompt). Đường cũ xóa bốn trường v2 còn sót khi đổi sang kiểu không phải v2.
+4. **Prompt review (5.3).** Ngoài tiêu chí structure, với v2 câu "lời và hành động phải xong trong số giây của cảnh" đổi thành "hành động đơn giản, mỗi lời một câu ngắn", vì thời lượng v2 chỉ là danh nghĩa; cảnh gửi review có thêm `shotType`, `productVisible`.
+5. **Thời điểm lời nói trong clip (5.5).** Dữ liệu Muse cho thấy với nhóm có lời, mốc kết thúc lời trong prompt clip là `round(1,6 + 0,3 × số chữ)` giây của câu được đưa vào, không cố định 5 giây; fashion 4 giây, lookbook 3 giây như thiết kế.
+6. **Đọc số thành chữ (trước đây ngoài phạm vi, mục 2).** Repo đã có bộ đọc số tiếng Việt trong `src/core/acoustics.ts` dùng để so transcript; nay xuất ra thành `spokenVietnamese`. Với v2 tiếng Việt, lời trong prompt clip được đọc thành chữ (khớp năm cặp thật của Muse); prompt ảnh và `dialogue` (phụ đề, review lời) giữ chữ viết gốc.
+7. **Giới hạn mô tả sản phẩm.** Riêng v2, mô tả sản phẩm trong planning input cắt ở 4000 ký tự để request có dư ít nhất 4 KB với sản phẩm Shopee lớn; dữ liệu lưu trữ và input của đường cũ không đổi.
+8. **Thứ tự ảnh tham chiếu (5.4).** Cảnh sản phẩm có `productVisible: false` không kèm ảnh sản phẩm (bảng thiết kế không có trường hợp này). Câu tư thế chỉ nối khi cảnh có kèm ảnh người dẫn.
+9. **Dựng và sửa lỗi.** Câu bị cụt khi dựng dùng cùng điều kiện dừng với lỗi tràn cũ (`render`, hoặc khi tự kiểm tắt). Dựng một phần cảnh của dự án v2 dừng với thông báo phải dựng toàn bộ video. Prompt sửa lỗi v2 (không lồng tiếng) không nêu thời lượng kế hoạch. Ảnh người dẫn v2 có fingerprint riêng nên ảnh kiểu cũ không bị dùng lại.

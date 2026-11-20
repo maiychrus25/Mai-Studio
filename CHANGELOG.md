@@ -2,6 +2,13 @@
 
 This file records development changes. No production release is declared by a development checkpoint.
 
+## Unreleased — development
+
+- Plan Video Aff scripts in Muse's shape for nine content styles (one fact per shot, labelled beats, product/presenter shots, `productLook`, `productVisible`, outfit and narrator descriptions) behind a stored `affiliatePlanVersion: 2` marker. Planning these styles always requires the v2 shape (one repair attempt, then the existing stop); ASMR, POV and saved projects that are not re-planned keep the previous path.
+- Compose v2 image, clip and host-portrait prompts from Muse's observed templates with Muse's reference order; spoken Vietnamese lines in clip prompts read numbers and units as words while frames and subtitles keep the written line.
+- Cut v2 spoken clips at the measured speech (0.12 s lead, 0.30 s hold, 1 s run gap) and place them back to back; a line ending in the last 0.15 s stops render and fails speech review instead of being clipped. Captions and flashes follow the real cuts, so spoken videos can run longer or shorter than the target.
+- Cap the v2 planning product description at 4000 characters, omit the planned duration from v2 repair feedback, and stop a partial v2 render with a clear message.
+
 ## 0.2.0-dev.4 — pre-release, 2026-11-20
 
 - Publish nine desktop installers and SHA256SUMS.txt from `185b618` after CI verification, five native package jobs, local 433/433 tests, two 1,000-task stress rounds and final artifact checks; retain documented provider/runtime limits.

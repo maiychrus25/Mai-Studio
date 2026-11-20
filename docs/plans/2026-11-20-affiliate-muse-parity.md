@@ -248,3 +248,27 @@ Decisions:
 **Owner:** reviewer (Opus 5.5), read-only.
 
 - [ ] Review `git diff main...feat/affiliate-muse-parity` against the spec, the Global Constraints and each Review Focus line. Report defects with file and line, a concrete failing scenario, and severity. Do not fix anything.
+
+---
+
+## Execution notes (2026-11-20)
+
+Commits: Task 1 `090d57d`, Task 2 `e8d0444`, Task 3 `5eb568a`, Task 4 `e977f2b` plus `feat(affiliate): require v2 plans for template styles`, Task 5 = the documentation commit that adds this section.
+
+Deviations accepted by the coordinator:
+- **v2 is mandatory while planning.** Planning (first plan or re-plan) any of the nine template styles always validates the reply as v2; a reply missing or breaking a v2 requirement is a planning error that goes through the existing single repair attempt in `planAffiliate` and then stops with the existing `NeedsInputError`. The review-only path still follows the stored marker. On the owner's instruction of 2026-11-20, the mock planner replies of four existing workflow tests ("Affiliate planning uploads…", "Run all plans…", "a failed Affiliate script is repaired once…", "ambiguous Affiliate provider admission…") were changed from the legacy shape to the v2 shape; what they assert is unchanged. Tests: `v2 style rejects a legacy-shaped reply`, `a legacy-shaped reply to a v2 style is repaired once`.
+- **`planning` parameter.** `parsePlan(value, project, planning = false)` and `finishAffiliatePlan(project, data, raw, planning = false)`; the two planning call sites in `src/core/studio.ts` pass `true`, the review-only path does not. Stored `productLook`/`outfitLooks`/`narratorVoice` are read from `project.data` inside `finishAffiliatePlan` on the review-only path.
+- **Extra v2 rules.** Talk group with speech and no `keepScript` requires a line in every shot (no 8–12 word check); the legacy path deletes stale v2 fields.
+- **Review prompt.** For v2 the "action and dialogue complete in the allotted seconds" sentence becomes "each action simple, each line one short sentence"; `shotType` and `productVisible` are sent to review.
+- **Task 3 details.** Truncation stops render under the same condition as the legacy overflow stop; no measured timeline in slideshow mode; `clipWindow` is exported for tests.
+
+Amendments to Task 4 (each with its own test):
+- **A. Spoken-form line.** `spokenVietnamese` exported from `src/core/acoustics.ts` (wraps the existing transcript number reader; `compareTranscripts` unchanged). v2 + `language === 'vi'`: the clip prompt gets the spoken form; the image prompt and the step's `dialogue` keep the written text. Tests: `spokenVietnamese reproduces Muse spoken lines`, `v2 clip speaks numbers as words while subtitles keep the written line`.
+- **B. v2 repair prompt.** v2 without dubbing passes no planned duration to `qualityRepairFeedback`. Test: `v2 repair feedback states no planned duration`.
+- **C. Planner input budget.** v2 caps the planning-input product description at 4000 characters; stored data and legacy input unchanged. Test: `v2 planning input caps the product description`.
+- **D. Partial v2 render.** `studio.run` already rejects `shotIds` for `render`/`all`; the internal path now stops with a Vietnamese `NeedsInputError` asking for a full render. Test: `partial v2 render stops with a clear message instead of misplacing cuts`.
+- **E.** Cancelled by the owner on 2026-11-20.
+
+Other Task 4 decisions: the speech window end in talk clips comes from the word count of the line passed to the module (`round(1.6 + 0.3 × words)`), so the spoken form lengthens it as in Muse; a product shot with `productVisible: false` attaches no product photos; the pose sentence is appended only when the presenter photo is attached; the v2 host portrait has its own fingerprint so a legacy portrait is not reused (test `v2 host reference uses the Muse portrait prompt without reference images`). The legacy guarantee is pinned by `tests/fixtures/legacy-affiliate-steps.json` (captured before Task 4) and test `legacy affiliate project keeps generic prompts`.
+
+Stress (Task 5 step 3), `node scripts/stress.mjs 1` and `2` on the final build with the script's own local fixture provider (no external provider): round 1 PASS, 1000 queued image tasks → 980 succeeded / 20 cancelled, peak provider concurrency 2, 980 requests; round 2 PASS, 877 succeeded / 72 failed (the script's injected 429 responses, `retryLimit: 0`) / 51 cancelled, peak 2, 950 requests; no renderer errors; desktop and mobile screenshots in light and dark mode each round. The stress script does not open the Video Aff screen, so the new target-duration hint was checked only by build and type-check.
