@@ -4,6 +4,8 @@ Phiên bản ứng dụng được khảo sát: `0.2.0-dev.4`.
 
 Trạng thái: pre-release 0.2.0-dev.3 đã công khai, vẫn đang thực hiện functional parity P1–P5; bằng chứng local/CI theo từng phần không chứng nhận full parity hoặc mọi nền tảng/provider. Nghiệm thu và nguồn artifact ghi tại docs/reports/acceptance.md. Anh đã duyệt thiết kế ngày 14/11/2026.
 
+Ghi chú runtime20/11/2026: đã xuất mẫu Affiliate9cảnh thật có native voice/nhạc nền, cả9cảnh qua review sau chỉnh dựng thủ công và đối soát shot2 sau đổi Wi-Fi. MP4 đo29.312s thay vì đúng30s; speech review toàn raw, excerpt action dài và ngữ cảnh review cũ vẫn là giới hạn chưa sửa trong lượt mẫu. Chi tiết/provenance và kiểm playback trong `docs/reports/acceptance.md`; không suy ra full automation hoặc parity Muse từ mẫu này.
+
 ## Ranh giới và runtime
 
 `electron/main.ts` sở hữu app lifecycle, file dialogs, custom media protocol và sender validation. `electron/preload.ts` chỉ công khai invoke/onChanged/pickFiles/pickFolder/mediaUrl. Renderer React trong `src/ui/` không có Node access; contextIsolation, sandbox và webSecurity bật, chặn navigation/window mới/quyền web không được cấp.
