@@ -263,6 +263,64 @@ test('browser reader prefers exact product structured data and never captures co
   } finally { await browser.close(); }
 });
 
+test('browser reader keeps the supplied product gallery instead of a matching single SEO image', async () => {
+  const productUrl = 'https://shopee.vn/product/92509213/27621749954';
+  const gallery = [
+    'https://down-vn.img.susercontent.com/file/vn-11134207-7ras8-mbkgzcouy344a8',
+    'https://down-vn.img.susercontent.com/file/vn-11134207-7r98o-lx9da91b65sr42',
+    'https://down-vn.img.susercontent.com/file/vn-11134207-7ra0g-m9y4b56mbm9ad4',
+    'https://down-vn.img.susercontent.com/file/vn-11134207-7ra0g-m7mkj694szht0f',
+  ];
+  const seo = 'https://down-vn.img.susercontent.com/file/sg-11134201-7rfgx-m47qoqpd7aswc0';
+  const browser = await chromium.launch({ executablePath: browserExecutable(), headless: true, chromiumSandbox: true });
+  try {
+    const page = await browser.newPage(); const requests: string[] = [];
+    await page.route('**/*', route => { requests.push(route.request().url()); return route.fulfill({ contentType: 'text/html', body: '<h1>Combo 10 đôi tất</h1><main><img class="product-image" src="' + seo + '"><div data-testid="product-gallery">' + gallery.map(src => '<img src="' + src + '">').join('') + '</div><aside><img src="https://down-vn.img.susercontent.com/file/unrelated-recommendation"></aside></main><script type="application/ld+json">' + JSON.stringify({ '@type': 'Product', url: productUrl, name: 'Combo 10 đôi tất', image: seo, description: 'Cotton product facts', offers: { price: '15000.00', priceCurrency: 'VND' } }) + '</script>' }); });
+    for (const width of [1440, 390]) {
+      await page.setViewportSize({ width, height: 900 }); await page.goto(productUrl);
+      const before = requests.length, captured = await page.evaluate(captureShopeeProduct);
+      assert.deepEqual(captured.images, gallery); assert.equal(captured.price, '15000.00₫');
+      assert.equal(captured.description, 'Cotton product facts'); assert.equal(requests.length, before);
+      const normalized = intake().parseShopeeCapture(JSON.stringify(captured), productUrl);
+      assert.deepEqual(normalized.images, gallery); assert.ok(!normalized.images.includes(seo));
+      await page.evaluate(code => { void (0, eval)(decodeURIComponent(code.slice('javascript:'.length))); }, shopeeBookmarklet());
+      const output = page.locator('#mai-studio-product-capture textarea'); await output.waitFor();
+      assert.deepEqual(JSON.parse(await output.inputValue()).images, gallery);
+    }
+  } finally { await browser.close(); }
+});
+
+test('browser reader falls back to product SEO images when the scoped gallery has no usable product image', async () => {
+  const browser = await chromium.launch({ executablePath: browserExecutable(), headless: true, chromiumSandbox: true });
+  try {
+    const page = await browser.newPage();
+    await page.route('**/*', route => route.fulfill({ contentType: 'text/html', body: '<h1>Provided product</h1><main><div data-testid="product-gallery"><img src="data:image/png;base64,AA=="></div><aside><img src="https://down-vn.img.susercontent.com/file/unrelated-recommendation"></aside></main><script type="application/ld+json">' + JSON.stringify({ '@type': 'Product', url, name: 'Provided product', image }) + '</script>' }));
+    await page.goto(url);
+    assert.deepEqual((await page.evaluate(captureShopeeProduct)).images, [image]);
+  } finally { await browser.close(); }
+});
+
+test('a generic hero image never replaces a complete structured product gallery', async () => {
+  const images = Array.from({ length: 4 }, (_, index) => image + '-' + index);
+  const browser = await chromium.launch({ executablePath: browserExecutable(), headless: true, chromiumSandbox: true });
+  try {
+    const page = await browser.newPage();
+    await page.route('**/*', route => route.fulfill({ contentType: 'text/html', body: '<h1>Provided product</h1><main><img class="product-image" src="' + images[0] + '"></main><script type="application/ld+json">' + JSON.stringify({ '@type': 'Product', url, name: 'Provided product', image: images }) + '</script>' }));
+    await page.goto(url);
+    assert.deepEqual((await page.evaluate(captureShopeeProduct)).images, images);
+  } finally { await browser.close(); }
+});
+
+test('an unloaded scoped gallery never falls through to recommendation images', async () => {
+  const browser = await chromium.launch({ executablePath: browserExecutable(), headless: true, chromiumSandbox: true });
+  try {
+    const page = await browser.newPage();
+    await page.route('**/*', route => route.fulfill({ contentType: 'text/html', body: '<h1>Provided product</h1><main><div data-testid="product-gallery"><img src="data:image/png;base64,AA=="></div><aside><img src="' + image + '"></aside></main>' }));
+    await page.goto(url);
+    await assert.rejects(page.evaluate(captureShopeeProduct), /Chưa thấy ảnh sản phẩm/);
+  } finally { await browser.close(); }
+});
+
 test('browser reader uses cache-only product data and exports only allowed product fields', async () => {
   const browser = await chromium.launch({ executablePath: browserExecutable(), headless: true, chromiumSandbox: true });
   try {
