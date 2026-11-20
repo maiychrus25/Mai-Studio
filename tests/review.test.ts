@@ -212,3 +212,26 @@ test('a completed newer checkpoint wins over an older project review after a cra
     assert.equal(calls, 2); assert.equal((studio.store.project(p.id).data.qualityReviews as any)[key].image.status, 'pass');
   });
 });
+
+const spokenAffiliate = (studio: StudioService, video: string, duration: number, v2: boolean) => studio.store.saveProject({ name: 'Spoken affiliate', kind: 'affiliate', data: {
+  affiliate: { contentStyle: 'review', hostMode: 'voiceover', seconds: 15 }, ...(v2 ? { affiliatePlanVersion: 2, productLook: 'A white cotton shirt.' } : {}), nativeAudio: true, product: { name: 'Shirt' },
+  shots: [{ id: 'one', prompt: 'Shirt on the cabinet', duration, videoAssetId: video, dialogue: 'Áo cotton mềm mại, mặc cả ngày vẫn thoáng.', beat: 'hook', shotType: 'insert' }] } });
+const speechReview = (studio: StudioService, p: Project) => (studio.store.project(p.id).data.qualityReviews as any)[`${p.id}/one`].speech;
+
+test('truncated line fails review', async () => {
+  await fixture((_req, res) => reply(res), async studio => {
+    const cut = await clip(studio, 'cut-line', 2.5), p = spokenAffiliate(studio, cut.id, 3.5, true);
+    await review(studio, p); const speech = speechReview(studio, p);
+    assert.equal(speech.status, 'fail'); assert.match(speech.reason, /bị cắt ở cuối clip/);
+  });
+});
+
+test('v2 overflow no longer fails', async () => {
+  await fixture((_req, res) => reply(res), async studio => {
+    const short = await clip(studio, 'long-line', 1.2);
+    const legacy = spokenAffiliate(studio, short.id, 1, false); await review(studio, legacy);
+    assert.equal(speechReview(studio, legacy).status, 'fail'); assert.match(speechReview(studio, legacy).reason, /vượt thời lượng shot/);
+    const v2 = spokenAffiliate(studio, short.id, 1, true); await review(studio, v2); const speech = speechReview(studio, v2);
+    assert.equal(speech.reason, undefined); assert.equal(speech.status, 'unknown', 'without a transcript the line stays unknown, never a pass');
+  });
+});

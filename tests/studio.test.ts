@@ -698,3 +698,47 @@ test('count expands into bounded independent jobs and invalid references never l
     await assert.rejects(studio.invoke('task.create', { projectId: project.id, prompts: ['bad'], kind: 'image', input: { count: 0 } }), /count|số lượng/i);
   } finally { await studio.close(); rmSync(root, { recursive: true, force: true }); }
 });
+
+test('legacy clip window is unchanged', () => {
+  const { clipWindow } = require('../src/core/studio') as typeof import('../src/core/studio');
+  const speech = { duration: 10, voiced: 3, f0: null, parts: [{ start: 0.6, end: 2.1 }, { start: 2.3, end: 4.4 }, { start: 7.9, end: 8.3 }] } as any;
+  const legacy = { affiliate: { contentStyle: 'review' } }, v2 = { ...legacy, affiliatePlanVersion: 2 };
+  assert.deepEqual(clipWindow(legacy, 10, 3.75, speech, true), { start: 0.6 - 0.45, duration: 3.75, speechOverflow: true });
+  assert.deepEqual(clipWindow({ pace: 'flow', fps: 24 }, 10, 3.75, speech), { start: 0.6 - 0.45, duration: Math.floor((8.3 + 0.75 - (0.6 - 0.45)) * 24) / 24 });
+  assert.deepEqual(clipWindow(v2, 10, 3.75, speech, false), clipWindow(legacy, 10, 3.75, speech, false));
+  assert.deepEqual(clipWindow(v2, 10, 3.75, undefined, true), { start: 0, duration: 3.75 });
+  const window = clipWindow(v2, 10, 3.75, speech, true);
+  assert.ok(Math.abs(window.start - 0.48) < 1e-9 && Math.abs(window.duration - 4.22) < 1e-9, JSON.stringify(window));
+  assert.equal(window.truncated, false); assert.ok(!('speechOverflow' in window));
+  const fashion = clipWindow({ affiliate: { contentStyle: 'fashion' }, affiliatePlanVersion: 2 }, 10, 6, speech, true);
+  assert.ok(Math.abs(fashion.duration - 6) < 1e-9, 'fashion keeps the planned duration as a minimum');
+});
+
+test('v2 render places spoken clips by measured speech and stops on a cut-off line', async () => {
+  const root = mkdtempSync(join(tmpdir(), 'maistudio-v2-cut-')); const studio = new StudioService(root);
+  const make = async (name: string, speech: number) => {
+    const source = join(root, `${name}.mp4`);
+    assert.equal(spawnSync(require('ffmpeg-static') as string, ['-v', 'error', '-f', 'lavfi', '-i', 'color=c=blue:s=64x64:r=24:d=3.5', '-f', 'lavfi', '-i', `sine=frequency=180:sample_rate=16000:duration=${speech}`, '-filter_complex', '[1:a]adelay=1000:all=1,apad=whole_dur=3.5[a]', '-map', '0:v', '-map', '[a]', '-c:v', 'libx264', '-pix_fmt', 'yuv420p', '-c:a', 'aac', '-t', '3.5', source]).status, 0);
+    return (await studio.importFiles([source]))[0];
+  };
+  const render = async (data: Record<string, unknown>) => {
+    const p = await studio.invoke<Project>('project.save', { name: 'v2 spoken', kind: 'affiliate', data }), task = await studio.invoke<Task>('studio.run', { projectId: p.id, stage: 'render' });
+    for (let n = 0; n < 1500 && ['draft', 'queued', 'running'].includes(studio.store.task(task.id).status); n++) await delay(10);
+    return { project: p, task: studio.store.task(task.id) };
+  };
+  try {
+    const short = await make('short', 1), cut = await make('cut', 2.5);
+    const shots = (second: string) => ['one', 'two'].map((id, index) => ({ id, prompt: 'Shirt on the cabinet', videoAssetId: index ? second : short.id, duration: 0.5, start: index * 0.5, dialogue: 'Áo cotton mềm mại.', beat: 'hook', shotType: 'insert' }));
+    const base = { affiliate: { contentStyle: 'review', hostMode: 'voiceover', screenText: false, seconds: 15 }, nativeAudio: true, keepAudio: true, width: 64, height: 64, product: { name: 'Shirt' } };
+    const v2 = await render({ ...base, affiliatePlanVersion: 2, productLook: 'A white cotton shirt.', shots: shots(short.id) });
+    assert.equal(v2.task.status, 'succeeded', v2.task.error);
+    const video = await new MediaTools().probe(studio.store.assetPath(v2.task.outputIds[0]));
+    assert.ok(video.duration > 2.4 && video.duration < 3.4, `two measured lines, not the 1 s plan: ${video.duration}`);
+    const cues = await studio.invoke<Array<{ start: number; end: number }>>('srt.parse', { text: (studio.store.project(v2.project.id).data.production as any).subtitle });
+    assert.equal(cues.length, 2); assert.ok(cues[1].start > 1.2 && cues[1].start >= cues[0].end, JSON.stringify(cues));
+    const legacy = await render({ ...base, shots: shots(short.id) });
+    assert.equal(legacy.task.status, 'waiting_input'); assert.match(legacy.task.error, /vượt khoảng dựng/);
+    const truncated = await render({ ...base, affiliatePlanVersion: 2, productLook: 'A white cotton shirt.', shots: shots(cut.id) });
+    assert.equal(truncated.task.status, 'waiting_input'); assert.match(truncated.task.error, /bị cắt ở cuối clip/);
+  } finally { await studio.close(); rmSync(root, { recursive: true, force: true }); }
+});

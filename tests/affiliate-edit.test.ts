@@ -178,3 +178,46 @@ test('editing the persistent ASMR or POV caption overrides the previous planned 
     assert.deepEqual(api().affiliateCaptionCues(data, []), [{ index: 1, start: 0, end: 6, text: 'Caption mới đã duyệt' }]);
   }
 });
+
+const edit = () => require('../src/core/affiliate-edit') as typeof import('../src/core/affiliate-edit');
+const close = (actual: number | undefined, expected: number) => assert.ok(actual !== undefined && Math.abs(actual - expected) < 1e-9, `${actual} != ${expected}`);
+
+test('speech run ignores sound after a long pause', () => {
+  const parts = [{ start: 0.6, end: 2.1 }, { start: 2.3, end: 4.4 }, { start: 7.9, end: 8.3 }];
+  assert.deepEqual(edit().affiliateSpeechRun(parts), { start: 0.6, end: 4.4 });
+  const window = edit().affiliateSpeechWindow(10, parts)!;
+  close(window.start, 0.48); close(window.duration, 4.22); assert.equal(window.truncated, false);
+  assert.deepEqual([edit().AFFILIATE_SPEECH_LEAD, edit().AFFILIATE_SPEECH_HOLD, edit().AFFILIATE_SPEECH_GAP, edit().AFFILIATE_SPEECH_TAIL_GUARD], [0.12, 0.3, 1, 0.15]);
+  assert.deepEqual(edit().affiliateSpeechRun([{ start: 0.5, end: 1 }, { start: 2, end: 2.5 }]), { start: 0.5, end: 2.5 }, 'a gap of exactly one second stays in the run');
+});
+
+test('speech window never cuts words', () => {
+  const window = edit().affiliateSpeechWindow(10, [{ start: 0.5, end: 4 }, { start: 4.5, end: 9.95 }])!;
+  assert.equal(window.truncated, true); close(window.start + window.duration, 10);
+  assert.equal(edit().affiliateSpeechWindow(10, [{ start: 0.5, end: 9.85 }])!.truncated, false);
+});
+
+test('planned minimum extends a short line', () => {
+  const window = edit().affiliateSpeechWindow(10, [{ start: 0.5, end: 1.4 }], 3)!;
+  close(window.start, 0.38); close(window.duration, 3);
+  close(edit().affiliateSpeechWindow(2, [{ start: 0.5, end: 1.4 }], 3)!.duration, 1.62);
+});
+
+test('no speech parts', () => {
+  assert.equal(edit().affiliateSpeechRun([]), undefined);
+  assert.equal(edit().affiliateSpeechWindow(10, []), undefined);
+});
+
+test('captions follow the real timeline beyond the planned total', () => {
+  const planned = Array.from({ length: 16 }, (_, index) => ({ id: `shot${index}`, prompt: `Frame ${index}`, start: index * 3.75, duration: 3.75, caption: `Chữ ${index}`, dialogue: `Câu ${index}` }));
+  const source = project({ affiliate: { seconds: 60 }, affiliatePlanVersion: 2, shots: planned });
+  const cuts = Array.from({ length: 17 }, (_, index) => index * 5);
+  const dialogue = planned.map((shot, index) => ({ index: index + 1, start: index * 5 + 0.12, end: index * 5 + 4.7, text: shot.dialogue }));
+  assert.throws(() => edit().affiliateCaptionCues(source, dialogue), /dialogue cue timing/);
+  const cues = edit().affiliateCaptionCues(source, dialogue, cuts);
+  assert.equal(cues.length, 16); assert.deepEqual([cues[1].start, cues[1].end], [5, 10]); assert.equal(cues.at(-1)!.end, 80);
+  for (const invalid of [cuts.slice(1), cuts.map((cut, index) => index === 16 ? 74 : cut), cuts.map((cut, index) => index === 3 ? Infinity : cut), [1, ...cuts.slice(1)]]) {
+    assert.throws(() => edit().affiliateCaptionCues(source, [], invalid), /cuts|timeline/);
+  }
+  assert.deepEqual(edit().affiliateCaptionCues(project(), []), edit().affiliateCaptionCues(project(), [], undefined));
+});

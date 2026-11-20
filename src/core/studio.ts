@@ -29,7 +29,7 @@ import { downloadShopeeImage, parseShopeeCapture, resolveShopeeLink, shopeeImage
 import { shopeeBookmarklet } from '../shared/shopee-capture';
 import { readAffiliateSettings, affiliateMode, MAX_AFFILIATE_REFERENCES } from '../shared/affiliate';
 import { affiliateReviewPrompt, parseAffiliateReview } from './affiliate';
-import { affiliateCaptionCues, affiliatePostText, alignAffiliateShots, detectAffiliateBeats } from './affiliate-edit';
+import { affiliateCaptionCues, affiliatePostText, affiliateSpeechWindow, alignAffiliateShots, detectAffiliateBeats } from './affiliate-edit';
 
 export interface DesktopActions {
   openExternal?(url: string): Promise<void>;
@@ -49,9 +49,10 @@ function directorEligible(project: Project): boolean {
     && !(Array.isArray(d.visualGroups) && d.visualGrouped === true) && !(typeof d.subtitle === 'string' && d.subtitle.trim());
 }
 
-function clipWindow(data: Record<string, unknown>, duration: number, requested: number, speech?: Awaited<ReturnType<typeof analyzeSpeech>>, affiliate = false): { start: number; duration: number; speechOverflow?: boolean } {
+export function clipWindow(data: Record<string, unknown>, duration: number, requested: number, speech?: Awaited<ReturnType<typeof analyzeSpeech>>, affiliate = false): { start: number; duration: number; speechOverflow?: boolean; truncated?: boolean } {
   if (!speech) return { start: 0, duration: Math.min(requested, duration) };
   if (!speech.parts.length) throw new NeedsInputError('Clip chưa phát hiện lời nói để căn hình và phụ đề');
+  if (affiliate && data.affiliatePlanVersion === 2) return affiliateSpeechWindow(duration, speech.parts, ['fashion', 'lookbook'].includes(readAffiliateSettings(data.affiliate).contentStyle) ? requested : undefined)!;
   const lead = data.pace === 'drama' ? 0.18 : 0.45, hold = data.pace === 'drama' ? 0.4 : 0.75, minimum = data.pace === 'drama' ? 1.6 : 2.6;
   const start = Math.max(0, speech.parts[0].start - lead), end = Math.min(duration, Math.max(speech.parts.at(-1)!.end + hold, start + minimum));
   if (affiliate) return { start, duration: Math.min(requested, duration - start), speechOverflow: speech.parts.at(-1)!.end - start > requested - 0.1 };
@@ -693,6 +694,8 @@ export class StudioService extends EventEmitter {
       this.store.saveProject({ ...latest, data: { ...latest.data, production } });
     };
     const stills = new Map<string, string>(); let position = 0;
+    // v2 spoken clips run for their measured speech, so they follow each other instead of the planned starts.
+    const measuredCuts = project.kind === 'affiliate' && project.data.affiliate !== undefined && project.data.affiliatePlanVersion === 2 && !dubbing && project.data.nativeAudio === true && project.data.renderMode !== 'slideshow' ? [0] : undefined;
     for (let index = 0; index < steps.length; index++) {
       const step = steps[index]; context.signal.throwIfAborted();
       const base = step.id.replace(/\/(image|video|speech)$/, '');
@@ -744,16 +747,18 @@ export class StudioService extends EventEmitter {
       if (step.kind === 'image') stills.set(base, assetId);
       else if (step.kind === 'video') {
         const path = this.store.assetPath(assetId); const info = await this.media().probe(path, context.signal); let duration = Math.min(step.duration, info.duration); let trimStart = 0;
-        const start = step.start ?? position;
+        const start = measuredCuts ? position : step.start ?? position;
         if (!dubbing && project.data.nativeAudio === true && step.dialogue) {
           if (!info.hasAudio) throw new NeedsInputError(`Clip ${base} chưa có lời thoại; kiểm tra hoặc tạo lại trước khi dựng`);
           const analysis = await this.withMedia(context.signal, () => analyzeSpeech(path, this.media().executablePath, context.signal));
           if (!analysis.parts.length) throw new NeedsInputError(`Clip ${base} chưa phát hiện lời nói để căn hình và phụ đề`);
           const window = clipWindow(project.data, info.duration, step.duration, analysis, project.kind === 'affiliate' && project.data.affiliate !== undefined); trimStart = window.start; duration = window.duration;
           if (window.speechOverflow && (stage === 'render' || project.data.autoChecks !== true)) throw new NeedsInputError(`Lời thoại shot ${base} vượt khoảng dựng; review và tạo lại clip trước khi xuất để không cắt mất lời`);
+          if (window.truncated && (stage === 'render' || project.data.autoChecks !== true)) throw new NeedsInputError(`Lời thoại shot ${base} bị cắt ở cuối clip; tạo lại clip để nói trọn câu trước khi xuất`);
           nativeCues.push({ index: nativeCues.length + 1, start: start + analysis.parts[0].start - trimStart, end: Math.min(start + duration, start + analysis.parts.at(-1)!.end - trimStart), text: step.dialogue });
         }
         clips.push({ path, duration: dubbing ? step.duration : duration, start: dubbing || project.data.nativeAudio === true ? start : step.start, ...(dubbing ? { base } : trimStart || project.data.nativeAudio === true ? { trimStart, trimEnd: trimStart + duration } : {}) }); position = start + (dubbing ? step.duration : duration);
+        measuredCuts?.push(position);
       }
       else if (!dubbing) voices.push({ path: this.store.assetPath(assetId), start: step.start ?? Math.max(0, position - step.duration), duration: step.duration });
     }
@@ -819,9 +824,9 @@ export class StudioService extends EventEmitter {
     }
     if (affiliate) {
       const captionEnd = options.overlays?.[0]?.start ?? Infinity;
-      const captions = affiliateCaptionCues(project, nativeCues).map(cue => ({ ...cue, end: Math.min(cue.end, captionEnd) })).filter(cue => cue.end > cue.start);
+      const captions = affiliateCaptionCues(project, nativeCues, measuredCuts).map(cue => ({ ...cue, end: Math.min(cue.end, captionEnd) })).filter(cue => cue.end > cue.start);
       if (captions.length) { const path = join(folder, 'affiliate-captions.srt'); await writeFile(path, formatSrt(captions)); options.captionPath = path; }
-      options.flashes = buildShots(project.data).filter(shot => shot.transition === 'flash' && Number(shot.start) > 0).map(shot => Number(shot.start));
+      options.flashes = measuredCuts ? buildShots(project.data).flatMap((shot, index) => shot.transition === 'flash' && index > 0 ? [measuredCuts[index]] : []) : buildShots(project.data).filter(shot => shot.transition === 'flash' && Number(shot.start) > 0).map(shot => Number(shot.start));
     }
     const titleSeconds = Number(project.data.titleDuration ?? 2); const endSeconds = Number(project.data.endDuration ?? 2);
     if (![titleSeconds, endSeconds].every(value => Number.isFinite(value) && value >= 0.5 && value <= 15)) throw new Error('Thời lượng thẻ phải từ 0.5–15 giây');
@@ -1510,7 +1515,9 @@ export class StudioService extends EventEmitter {
       else if (target.step.speaker && identity.status === 'unknown' && status !== 'fail') status = 'unknown';
       if (target.audioRequired && !audioPresent.get(target.base)) return { ...speech, identity, status: 'fail', reason: 'Clip ASMR không có luồng âm thanh thao tác' };
       const measured = analyses.get(target.base);
-      if (!dubbing && target.affiliate && target.step.dialogue && measured?.parts.length && clipWindow(project.data, measured.duration, target.step.duration, measured, true).speechOverflow) return { ...speech, identity, status: 'fail', reason: 'Lời nói vượt thời lượng shot; nói đúng câu ngắn gọn hơn trong khoảng dựng, không bỏ hoặc đổi từ' };
+      const window = !dubbing && target.affiliate && target.step.dialogue && measured?.parts.length ? clipWindow(project.data, measured.duration, target.step.duration, measured, true) : undefined;
+      if (window?.speechOverflow) return { ...speech, identity, status: 'fail', reason: 'Lời nói vượt thời lượng shot; nói đúng câu ngắn gọn hơn trong khoảng dựng, không bỏ hoặc đổi từ' };
+      if (window?.truncated) return { ...speech, identity, status: 'fail', reason: 'Lời nói bị cắt ở cuối clip; tạo lại clip để nói trọn câu trước giây cuối, không bỏ hoặc đổi từ' };
       return { ...speech, identity, status };
     };
     // Recompute consistency for the whole current cohort, without buying ASR/vision for unselected shots.

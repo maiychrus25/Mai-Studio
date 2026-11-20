@@ -82,20 +82,38 @@ export function alignAffiliateShots(shots: Shot[], beats: number[], totalSeconds
   return shots.map((shot, index) => ({ ...shot, start: cuts[index], duration: cuts[index + 1] - cuts[index] }));
 }
 
+export const AFFILIATE_SPEECH_LEAD = 0.12;
+export const AFFILIATE_SPEECH_HOLD = 0.3;
+export const AFFILIATE_SPEECH_GAP = 1;
+export const AFFILIATE_SPEECH_TAIL_GUARD = 0.15;
+// The detector measures periodicity, not words: a voiced noise after a long pause is not part of the line.
+export function affiliateSpeechRun(parts: Array<{ start: number; end: number }>): { start: number; end: number } | undefined {
+  if (!parts.length) return undefined;
+  const run = { start: parts[0].start, end: parts[0].end };
+  for (const part of parts.slice(1)) { if (part.start - run.end > AFFILIATE_SPEECH_GAP) break; run.end = part.end; }
+  return run;
+}
+export function affiliateSpeechWindow(clipDuration: number, parts: Array<{ start: number; end: number }>, minimum?: number): { start: number; duration: number; truncated: boolean } | undefined {
+  const run = affiliateSpeechRun(parts); if (!run) return undefined;
+  const start = Math.max(0, run.start - AFFILIATE_SPEECH_LEAD), end = Math.min(clipDuration, Math.max(run.end + AFFILIATE_SPEECH_HOLD, start + (minimum ?? 0)));
+  return { start, duration: end - start, truncated: run.end > clipDuration - AFFILIATE_SPEECH_TAIL_GUARD };
+}
+
 function clean(value: unknown, max: number, label: string): string {
   if (typeof value !== 'string' || Buffer.byteLength(value) > max) throw new Error(`Invalid Affiliate ${label}: limit ${max} UTF-8 bytes`);
   return value.replace(/\{[^}]*\}/g, '').replace(/<[^>]*>/g, '').replace(/[{}<>]/g, '')
     .replace(/\\[Nnh]/g, ' ').replace(/\\/g, '').replace(/[\u0000-\u001f\u007f-\u009f\u202a-\u202e\u2066-\u2069]/g, ' ').replace(/\s+/g, ' ').trim();
 }
 
-export function affiliateCaptionCues(project: Project, dialogue: Cue[]): Cue[] {
+export function affiliateCaptionCues(project: Project, dialogue: Cue[], measured?: number[]): Cue[] {
   if (project.data.affiliate === undefined) return [];
   const cfg = readAffiliateSettings(project.data.affiliate);
   if (!cfg.screenText) return [];
   const shots = project.data.shots as Shot[];
   if (Array.isArray(shots) && !shots.length) return [];
-  const total = Array.isArray(shots) ? shots.reduce((sum, shot) => sum + shot?.duration, 0) : NaN;
-  const cuts = timeline(shots, total);
+  if (measured && (!Array.isArray(shots) || !Array.isArray(measured) || measured.length !== shots.length + 1 || measured[0] !== 0 || measured.some((cut, index) => !Number.isFinite(cut) || index > 0 && cut <= measured[index - 1]))) throw new Error('Invalid Affiliate measured cuts: one increasing timeline from 0 per shot');
+  const total = measured ? measured[measured.length - 1] : Array.isArray(shots) ? shots.reduce((sum, shot) => sum + shot?.duration, 0) : NaN;
+  const cuts = measured ?? timeline(shots, total);
   if (!Array.isArray(dialogue) || dialogue.length > 1000) throw new Error('Invalid Affiliate dialogue cues');
   let lastEnd = 0, lastIndex = 0;
   const spoken = Array.from(dialogue, cue => {
