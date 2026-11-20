@@ -264,7 +264,7 @@ Publication evidence: release452130111 at2026-11-20T00:53:22Z, all7native CI job
 
 ## Resume after a fresh quality review — 20/11/2026
 
-Status: DEV VERIFIED426/426; APPROVED NATIVE ARTIFACT REPLACEMENT IN PROGRESS. Operator explicitly approved installing/restarting and continuing the existing job; previous deferral is revoked.
+Status: DEV VERIFIED426/426; MAC ARM64 INSTALLED AND ORIGINAL JOB RESUMED. Operator explicitly approved installing/restarting and continuing the existing job; previous deferral is revoked. Live first-shot review accepted7images and returned evidence-backed fail; parent adopted that new assessment and continues with repair limit2. Final video quality and Kubuntu runtime remain unverified.
 Scope: StudioService review checkpoint reconciliation, existing ProjectActivity controls, quality/review regression tests and documentation. The new explicit review task must override completed stale responses only for identical current assets/fingerprints; pending remote admission, fail/unknown gates, source media, repair limits and output preservation remain intact. Reuse stage=check and confirmation; no new dependency/IPC or speculative manual-pass override.
 
 - [x] Reproduce unknown checkpoint replay after a fresh successful review; add positive image/video/ASR and negative unknown/foreign-asset/failing-take cases.
