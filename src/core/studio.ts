@@ -1588,7 +1588,7 @@ export class StudioService extends EventEmitter {
             checkpoint(base, 'video', target.videoHash, { frameIds, sampleTimes });
           }
           assertCurrent(); const refs = [...(frame ? [frame] : []), ...frameIds];
-          const prompt = videoReviewPrompt(target.visualPlan, step.prompt, sampleTimes, !!frame, target.affiliate);
+          const prompt = videoReviewPrompt(target.visualPlan, step.prompt, sampleTimes, !!frame, target.affiliate, target.productAbsent === true);
           if (this.store.settings().providers.text.baseUrl) {
             checkpoint(base, 'video', target.videoHash, { remoteSubmitted: true });
             try { response = await this.client('text').reviewImages(prompt, refs.map(id => this.store.assetPath(id)), context.signal); }
@@ -1600,7 +1600,7 @@ export class StudioService extends EventEmitter {
           checkpoint(base, 'video', target.videoHash, { response });
         }
         assertCurrent(); const assessment = parseVideoReview(response);
-        if (target.affiliate && assessment.checks.identity.status === 'not_applicable') { assessment.checks.identity.status = 'unknown'; assessment.checks.identity.reason = 'Affiliate cần đối chiếu sản phẩm với ảnh cảnh; chưa có đánh giá danh tính sản phẩm'; assessment.status = 'unknown'; }
+        if (target.affiliate && !target.productAbsent && assessment.checks.identity.status === 'not_applicable') { assessment.checks.identity.status = 'unknown'; assessment.checks.identity.reason = 'Affiliate cần đối chiếu sản phẩm với ảnh cảnh; chưa có đánh giá danh tính sản phẩm'; assessment.status = 'unknown'; }
         patch.video = { ...assessment, assetId: video, frameIds, sampleTimes, fingerprint: target.videoHash, modelAssessed: true, coverage: 'four_sampled_frames', taskId: state.sourceTaskId ?? task.id, at: state.responseAt ?? Date.now() };
         if (assessment.status === 'fail') failed++; outputIds.push(video);
       }

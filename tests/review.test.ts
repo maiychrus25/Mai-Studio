@@ -254,3 +254,24 @@ test('a v2 shot planned without the product may pass with product not_applicable
     }
   });
 });
+
+test('a v2 presenter clip planned without the product may pass video review with identity not_applicable', async () => {
+  let bodies: string[] = [];
+  const answer = JSON.stringify({ action: { status: 'pass', reason: 'Visible' }, motion: { status: 'pass', reason: 'Visible' }, continuity: { status: 'pass', reason: 'Stable' }, identity: { status: 'not_applicable', reason: 'No product to compare' } });
+  await fixture(async (req, res) => { let body = ''; for await (const chunk of req) body += chunk; bodies.push(body); res.setHeader('Content-Type', 'application/json'); res.end(JSON.stringify({ choices: [{ message: { content: answer } }] })); }, async (studio, base) => {
+    await studio.invoke('settings.save', { providers: { text: { baseUrl: base } } }); const video = await clip(studio, 'presenter');
+    const project = (productVisible: boolean | undefined, v2: boolean) => studio.store.saveProject({ name: 'Absent product video', kind: 'affiliate', data: {
+      affiliate: { contentStyle: 'review', hostMode: 'presenter', seconds: 15 }, ...(v2 ? { affiliatePlanVersion: 2, productLook: 'A white cotton shirt.' } : {}), product: { name: 'Shirt' }, videoReview: true,
+      characters: [{ id: 'host', name: 'Minh', description: 'Short black hair' }],
+      shots: [{ id: 'one', prompt: 'Minh talks with empty hands', duration: 3, videoAssetId: video.id, characterIds: ['host'], beat: 'intro', shotType: 'single', ...(productVisible === undefined ? {} : { productVisible }) }] } });
+    const videoReview = (p: Project) => (studio.store.project(p.id).data.qualityReviews as any)[`${p.id}/one`].video;
+    const absent = project(false, true); await review(studio, absent);
+    assert.equal(videoReview(absent).status, 'pass'); assert.equal(videoReview(absent).checks.identity.status, 'not_applicable');
+    assert.ok(bodies.some(body => body.includes('intentionally absent'))); assert.ok(!bodies.some(body => body.includes('Product identity cannot be not_applicable')));
+    for (const [visible, v2] of [[true, true], [undefined, true], [false, false]] as const) {
+      bodies = []; const other = project(visible, v2); await review(studio, other);
+      assert.equal(videoReview(other).status, 'unknown', `${visible}/${v2}`); assert.equal(videoReview(other).checks.identity.status, 'unknown');
+      assert.ok(bodies.some(body => body.includes('Product identity cannot be not_applicable'))); assert.ok(!bodies.some(body => body.includes('intentionally absent')));
+    }
+  });
+});

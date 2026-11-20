@@ -447,3 +447,13 @@ test('v2 repair feedback states no planned duration', async t => {
     assert.equal(legacy.length, 2); assert.match(legacy[1], /within 3\.000 seconds/, 'legacy repair keeps the planned edit window');
   });
 });
+
+test('video review prompt marks a planned product absence only when asked', () => {
+  const { videoReviewPrompt } = require('../src/core/quality') as typeof import('../src/core/quality');
+  const args: [string, string, number[], boolean] = ['Minh talks with empty hands', 'Minh gestures', [0.1, 0.9, 1.7, 2.5], true];
+  assert.equal(videoReviewPrompt(...args, true, false), videoReviewPrompt(...args, true));
+  assert.equal(videoReviewPrompt(...args, false, true), videoReviewPrompt(...args), 'non-affiliate prompts ignore the flag');
+  assert.ok(videoReviewPrompt(...args, true).includes('Product identity cannot be not_applicable.'));
+  const absent = videoReviewPrompt(...args, true, true);
+  assert.match(absent, /intentionally absent from this shot by plan and must not appear/); assert.ok(!absent.includes('Product identity cannot be not_applicable'));
+});
