@@ -1,6 +1,8 @@
 MAISTUDIO — THIẾT KẾ HỆ THỐNG TƯƠNG ĐƯƠNG MUSESTUDIO
 Ngày: 14/11/2026
-Trạng thái: Đã được anh duyệt ngày 14/11/2026; có bản dev kiểm chứng local, chưa hoàn tất nghiệm thu M5/full parity.
+Trạng thái: Đã được anh duyệt ngày 14/11/2026; pre-release0.2.0-dev.4 đã công khai ngày20/11/2026, chưa hoàn tất nghiệm thu M5/full parity.
+
+Ghi chú sau phát hành0.2.0-dev.4: có chín bộ cài macOS ARM64/Intel, Linux ARM64/x64 và Windows x64, cùng checksum. Release kiểm chứng review/resume và prompt căn lời Affiliate trong phạm vi đã ghi ở docs/reports/acceptance.md; mẫu live có chỉnh dựng thủ công, không coi review9/9 hoặc build đa nền tảng là chứng nhận chất lượng tương đương Muse. Không sửa lại mục tiêu và nội dung thiết kế lịch sử bên dưới.
 Tên MaiStudio, ứng dụng độc lập và lựa chọn công nghệ là mặc định do em đề xuất; anh chưa xác nhận các lựa chọn này.
 
 1. MỤC TIÊU VÀ BẰNG CHỨNG

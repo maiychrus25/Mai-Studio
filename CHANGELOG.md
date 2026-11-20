@@ -2,7 +2,9 @@
 
 This file records development changes. No production release is declared by a development checkpoint.
 
-## 0.2.0-dev.4 — development candidate
+## 0.2.0-dev.4 — pre-release, 2026-11-20
+
+- Publish nine desktop installers and SHA256SUMS.txt from `185b618` after CI verification, five native package jobs, local 433/433 tests, two 1,000-task stress rounds and final artifact checks; retain documented provider/runtime limits.
 
 - Give native Affiliate generation its exact edit window and synchronize speech/action; keep empty-dialogue inserts free of voice directions.
 - Pass measured speech failures, unexpected words and failed visual evidence into bounded repair feedback instead of generic retries or passed checks.

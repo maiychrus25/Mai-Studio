@@ -1,3 +1,13 @@
+## Release 0.2.0-dev.4 — 20/11/2026
+
+**Trạng thái: đã công khai pre-release theo yêu cầu của anh.** [Releasev0.2.0-dev.4](https://github.com/maiychrus25/Mai-Studio/releases/tag/v0.2.0-dev.4) từ185b618e8460af4409dd692d86a27bb86717ce63; [CI44697568653](https://github.com/maiychrus25/Mai-Studio/actions/runs/44697568653) verify và5/5job package native đều success. Nguồn đã fast-forward vào main, tag trỏ đúng source; chín installer cùng SHA256SUMS.txt, không thay asset của release cũ hoặc cài lại trên máy anh. Ghi chú release được thay nội dung Shopee mặc định bằng các sửa review/resume, thời lượng Affiliate và giới hạn thực tế.
+
+Kiểm local cùng source: make build kết thúc Build succeeded; make test433pass/0fail/0cancel/0skip (291652ms); make lint exit0/zero warnings; docs-check OK. Review source không có P0/P1 chặn bản thử nghiệm. Hai vòng1000task với provider loopback: vòng1 980success/20cancel,5901ms; vòng2 873success/76lỗi429 fixture chủ đích/51cancel,10397ms; đối soát76error đều là rate limit. Peak2, đủ desktop1440/mobile390 × light/dark mỗi vòng, tám screenshot kiểm trực tiếp không chồng chữ/tràn ngang, không renderer error; mở lại không gửi trùng. Dùng lại workflow/scripts/pattern có sẵn, không thêm dependency hoặc thay code sản phẩm trong lượt phát hành.
+
+Chín SHA256 do GitHub ghi cho bytes đã upload khớp SHA256SUMS.txt; manifest SHA256 `8e326e249204d4324a3405fcca9cc208559916fb97a857ffc24a1f24f7784365`. ZIP Mac ARM tải lại có hash đúng manifest, codesign deep/strict hợp lệ; app/FFmpeg là Mach-O ARM64, native version0.2.0-dev.4 và63file compiled khớp dist đã test. ASAR SHA256 của gói CI `f5bf64c24f14d9750f89486974b3726259bfb09444b78baefa4ce7d7824614a6`, không tuyên bố bằng ASAR của lần đóng gói local trước. Native startup với userData riêng/mockKeychain:0project/0task/0account,1440px không tràn ngang và0renderer error. Gói CI không ghi vào userData đang dùng. Các thư mục test, screenshot, ZIP và app giải nén được dọn sau xác minh.
+
+Đây là phát hành bộ cài, không nghiệm thu mọi native OS/provider hoặc full Muse parity. Giới hạn mẫu/luồng tự động bên dưới vẫn còn; Linux ARM64/Kubuntu chưa chạy native trong lượt phát hành này. macOS ký ad-hoc/chưa notarized, Windows chưa có chứng chỉ ký tin cậy.
+
 ## Affiliate sample recovery — 20/11/2026
 
 **Trạng thái: đã xuất mẫu thật Mac ARM64, có chỉnh dựng thủ công; chưa chứng nhận full parity hoặc luồng hoàn toàn tự động.** Mẫu `Tất chữ C — mẫu 30 giây` dùng9ảnh/9clip mới, cùng portrait và ảnh nguồn sản phẩm. Shot2 bị ngắt tải khi anh đổi Wi-Fi: đối soát kết quả provider đã hoàn tất rồi tiếp tục tải trong cùng task, không gửi tạo video trùng. Job cũ, clip gốc và giới hạn hai vòng sửa vẫn giữ nguyên.
