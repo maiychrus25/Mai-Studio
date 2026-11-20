@@ -316,7 +316,7 @@ test('v2 voiceover without model requires narratorVoice', () => {
   const output = core().finishAffiliatePlan(source, data, raw, true);
   assert.equal(output.narratorVoice, raw.narratorVoice); assert.deepEqual(output.characters, []);
   for (const narratorVoice of [undefined, '', 'x'.repeat(1001), 42]) assert.throws(() => core().finishAffiliatePlan(source, data, { ...raw, narratorVoice }, true), /narratorVoice|narrator voice/i);
-  for (const productLook of ['', 'x'.repeat(2001), 42]) assert.throws(() => core().finishAffiliatePlan(source, data, { ...raw, productLook }, true), /productLook|product look/i);
+  for (const productLook of [undefined, '', 'x'.repeat(2001), 42]) assert.throws(() => core().finishAffiliatePlan(source, data, { ...raw, productLook }, true), /productLook|product look/i);
 });
 
 test('asmr and pov stay legacy', () => {
@@ -353,7 +353,7 @@ test('edited legacy project is re-checked by legacy rules', () => {
   const checked = planning().parsePlan(JSON.stringify(raw), stored);
   assert.equal(checked.affiliatePlanVersion, undefined);
   assert.equal((checked.shots as any[])[0].beat, 'demonstration-0');
-  assert.equal(planning().parsePlan(JSON.stringify(raw), stored, true).affiliatePlanVersion, undefined, 'a planner reply without productLook keeps the legacy contract');
+  assert.throws(() => planning().parsePlan(JSON.stringify(raw), stored, true), /beat|shotType|productLook/, 'planning a v2 style never falls back to the legacy contract');
   assert.throws(() => planning().parsePlan(JSON.stringify({ ...raw, productLook: 'A white cotton shirt.' }), stored, true), /beat|shotType/);
   const muse = museFixture(source), upgraded = { ...source, data: { ...source.data, shots: muse.raw.shots, characters: muse.raw.characters, affiliatePlanVersion: 2, productLook: muse.raw.productLook } };
   const { productLook, ...edited } = muse.raw;
@@ -374,4 +374,13 @@ test('v2 planning input caps the product description', () => {
   assert.ok(prompt.includes('ế'.repeat(4000)) && !prompt.includes('ế'.repeat(4001)));
   assert.deepEqual(source.data, before);
   assert.ok(core().affiliatePlanningPrompt(project({ contentStyle: 'asmr' }, { product: { name: 'Hộp', description: 'x'.repeat(5000) } })).includes('x'.repeat(5000)), 'legacy input keeps the full description');
+});
+
+test('v2 style rejects a legacy-shaped reply', () => {
+  const source = project({ contentStyle: 'review' });
+  const { raw } = fixture(source);
+  assert.throws(() => planning().parsePlan(JSON.stringify(raw), source, true), /shotType|beat/);
+  const muse = museFixture(source); delete muse.raw.productLook;
+  assert.throws(() => planning().parsePlan(JSON.stringify(muse.raw), source, true), /productLook/);
+  assert.equal((planning().parsePlan(JSON.stringify(raw), source) as any).affiliatePlanVersion, undefined, 'the review-only path still follows the stored marker');
 });

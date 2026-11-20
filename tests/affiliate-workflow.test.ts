@@ -30,6 +30,9 @@ test('Affiliate configuration and every presenter/background/outfit reference ar
 function candidate() {
   return { name: 'Áo cotton', summary: 'Giới thiệu áo cotton có nguồn', postCaption: 'Áo cotton màu xanh.', hashtags: ['#AoCotton'], characters: [], scenes: [{ id: 'scene', location: 'Studio', characterIds: [] }], shots: ['hook', 'detail', 'demo', 'cta'].map((beat, index) => ({ id: `shot-${index + 1}`, sceneId: 'scene', prompt: 'Hands display the supplied blue cotton shirt', action: 'Unfold the actual shirt', videoPrompt: 'Hands slowly unfold the shirt', duration: 3.75, start: index * 3.75, characterIds: [], beat, caption: index ? 'Cotton màu xanh' : 'Áo cotton' })) };
 }
+function museCandidate() {
+  return { ...candidate(), productLook: 'A blue short-sleeve cotton shirt.', shots: candidate().shots.map((shot, index) => ({ ...shot, beat: ['hook', 'benefit', 'demo', 'cta'][index], shotType: 'insert' })) };
+}
 const verdict = (status: 'pass' | 'fail' | 'unknown') => Object.fromEntries(['facts', 'structure', 'host'].map(key => [key, { status: key === 'facts' ? status : 'pass', reason: status === 'fail' && key === 'facts' ? 'Remove the unsupported claim' : 'Controlled source comparison' }]));
 async function settle(studio: StudioService, id: string) {
   for (let index = 0; index < 1500; index++) { const task = studio.store.task(id); if (!['draft', 'queued', 'running'].includes(task.status)) return task; await delay(10); }
@@ -189,7 +192,8 @@ async function plannedFixture(run: (studio: StudioService, project: Project, cal
 }
 
 test('Affiliate planning uploads actual product references and requires an independent source review before applying', async () => {
-  await plannedFixture(async (studio, project, calls) => {
+  await plannedFixture(async (studio, project, calls, decide) => {
+    decide(review => review ? verdict('pass') : museCandidate());
     const task = await studio.invoke<Task>('studio.run', { projectId: project.id, stage: 'plan' }), done = await settle(studio, task.id);
     assert.equal(done.status, 'succeeded', done.error); assert.equal(calls.length, 2);
     assert.ok(calls.every(call => call.images.length === 1 && call.images[0].endsWith(png.toString('base64'))));
@@ -202,7 +206,7 @@ test('Affiliate planning uploads actual product references and requires an indep
 
 test('a Muse-shaped planner reply is saved as a v2 plan and reviewed against the v2 shape', async () => {
   await plannedFixture(async (studio, project, calls, decide) => {
-    const muse = { ...candidate(), productLook: 'A blue short-sleeve cotton shirt.', shots: candidate().shots.map((shot, index) => ({ ...shot, beat: ['hook', 'benefit', 'demo', 'cta'][index], shotType: 'insert', productVisible: index !== 2 })) };
+    const muse = { ...museCandidate(), shots: museCandidate().shots.map((shot, index) => ({ ...shot, productVisible: index !== 2 })) };
     decide(review => review ? verdict('pass') : muse);
     const task = await studio.invoke<Task>('studio.run', { projectId: project.id, stage: 'plan' }), done = await settle(studio, task.id);
     assert.equal(done.status, 'succeeded', done.error); assert.equal(calls.length, 2);
@@ -212,21 +216,9 @@ test('a Muse-shaped planner reply is saved as a v2 plan and reviewed against the
   });
 });
 
-test('a v2-eligible plan accepted in the old format says the video keeps the old flow', async () => {
-  await plannedFixture(async (studio, project) => {
-    const task = await studio.invoke<Task>('studio.run', { projectId: project.id, stage: 'plan' }), done = await settle(studio, task.id);
-    assert.equal(done.status, 'succeeded', done.error); assert.equal((studio.store.project(project.id).data as any).affiliatePlanVersion, undefined);
-    assert.match(done.message, /định dạng cũ/); assert.match(done.message, /lập kế hoạch lại/);
-  });
-  await plannedFixture(async (studio, project, _calls, decide) => {
-    decide(review => review ? verdict('pass') : { ...candidate(), productLook: 'A blue short-sleeve cotton shirt.', shots: candidate().shots.map((shot, index) => ({ ...shot, beat: ['hook', 'benefit', 'demo', 'cta'][index], shotType: 'insert' })) });
-    const task = await studio.invoke<Task>('studio.run', { projectId: project.id, stage: 'plan' }), done = await settle(studio, task.id);
-    assert.equal(done.status, 'succeeded', done.error); assert.doesNotMatch(done.message, /định dạng cũ/);
-  });
-});
-
 test('Run all plans and reviews a newly imported product before asking for a media account', async () => {
-  await plannedFixture(async (studio, project, calls) => {
+  await plannedFixture(async (studio, project, calls, decide) => {
+    decide(review => review ? verdict('pass') : museCandidate());
     const task = await studio.invoke<Task>('studio.run', { projectId: project.id, stage: 'all' }), done = await settle(studio, task.id);
     assert.equal(done.status, 'waiting_input', done.error);
     assert.equal(calls.length, 2, 'the initial all-stage job must create and independently review its plan first');
@@ -237,16 +229,33 @@ test('Run all plans and reviews a newly imported product before asking for a med
 
 test('a failed Affiliate script is repaired once and reviewed again, while unknown preserves the existing project', async () => {
   await plannedFixture(async (studio, project, calls, decide) => {
-    decide((review, index) => review ? verdict(index === 1 ? 'fail' : 'pass') : candidate());
+    decide((review, index) => review ? verdict(index === 1 ? 'fail' : 'pass') : museCandidate());
     const task = await studio.invoke<Task>('studio.run', { projectId: project.id, stage: 'plan' }), done = await settle(studio, task.id);
     assert.equal(done.status, 'succeeded', done.error); assert.equal(calls.length, 4); assert.match(calls[2].prompt, /unsupported claim/);
     assert.equal((studio.store.project(project.id).data.affiliateReview as any).attempts, 2);
   });
   await plannedFixture(async (studio, project, calls, decide) => {
-    decide(review => review ? verdict('unknown') : candidate());
+    decide(review => review ? verdict('unknown') : museCandidate());
     const task = await studio.invoke<Task>('studio.run', { projectId: project.id, stage: 'plan' });
     assert.equal((await settle(studio, task.id)).status, 'waiting_input'); assert.deepEqual(studio.store.project(project.id).data, project.data);
     await studio.invoke('task.action', { action: 'resume', ids: [task.id] }); assert.equal((await settle(studio, task.id)).status, 'waiting_input'); assert.equal(calls.length, 2);
+  });
+});
+
+test('a legacy-shaped reply to a v2 style is repaired once', async () => {
+  await plannedFixture(async (studio, project, calls, decide) => {
+    decide((review, index) => review ? verdict('pass') : index === 0 ? candidate() : museCandidate());
+    const task = await studio.invoke<Task>('studio.run', { projectId: project.id, stage: 'plan' }), done = await settle(studio, task.id);
+    assert.equal(done.status, 'succeeded', done.error); assert.equal(calls.length, 3);
+    const plans = calls.filter(call => !call.prompt.startsWith('Act as an independent Affiliate'));
+    assert.equal(plans.length, 2); assert.equal(plans.filter(call => call.prompt.includes('Revise the previous failed draft')).length, 1); assert.match(plans[1].prompt, /shotType/);
+    const data = studio.store.project(project.id).data as any; assert.equal(data.affiliatePlanVersion, 2); assert.equal(data.productLook, 'A blue short-sleeve cotton shirt.');
+  });
+  await plannedFixture(async (studio, project, calls, decide) => {
+    decide(review => review ? verdict('pass') : candidate());
+    const task = await studio.invoke<Task>('studio.run', { projectId: project.id, stage: 'plan' }), done = await settle(studio, task.id);
+    assert.equal(done.status, 'waiting_input'); assert.match(done.error, /chưa đúng cấu hình sau một lượt sửa/); assert.equal(calls.length, 2);
+    assert.deepEqual(studio.store.project(project.id).data, project.data);
   });
 });
 
@@ -257,7 +266,7 @@ test('ambiguous Affiliate provider admission is never resubmitted and a concurre
     assert.equal((await settle(studio, task.id)).status, 'waiting_input'); assert.equal(calls.length, 1);
   });
   await plannedFixture(async (studio, project, _calls, decide) => {
-    decide(review => { if (review) studio.store.saveProject({ ...project, data: { ...project.data, script: 'New user edit' } }); return review ? verdict('pass') : candidate(); });
+    decide(review => { if (review) studio.store.saveProject({ ...project, data: { ...project.data, script: 'New user edit' } }); return review ? verdict('pass') : museCandidate(); });
     const task = await studio.invoke<Task>('studio.run', { projectId: project.id, stage: 'plan' }); assert.equal((await settle(studio, task.id)).status, 'waiting_input');
     assert.equal(studio.store.project(project.id).data.script, 'New user edit'); assert.equal(studio.store.project(project.id).data.shots, undefined);
   });

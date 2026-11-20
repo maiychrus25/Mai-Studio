@@ -28,7 +28,7 @@ import { analyzeSpeech, compareTranscripts, compareSpeakers } from './acoustics'
 import { parseVideoReview, qualityRetries, qualityRepairFeedback, reviewScore, videoReviewPrompt, VIDEO_REVIEW_FRAMES } from './quality';
 import { downloadShopeeImage, parseShopeeCapture, resolveShopeeLink, shopeeImageUrl, shopeeLink, shopeeOffer, MAX_SHOPEE_IMAGES, MAX_SHOPEE_CAPTURE_BYTES } from './shopee';
 import { shopeeBookmarklet } from '../shared/shopee-capture';
-import { readAffiliateSettings, affiliateMode, affiliateTemplateGroup, MAX_AFFILIATE_REFERENCES } from '../shared/affiliate';
+import { readAffiliateSettings, affiliateMode, MAX_AFFILIATE_REFERENCES } from '../shared/affiliate';
 import { affiliateReviewPrompt, parseAffiliateReview } from './affiliate';
 import { affiliateCaptionCues, affiliatePostText, affiliateSpeechWindow, alignAffiliateShots, detectAffiliateBeats } from './affiliate-edit';
 
@@ -1068,9 +1068,7 @@ export class StudioService extends EventEmitter {
     this.store.transaction(() => {
       this.store.saveProject({ ...latest, data }); context.checkpoint({ planApplied: true, planFingerprint: this.contentFingerprint(data) });
     });
-    context.progress(1, 'Đã lưu kế hoạch AI: kiểm tra nhân vật và từng shot trước khi tạo media');
-    if (affiliate && affiliateTemplateGroup(readAffiliateSettings(project.data.affiliate).contentStyle) && data.affiliatePlanVersion !== 2) return { outputIds: [], message: 'Đã lưu kế hoạch, nhưng AI trả về theo định dạng cũ nên video này sẽ dựng theo luồng cũ; chạy lập kế hoạch lại để dùng luồng mới' };
-    return { outputIds: [] };
+    context.progress(1, 'Đã lưu kế hoạch AI: kiểm tra nhân vật và từng shot trước khi tạo media'); return { outputIds: [] };
   }
   private async planAffiliate(task: Task, project: Project, context: TaskContext, throughApi: boolean, reviewOnly = false) {
     const product = object(project.data.product ?? {});
