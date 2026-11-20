@@ -1051,7 +1051,7 @@ export class StudioService extends EventEmitter {
       }
       context.checkpoint({ planText: response });
     }
-    const data = parsePlan(response, project); context.signal.throwIfAborted();
+    const data = parsePlan(response, project, !!affiliate); context.signal.throwIfAborted();
     if (affiliate) data.affiliateReview = { ...affiliate.review, attempts: affiliate.attempts, modelAssessed: true, taskId: task.id, at: Date.now() };
     if (directed) data.director = { review: directed.state.review ?? null, lint: directed.state.lint ?? [], logline: directed.state.bible?.logline ?? '', question: directed.state.bible?.question ?? '' };
     for (const character of validateCharacters(data.characters)) if (character.assetId && !this.store.asset(character.assetId).mime.startsWith('image/')) throw new Error('Tham chiếu nhân vật không phải ảnh');
@@ -1102,7 +1102,7 @@ export class StudioService extends EventEmitter {
     for (let attempt = 0; attempt < 2; attempt++) {
       const response = await complete(`plan:${attempt}`, text(`${planningPrompt(project)}${feedback ? `\nRevise the previous failed draft. Fix these observed problems without changing the product facts or requested settings:\n${feedback}` : ''}`, 'Affiliate planning request', 32768));
       let data: Record<string, unknown>;
-      try { data = parsePlan(response, project); }
+      try { data = parsePlan(response, project, true); }
       catch (error) {
         feedback = error instanceof Error ? error.message : 'Invalid Affiliate plan';
         context.checkpoint({ affiliatePlanError: feedback });

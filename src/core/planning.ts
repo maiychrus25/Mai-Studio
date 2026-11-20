@@ -22,7 +22,7 @@ INPUT JSON:
 ${JSON.stringify(input)}`, 'Planning request', 32768);
 }
 
-export function parsePlan(value: string, project: Project): Record<string, unknown> {
+export function parsePlan(value: string, project: Project, planning = false): Record<string, unknown> {
   const body = text(value, 'AI plan JSON', 512 * 1024).replace(/^```(?:json)?\s*\n?([\s\S]*?)\n?```$/i, '$1');
   let raw: Record<string, unknown>;
   try { raw = object(JSON.parse(body)); } catch { throw new Error('AI plan must be a valid JSON object'); }
@@ -80,6 +80,7 @@ export function parsePlan(value: string, project: Project): Record<string, unkno
     if (item.videoPrompt !== undefined) shot.videoPrompt = text(item.videoPrompt, 'Video prompt', 32768);
     for (const key of ['action', 'acting', 'camera', 'environment'] as const) if (item[key] !== undefined) shot[key] = text(item[key], `Shot ${key}`, 4000);
     if (item.assetId !== undefined) shot.assetId = safeAsset(item.assetId);
+    if (item.productVisible !== undefined) { if (typeof item.productVisible !== 'boolean') throw new Error('Invalid plan productVisible: expected boolean'); shot.productVisible = item.productVisible; }
     return shot;
   });
   buildShots({ shots });
@@ -98,7 +99,7 @@ export function parsePlan(value: string, project: Project): Record<string, unkno
     musicDucking: previous.musicDucking ?? true, autoChecks: previous.autoChecks ?? true, videoReview: previous.videoReview ?? true, qualityRetries: previous.qualityRetries ?? 1, fadeOut: previous.fadeOut ?? (project.kind === 'film' ? 1.6 : 0) };
   for (const key of ['name', 'summary', 'musicPrompt'] as const) if (raw[key] !== undefined) data[key === 'name' ? 'suggestedTitle' : key] = text(raw[key], `Plan ${key}`, 32768);
   if (project.kind === 'film' && previous.titleCard === undefined && typeof raw.name === 'string') { data.titleCard = raw.name; data.titleDuration = 3; }
-  const result = project.kind === 'affiliate' && previous.affiliate !== undefined ? finishAffiliatePlan(project, data, raw) : data;
+  const result = project.kind === 'affiliate' && previous.affiliate !== undefined ? finishAffiliatePlan(project, data, raw, planning) : data;
   pipelineSteps({ ...project, data: result }, { speech: false });
   return result;
 }

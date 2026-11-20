@@ -53,6 +53,7 @@ export function buildShots(input: { script?: string; subtitle?: string; shots?: 
       if (item.outfitIndex !== undefined) { if (!Number.isInteger(item.outfitIndex) || Number(item.outfitIndex) < 0 || Number(item.outfitIndex) > 3) throw new Error('Invalid shot outfit index'); shot.outfitIndex = Number(item.outfitIndex); }
       if (item.transition !== undefined) { if (!['cut', 'flash', 'whip'].includes(String(item.transition))) throw new Error('Invalid shot transition'); shot.transition = item.transition as Shot['transition']; }
       for (const key of ['action', 'acting', 'camera', 'environment'] as const) if (item[key] !== undefined) shot[key] = text(item[key], `shot ${key}`, 4000);
+      if (item.productVisible !== undefined) { if (typeof item.productVisible !== 'boolean') throw new Error('Invalid shot productVisible: expected boolean'); shot.productVisible = item.productVisible; }
       for (const key of ['characterIds', 'listenerIds'] as const) if (item[key] !== undefined) shot[key] = list(item[key], key, true).map(value => text(value, key, 256));
       return shot;
     }), 'shot');

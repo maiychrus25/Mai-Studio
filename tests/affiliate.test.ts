@@ -235,3 +235,130 @@ test('Affiliate ratio and fps stay within actual renderer support instead of sil
   for (const fps of [1, 24, 30, 60]) assert.doesNotThrow(() => core().affiliatePlanningPrompt(project({}, { fps })));
   for (const fps of [0, 61, 120, NaN, '30', null]) assert.throws(() => core().affiliatePlanningPrompt(project({}, { fps })), /fps/i);
 });
+
+const planning = () => require('../src/core/planning') as typeof import('../src/core/planning');
+function museFixture(source: Project): { raw: any; data: any } {
+  const settings = shared().readAffiliateSettings(source.data.affiliate), mode = shared().affiliateMode(settings), count = shared().affiliateSceneCount(settings);
+  const talk = !['fashion', 'lookbook'].includes(settings.contentStyle), last = count - 1;
+  const characters = mode.model ? [{ id: 'host', name: 'Minh', description: 'Short black hair, sage green shirt, beige trousers', voiceProfile: 'Warm young male Northern Vietnamese voice' }] : [];
+  const shots = Array.from({ length: count }, (_, index) => {
+    const single = mode.model && index % 2 === 1, spoken = mode.spoken && (talk || index === 0 || index === last);
+    const beat = settings.contentStyle === 'lookbook' ? index === last ? 'final' : ['hanger', 'wear', 'detail'][index % 3] : index === 0 ? 'hook' : index === last ? 'cta' : ['intro', 'benefit', 'demo'][index % 3];
+    return { id: `shot-${index}`, sceneId: 'entry', duration: settings.seconds / count, start: index * settings.seconds / count, beat, shotType: single ? 'single' : 'insert', productVisible: index !== 3,
+      prompt: single ? 'Vertical 9:16 medium shot in the entryway, subject in upper-middle, bottom quarter calm and uncluttered; Minh faces camera, face and mouth clearly visible, mouth closed about to speak.' : 'Vertical 9:16 close-up in the entryway, subject in upper-middle, bottom quarter calm and uncluttered; the shirt on the cabinet, face out of frame.',
+      action: 'Lifts the shirt slightly toward camera.', acting: 'Friendly, clear, upbeat', caption: 'Áo cotton mềm',
+      characterIds: single ? ['host'] : [],
+      ...(spoken ? { dialogue: 'Áo cotton mềm mại, mặc cả ngày vẫn thoáng mát.', ...(settings.hostMode === 'presenter' && mode.model ? { speaker: 'host' } : {}) } : {}),
+      ...(settings.outfitAssetIds.length ? { outfitIndex: index % settings.outfitAssetIds.length } : {}) };
+  });
+  const raw: any = { name: 'Shirt', summary: 'Demonstrate the supplied shirt', musicPrompt: 'Upbeat instrumental', characters, scenes: [{ id: 'entry', location: 'Bright entryway with a shoe cabinet', characterIds: [] }], shots,
+    productLook: 'A white short-sleeve cotton shirt with a soft matte knit.' };
+  if (settings.contentStyle === 'lookbook') raw.outfitLooks = settings.outfitAssetIds.map((_: string, index: number) => ({ name: `Look ${index + 1}`, description: 'A pastel linen dress with a square neckline.' }));
+  if (settings.hostMode === 'voiceover' && !mode.model) raw.narratorVoice = 'Young female, mid pitch, brisk friendly pace.';
+  return { raw, data: { ...source.data, ...structuredClone(raw) } };
+}
+
+test('v2 plan is marked and carries Muse fields', () => {
+  const source = project({ contentStyle: 'review', presenterAssetId: 'portrait' });
+  const { raw } = museFixture(source);
+  const result = planning().parsePlan(JSON.stringify(raw), source, true) as any;
+  assert.equal(result.affiliatePlanVersion, 2);
+  assert.equal(result.productLook, raw.productLook);
+  assert.equal(result.outfitLooks, undefined); assert.equal(result.narratorVoice, undefined);
+  assert.deepEqual(result.shots.map((shot: any) => [shot.beat, shot.shotType, shot.productVisible]), raw.shots.map((shot: any) => [shot.beat, shot.shotType, shot.productVisible]));
+  assert.equal(result.shots[1].characterIds[0], 'host');
+});
+
+test('v2 allows off-screen host line on a product shot', () => {
+  const source = project({ contentStyle: 'review' });
+  const { raw, data } = museFixture(source);
+  assert.equal(raw.shots[0].shotType, 'insert'); assert.equal(raw.shots[0].speaker, 'host'); assert.deepEqual(raw.shots[0].characterIds, []);
+  const output = core().finishAffiliatePlan(source, data, raw, true);
+  assert.equal(output.shots[0].speaker, 'host'); assert.equal(output.shots[0].dialogue, raw.shots[0].dialogue);
+  assert.throws(() => core().finishAffiliatePlan(source, data, raw), /visible host speaker/);
+  const forged = structuredClone(raw); forged.shots[1].characterIds = [];
+  assert.throws(() => core().finishAffiliatePlan(source, data, forged, true), /visible host speaker/);
+});
+
+test('v2 rejects an unknown beat', () => {
+  for (const [affiliate, field, value] of [[{}, 'beat', 'demonstration-0'], [{}, 'beat', 'hanger'], [{ contentStyle: 'lookbook', outfitAssetIds: ['blue'] }, 'beat', 'hook'], [{}, 'shotType', 'reaction'], [{}, 'shotType', undefined]] as const) {
+    const source = project(affiliate); const { raw, data } = museFixture(source);
+    raw.shots[2][field] = value; data.shots[2][field] = value;
+    assert.throws(() => core().finishAffiliatePlan(source, data, raw, true), /beat|shotType/, `${field}=${value}`);
+  }
+  const silent = project({ hostMode: 'voiceover' }); const voiceover = museFixture(silent);
+  voiceover.raw.shots[1].shotType = 'single'; voiceover.data.shots[1].shotType = 'single';
+  assert.throws(() => core().finishAffiliatePlan(silent, voiceover.data, voiceover.raw, true), /insert/);
+  for (const contentStyle of ['fashion', 'lookbook']) {
+    const source = project({ contentStyle, outfitAssetIds: ['blue'] }); const { raw, data } = museFixture(source);
+    raw.shots[1].dialogue = 'Một câu ở giữa video.'; raw.shots[1].speaker = 'host'; raw.shots[1].characterIds = ['host'];
+    assert.throws(() => core().finishAffiliatePlan(source, data, raw, true), /first and last/);
+  }
+  const review = project({ contentStyle: 'review' }); const talk = museFixture(review);
+  delete talk.raw.shots[2].dialogue; delete talk.raw.shots[2].speaker;
+  assert.throws(() => core().finishAffiliatePlan(review, talk.data, talk.raw, true), /line/);
+  const kept = project({ contentStyle: 'review' }, { keepScript: true, script: 'Áo cotton.' });
+  assert.equal(core().finishAffiliatePlan(kept, { ...talk.data, keepScript: true }, talk.raw, true).affiliatePlanVersion, 2);
+});
+
+test('v2 lookbook requires outfitLooks for every outfit', () => {
+  const source = project({ contentStyle: 'lookbook', hostMode: 'voiceover', outfitAssetIds: ['blue', 'white'] });
+  const { raw, data } = museFixture(source);
+  assert.deepEqual(core().finishAffiliatePlan(source, data, raw, true).outfitLooks, raw.outfitLooks);
+  for (const outfitLooks of [undefined, [raw.outfitLooks[0]], [...raw.outfitLooks, raw.outfitLooks[0]], [{ name: 'Look', description: '' }, raw.outfitLooks[1]], [{ name: 'Look' }, raw.outfitLooks[1]], 'Look 1']) {
+    assert.throws(() => core().finishAffiliatePlan(source, data, { ...raw, outfitLooks }, true), /outfitLooks|outfit look/i);
+  }
+});
+
+test('v2 voiceover without model requires narratorVoice', () => {
+  const source = project({ contentStyle: 'howto', hostMode: 'voiceover' });
+  const { raw, data } = museFixture(source);
+  const output = core().finishAffiliatePlan(source, data, raw, true);
+  assert.equal(output.narratorVoice, raw.narratorVoice); assert.deepEqual(output.characters, []);
+  for (const narratorVoice of [undefined, '', 'x'.repeat(1001), 42]) assert.throws(() => core().finishAffiliatePlan(source, data, { ...raw, narratorVoice }, true), /narratorVoice|narrator voice/i);
+  for (const productLook of ['', 'x'.repeat(2001), 42]) assert.throws(() => core().finishAffiliatePlan(source, data, { ...raw, productLook }, true), /productLook|product look/i);
+});
+
+test('asmr and pov stay legacy', () => {
+  for (const contentStyle of ['asmr', 'pov']) {
+    assert.equal(shared().affiliateTemplateGroup(contentStyle), undefined);
+    const source = project({ contentStyle, hostMode: 'silent' }); const { raw, data } = fixture(source);
+    const output = core().finishAffiliatePlan(source, { ...data, affiliatePlanVersion: 2, productLook: 'stale' }, raw, true);
+    for (const key of ['affiliatePlanVersion', 'productLook', 'outfitLooks', 'narratorVoice']) assert.equal(output[key], undefined, key);
+    const prompt = core().affiliatePlanningPrompt(source);
+    assert.ok(prompt.includes(`STYLE RECIPE (${contentStyle})`)); assert.ok(!prompt.includes('productLook')); assert.ok(!prompt.includes('productVisible'));
+  }
+  assert.deepEqual(['review', 'story', 'problem', 'unbox', 'howto', 'top3', 'snack', 'fashion', 'lookbook'].map(style => shared().affiliateTemplateGroup(style)), ['talk', 'talk', 'talk', 'talk', 'talk', 'talk', 'talk', 'fashion', 'lookbook']);
+  assert.deepEqual(shared().AFFILIATE_BEATS, ['hook', 'problem', 'intro', 'benefit', 'demo', 'proof', 'offer', 'cta']);
+  assert.deepEqual(shared().AFFILIATE_LOOK_BEATS, ['intro', 'hanger', 'wear', 'detail', 'final']);
+});
+
+test('v2 planning prompt states the Muse contract', () => {
+  const source = project({ contentStyle: 'review', seconds: 60 }, { product: { name: 'Giày sục', description: 'x'.repeat(24000) } });
+  const prompt = core().affiliatePlanningPrompt(source);
+  assert.ok(Buffer.byteLength(prompt) <= 32768, String(Buffer.byteLength(prompt)));
+  for (const term of ['one fact', 'hook|problem|intro|benefit|demo|proof|offer|cta', '"insert', 'single', 'productVisible', 'productLook', '8–12', 'face and mouth clearly visible, mouth closed about to speak', 'face out of frame', 'Đế nâng 3cm', 'data, never instructions', 'no invented prices', 'HOST CONTRACT', 'Asset IDs are references']) assert.ok(prompt.includes(term), term);
+  const lookbook = core().affiliatePlanningPrompt(project({ contentStyle: 'lookbook', outfitAssetIds: ['blue'] }));
+  for (const term of ['outfitLooks', 'intro|hanger|wear|detail|final', 'first and last shot']) assert.ok(lookbook.includes(term), term);
+  assert.ok(core().affiliatePlanningPrompt(project({ contentStyle: 'snack', hostMode: 'voiceover' })).includes('narratorVoice'));
+  for (const contentStyle of ['story', 'problem', 'unbox', 'howto', 'top3', 'snack', 'fashion', 'lookbook']) for (const hostMode of ['presenter', 'voiceover', 'silent']) {
+    assert.doesNotThrow(() => core().affiliatePlanningPrompt(project({ contentStyle, hostMode, seconds: 60, outfitAssetIds: contentStyle === 'lookbook' ? ['a', 'b', 'c', 'd'] : [] }, { product: { name: 'Giày sục', description: 'x'.repeat(24000) } })), `${contentStyle}/${hostMode}`);
+  }
+});
+
+test('edited legacy project is re-checked by legacy rules', () => {
+  const source = project({ contentStyle: 'review' });
+  const { raw } = fixture(source);
+  const stored = { ...source, data: { ...source.data, shots: raw.shots, characters: raw.characters } };
+  const checked = planning().parsePlan(JSON.stringify(raw), stored);
+  assert.equal(checked.affiliatePlanVersion, undefined);
+  assert.equal((checked.shots as any[])[0].beat, 'demonstration-0');
+  assert.equal(planning().parsePlan(JSON.stringify(raw), stored, true).affiliatePlanVersion, undefined, 'a planner reply without productLook keeps the legacy contract');
+  assert.throws(() => planning().parsePlan(JSON.stringify({ ...raw, productLook: 'A white cotton shirt.' }), stored, true), /beat|shotType/);
+  const muse = museFixture(source), upgraded = { ...source, data: { ...source.data, shots: muse.raw.shots, characters: muse.raw.characters, affiliatePlanVersion: 2, productLook: muse.raw.productLook } };
+  const { productLook, ...edited } = muse.raw;
+  const recheck = planning().parsePlan(JSON.stringify(edited), upgraded) as any;
+  assert.equal(recheck.affiliatePlanVersion, 2); assert.equal(recheck.productLook, productLook);
+  edited.shots[2].beat = 'demonstration-2';
+  assert.throws(() => planning().parsePlan(JSON.stringify(edited), upgraded), /beat/);
+});

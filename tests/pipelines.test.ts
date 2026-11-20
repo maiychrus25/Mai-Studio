@@ -249,3 +249,10 @@ test('native audio keeps exact dialogue, stable voices and silent listeners alon
   for (const value of ['Mai speaks exactly: "Anh về rồi à?"', 'Listeners: Nam react naturally and remain silent.', 'Low northern voice', 'Keep natural scene sound and the requested dialogue.']) assert.ok(clips[0].prompt.includes(value), value);
   assert.match(clips[1].prompt, /Silent visual action; no invented speech/);
 });
+
+test('buildShots keeps productVisible', () => {
+  const shot = { id: 'one', prompt: 'Presenter talks with empty hands', duration: 3, productVisible: false };
+  assert.deepEqual(api().buildShots({ shots: [shot] }), [shot]);
+  assert.equal(api().buildShots({ shots: [{ ...shot, productVisible: true }] })[0].productVisible, true);
+  for (const productVisible of ['no', 0, null]) assert.throws(() => api().buildShots({ shots: [{ ...shot, productVisible }] }), /productVisible/);
+});

@@ -200,6 +200,18 @@ test('Affiliate planning uploads actual product references and requires an indep
   });
 });
 
+test('a Muse-shaped planner reply is saved as a v2 plan and reviewed against the v2 shape', async () => {
+  await plannedFixture(async (studio, project, calls, decide) => {
+    const muse = { ...candidate(), productLook: 'A blue short-sleeve cotton shirt.', shots: candidate().shots.map((shot, index) => ({ ...shot, beat: ['hook', 'benefit', 'demo', 'cta'][index], shotType: 'insert', productVisible: index !== 2 })) };
+    decide(review => review ? verdict('pass') : muse);
+    const task = await studio.invoke<Task>('studio.run', { projectId: project.id, stage: 'plan' }), done = await settle(studio, task.id);
+    assert.equal(done.status, 'succeeded', done.error); assert.equal(calls.length, 2);
+    const data = studio.store.project(project.id).data as any;
+    assert.equal(data.affiliatePlanVersion, 2); assert.equal(data.productLook, muse.productLook); assert.equal(data.shots[2].productVisible, false);
+    assert.match(calls[0].prompt, /MUSE SHAPE/); assert.match(calls[1].prompt, /Muse shape/);
+  });
+});
+
 test('Run all plans and reviews a newly imported product before asking for a media account', async () => {
   await plannedFixture(async (studio, project, calls) => {
     const task = await studio.invoke<Task>('studio.run', { projectId: project.id, stage: 'all' }), done = await settle(studio, task.id);

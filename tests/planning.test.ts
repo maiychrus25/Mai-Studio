@@ -88,3 +88,11 @@ test('new plans enable bounded image and video review for every studio kind with
   for (const qualityRetries of [0, 1, 2]) assert.equal(planner().parsePlan(JSON.stringify(result()), project({ qualityRetries })).qualityRetries, qualityRetries);
   for (const qualityRetries of [-1, 3, 0.5, '1', null, false, Infinity, NaN]) assert.throws(() => planner().parsePlan(JSON.stringify(result()), project({ qualityRetries })), /qualityRetries|quality retries/i);
 });
+
+test('parsePlan keeps productVisible', () => {
+  const raw = result(); Object.assign(raw.shots[0], { productVisible: false });
+  assert.equal((planner().parsePlan(JSON.stringify(raw), project()).shots as Record<string, unknown>[])[0].productVisible, false);
+  assert.equal((planner().parsePlan(JSON.stringify(result()), project()).shots as Record<string, unknown>[])[0].productVisible, undefined);
+  Object.assign(raw.shots[0], { productVisible: 'false' });
+  assert.throws(() => planner().parsePlan(JSON.stringify(raw), project()), /productVisible/);
+});

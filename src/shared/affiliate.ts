@@ -97,6 +97,11 @@ export function affiliateSceneCount(settings: AffiliateSettings): number {
   if (['asmr', 'pov'].includes(settings.contentStyle)) return Math.max(5, Math.min(16, Math.round(settings.seconds / 1.9)));
   return Math.max(3, Math.min(16, Math.round(settings.seconds / 3.4)));
 }
+export const AFFILIATE_BEATS = ['hook', 'problem', 'intro', 'benefit', 'demo', 'proof', 'offer', 'cta'] as const;
+export const AFFILIATE_LOOK_BEATS = ['intro', 'hanger', 'wear', 'detail', 'final'] as const;
+export function affiliateTemplateGroup(contentStyle: AffiliateSettings['contentStyle']): 'talk' | 'fashion' | 'lookbook' | undefined {
+  return contentStyle === 'fashion' || contentStyle === 'lookbook' ? contentStyle : contentStyle === 'asmr' || contentStyle === 'pov' ? undefined : 'talk';
+}
 export function affiliateMode(settings: AffiliateSettings): { model: boolean; spoken: boolean; handsOnly: boolean; nativeAudio: boolean } {
   const asmr = settings.contentStyle === 'asmr';
   const model = !asmr && (['fashion', 'lookbook'].includes(settings.contentStyle) || settings.hostMode === 'presenter');
