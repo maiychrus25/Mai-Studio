@@ -61,9 +61,15 @@ export async function captureShopeeProduct(): Promise<Record<string, unknown>> {
     if (start >= 0) description = body.slice(start).replace(/^MÔ TẢ SẢN PHẨM\s*/i, '').split(/ĐÁNH GIÁ SẢN PHẨM|SẢN PHẨM TƯƠNG TỰ/i)[0].trim();
   }
   const suppliedImages = [structured?.image].flat().filter(Boolean).map(value => typeof value === 'string' ? value : value.url).filter(Boolean);
-  const gallery = document.querySelector('[data-testid="product-gallery"], .product-images, [class*="product-image"], [class*="image-carousel"]');
-  const candidates = suppliedImages.length ? suppliedImages : Array.from((gallery || document.querySelector('main') || document).querySelectorAll('img')).map(image => image.currentSrc || image.getAttribute('src') || '');
-  const images = [...new Set(candidates.filter(value => { try { const image = new URL(value, location.href); return image.protocol === 'https:' && /^(?:(?:down|down-zl)-vn\.img\.susercontent\.com|cf\.shopee\.vn)$/.test(image.hostname) && image.pathname.startsWith('/file/'); } catch { return false; } }))].slice(0, 16);
+  const productImages = (values: string[]) => values.filter(value => { try { const image = new URL(value, location.href); return image.protocol === 'https:' && /^(?:(?:down|down-zl)-vn\.img\.susercontent\.com|cf\.shopee\.vn)$/.test(image.hostname) && image.pathname.startsWith('/file/'); } catch { return false; } });
+  // A single SEO image can differ from the visible gallery; explicit gallery containers take priority over generic hero classes.
+  const gallery = document.querySelector('[data-testid="product-gallery"]') || document.querySelector('.product-images, [class*="image-carousel"]');
+  const imageContainer = gallery || document.querySelector('[class*="product-image"]');
+  const galleryElements = imageContainer ? imageContainer instanceof HTMLImageElement ? [imageContainer] : Array.from(imageContainer.querySelectorAll('img')) : [];
+  const galleryImages = productImages(galleryElements.map(image => image.currentSrc || image.getAttribute('src') || ''));
+  const candidates = galleryImages.length && (gallery || galleryImages.length >= suppliedImages.length) ? galleryImages
+    : suppliedImages.length ? suppliedImages : imageContainer ? galleryImages : Array.from((document.querySelector('main') || document).querySelectorAll('img')).map(image => image.currentSrc || image.getAttribute('src') || '');
+  const images = [...new Set(productImages(candidates))].slice(0, 16);
   if (!images.length) throw new Error('Chưa thấy ảnh sản phẩm. Mở phần ảnh chính và đợi ảnh tải xong rồi bấm lại.');
   const attributes = Array.isArray(structured?.additionalProperty) ? structured.additionalProperty.filter((value: any) => typeof value.name === 'string' && value.value !== undefined).map((value: any) => ({ name: value.name, value: String(value.value) })) : [];
   return { _: 'maistudio-shopee', v: 1, kind: 'page', url, capturedAt, title, price, description, images, attributes };

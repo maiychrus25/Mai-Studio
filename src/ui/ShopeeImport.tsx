@@ -119,6 +119,7 @@ export function ShopeeImport({ project, saveProject }: { project: Project; saveP
     </>}
     {help && <Modal title={t('Lấy dữ liệu từ Chrome', 'Capture product data in Chrome')} onClose={() => setHelp(false)}>
       <p className="inline-note">{t('Dùng Chrome thông thường trên Mac hoặc Linux, tại trang sản phẩm Shopee Việt Nam đã tải xong.', 'Use normal Chrome on Mac or Linux with the Shopee Vietnam product page fully loaded.')}</p>
+      <p className="inline-note">{t('Nếu đã có dấu trang lấy sản phẩm từ bản trước, sau khi cập nhật MaiStudio anh cần sao chép lại mã và thay toàn bộ URL của dấu trang. Dấu trang cũ không tự cập nhật.', 'If you already have a capture bookmark from an earlier version, copy the code again after updating MaiStudio and replace the entire bookmark URL. Existing bookmarks do not update automatically.')}</p>
       <ol className="import-results">
         <li>{t('Hiện thanh dấu trang: Cmd+Shift+B trên Mac hoặc Ctrl+Shift+B trên Linux.', 'Show the bookmarks bar: Cmd+Shift+B on Mac or Ctrl+Shift+B on Linux.')}</li>
         <li>{t('Thêm dấu trang bất kỳ bằng Cmd+D / Ctrl+D. Đặt tên “Shopee capture”, lưu vào thanh dấu trang.', 'Add a bookmark with Cmd+D / Ctrl+D. Name it “Shopee capture” and save it to the bookmarks bar.')}</li>

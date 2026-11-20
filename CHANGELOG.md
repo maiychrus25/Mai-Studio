@@ -2,6 +2,13 @@
 
 This file records development changes. No production release is declared by a development checkpoint.
 
+## 0.2.0-dev.3 — pre-release candidate
+
+- Fix page capture choosing one JSON-LD image instead of the full scoped product gallery. Explicit gallery containers take priority over generic hero-image classes; valid structured product images remain a fallback.
+- Preserve structured price/description and the cache-only capture path; do not append an unrelated SEO image to a known gallery.
+- Explain that an existing capture bookmark must have its URL replaced with freshly copied code after upgrading the app.
+- Native builds and public release are pending verification; existing releases remain available.
+
 ## 0.2.0-dev.2 — pre-release, 2026-11-19
 
 - Fix Shopee cached product prices when unavailable ranges are marked `-1`: use the supplied current single price before item fallback prices, preserving strict validation for other numeric facts.
