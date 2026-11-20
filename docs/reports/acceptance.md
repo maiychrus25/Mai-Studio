@@ -1,12 +1,25 @@
-## Shopee page gallery candidate 0.2.0-dev.3 — 20/11/2026
+## Shopee page gallery Release 0.2.0-dev.3 — 20/11/2026
 
-**Trạng thái: dev đã sửa; kiểm toàn bộ source cuối và native Release còn chờ.** Capture anh gửi cho92509213/27621749954 có bốn ảnh Muse nhưng Mai chọn một ảnh JSON-LD khác. Regression tái hiện trước sửa; shared reader nay ưu tiên gallery rõ ràng và giữ facts/cache-only. Review phát hiện thêm hai regression ở candidate đầu: hero chung đè bộ structured đầy đủ và gallery placeholder rơi sang ảnh gợi ý. Hai bài kiểm mới RED2/2 trước sửa, GREEN2/2 sau sửa; focused suite cuối23/23, gồm generated bookmarklet chạy trong Chromium desktop1440/mobile390 và parse đúng bốn URL anh cung cấp. Không gọi đó là kiểm DOM Shopee live: không có tab sản phẩm khớp trong Chrome để đọc.
+**Trạng thái: đã kiểm source cuối và phát hành pre-release; chưa cài trên máy anh.** Capture anh gửi cho92509213/27621749954 có bốn ảnh Muse nhưng Mai chọn một ảnh JSON-LD khác. Regression tái hiện trước sửa; shared reader nay ưu tiên gallery rõ ràng và giữ facts/cache-only. Review phát hiện thêm hai regression ở candidate đầu: hero chung đè bộ structured đầy đủ và gallery placeholder rơi sang ảnh gợi ý. Hai bài kiểm mới RED2/2 trước sửa, GREEN2/2 sau sửa; focused suite cuối23/23, gồm generated bookmarklet chạy trong Chromium desktop1440/mobile390 và parse đúng bốn URL anh cung cấp. Không gọi đó là kiểm DOM Shopee live: không có tab sản phẩm khớp trong Chrome để đọc.
 
-Build succeeded; lint exit0/zero warnings, docs-check OK, actionlint sạch. Full suite trước hai guard cuối413/413; full suite415 của source cuối đang chạy, chưa được ghi là đạt. Các kiểm hồi quy Shopee gồm legacy Muse/page/get_pc/API, giá cache -1, chín ảnh và thứ tự, URL/MIME/byte limits, partial/cancel/retry/checkpoint, giữ output và chỉnh sửa đồng thời. Không đổi dependency, schema/IPC hay dữ liệu của anh.
+Build succeeded; lint exit0/zero warnings, docs-check OK, actionlint sạch. Full suite trước hai guard cuối413/413; source cuối local415/415 và CI415/415, không fail/cancel/skip. Các kiểm hồi quy Shopee gồm legacy Muse/page/get_pc/API, giá cache -1, chín ảnh và thứ tự, URL/MIME/byte limits, partial/cancel/retry/checkpoint, giữ output và chỉnh sửa đồng thời. Không đổi dependency, schema/IPC hay dữ liệu của anh.
 
 Hai vòng stress source cuối đạt với Electron thật/provider loopback: round1 980succeeded/20cancelled, queue5482ms; round2 879succeeded/70lỗi429 có chủ đích/51cancelled, queue10393ms; peak2, bốn tổ hợp desktop/mobile × light/dark mỗi vòng, không tràn ngang/renderer error, reopen không resubmit. Lượt trước chạy cùng full suite bị screenshot timeout và không được tính là đạt; chạy riêng lại giữ nguyên script/assertion và đạt cả hai vòng. Không suy ra nguyên nhân chắc chắn của timeout từ một lần tái hiện.
 
 Hộp hướng dẫn thật kiểm tám lượt qua hai vòng desktop/mobile × light/dark: lời nhắc thay URL dấu trang hiện, mã copy khớp generator, đóng được modal, không tràn ngang trang/modal hoặc lỗi renderer. Hai lần probe đầu dùng sai locator trong harness (picker Affiliate bị ẩn trên desktop, Close có hai nút) đã được sửa theo DOM hiện hữu; không đổi app để phục vụ test. Dữ liệu thử/stress và ảnh chụp dùng thư mục tạm tự dọn. Bản cài cũ/dấu trang đã lưu chưa tự đổi; người dùng cần cài bản mới và thay URL dấu trang. Native runtime Kubuntu và layout Shopee thực vẫn chưa nghiệm thu.
+
+[Release v0.2.0-dev.3](https://github.com/maiychrus25/Mai-Studio/releases/tag/v0.2.0-dev.3) public lúc2026-11-20T00:53:22Z, ID452130111, source3618cc0e54f4d0101226970c9de57dd9f5a19ffe, [Build44648246603](https://github.com/maiychrus25/Mai-Studio/actions/runs/44648246603) thành công7/7job. Chín installer Mac ARM64/x64, Linux ARM64/x64, Windowsx64 và SHA256SUMS.txt khớp toàn bộ asset digest trước/sau public; tag đúng source, public page HTTP200, tải anonymous8byte đầu ARM64 DEB trả206 và header Debian hợp lệ. PR#1 đã merge, tree merge khớp hoàn toàn source build; bản cũ giữ nguyên. Báo cáo sau phát hành chỉ đổi docs, không đổi application source.
+
+Nhập lại JSON Muse bốn URL anh cung cấp qua StudioService cô lập, tải/giải mã CDN công khai thật: succeeded4/4JPEG, giá15.000₫; không coi đây là lượt scrape Shopee mới hoặc xác nhận giá hiện tại. Không dùng provider tạo sinh, tài khoản hay profile cá nhân. Anh dặn đang chạy job nên chưa cài: không thay bộ cài đang dùng, restart app, đổi task/checkpoint hoặc cấu hình tài khoản. Truy vấn giải thích thông báo review dùng SQLite mode=ro; không sửa job hay đánh dấu unknown thành pass.
+
+```text
+make build: Build succeeded
+make test: 415 tests, 415 pass, 0 fail, 0 cancelled, 0 skipped
+make lint: exit 0, zero warnings
+node scripts/check-docs.js: docs-check: OK
+actionlint: exit 0
+stress: two rounds PASS; desktop/mobile x light/dark
+```
 
 ## 0.2.0-dev.2 native Release — 19/11/2026
 

@@ -2,12 +2,13 @@
 
 This file records development changes. No production release is declared by a development checkpoint.
 
-## 0.2.0-dev.3 — pre-release candidate
+## 0.2.0-dev.3 — pre-release, 2026-11-20
 
 - Fix page capture choosing one JSON-LD image instead of the full scoped product gallery. Explicit gallery containers take priority over generic hero-image classes; valid structured product images remain a fallback.
 - Preserve structured price/description and the cache-only capture path; do not append an unrelated SEO image to a known gallery.
 - Explain that an existing capture bookmark must have its URL replaced with freshly copied code after upgrading the app.
-- Native builds and public release are pending verification; existing releases remain available.
+- Published after native Build44648246603 completed all seven jobs; nine installers and the checksum manifest were digest-verified before and after publication. Source3618cc0; local415/415 tests, focused23/23 and two isolated stress rounds pass. Existing releases remain available.
+- Live Shopee DOM and bare-metal Kubuntu installer execution remain unverified. Installation is deferred at the operator's request while an existing job is active.
 
 ## 0.2.0-dev.2 — pre-release, 2026-11-19
 

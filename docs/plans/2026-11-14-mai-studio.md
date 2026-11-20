@@ -250,12 +250,14 @@ Publication evidence: https://github.com/maiychrus25/Mai-Studio/releases/tag/v0.
 
 ## Shopee page gallery capture — 20/11/2026
 
-**Status: DEV FIX IMPLEMENTED; FINAL VERIFICATION PENDING.** The operator supplied Muse/Mai page captures for product92509213/27621749954 and reported the same failure on Mac and Kubuntu: four gallery images versus one different structured image. Scope is the shared bookmarklet reader, regression coverage, existing help copy, version/docs and native release0.2.0-dev.3. Preserve structured facts, cache-only reads, import limits, image validation, existing Muse capture compatibility and user data. No dependency or provider configuration change.
+**Status: PUBLISHED AND DIGEST VERIFIED — v0.2.0-dev.3, source3618cc0, Build44648246603; INSTALLATION DEFERRED BY OPERATOR.** The operator supplied Muse/Mai page captures for product92509213/27621749954 and reported the same failure on Mac and Kubuntu: four gallery images versus one different structured image. Scope is the shared bookmarklet reader, regression coverage, existing help copy, version/docs and native release0.2.0-dev.3. Preserve structured facts, cache-only reads, import limits, image validation, existing Muse capture compatibility and user data. No dependency or provider configuration change.
 
 - [x] Reproduce single structured-image selection before the fix; prioritize explicit product gallery over generic hero-image classes and JSON-LD image fallback.
 - [x] Check the exact four supplied CDN URLs through the generated bookmarklet and parser on desktop/mobile; preserve price/description and structured fallback when gallery is unusable.
-- [ ] Review the actual diff, complete build/full tests/lint/docs and two isolated desktop/mobile light/dark stress rounds; check the updated help dialog.
-- [ ] Build the reviewed source using the existing native CI matrix and draft release relay; verify all jobs, installer digests and tag before publication.
-- [ ] Publish the verified pre-release, record evidence and explain replacing old bookmark URLs on both operating systems.
+- [x] Review the actual diff, complete build/full tests/lint/docs and two isolated desktop/mobile light/dark stress rounds; check the updated help dialog.
+- [x] Build the reviewed source using the existing native CI matrix and draft release relay; verify all jobs and installer digests before publication, then verify the published source tag.
+- [x] Publish the verified pre-release, record evidence and explain replacing old bookmark URLs on both operating systems.
 
 Risk: scoped gallery selectors can differ from the live Shopee layout. The supplied JSON proves the old priority bug, not the actual current DOM. No matching product tab was available for read-only inspection; controlled DOM evidence must not be presented as a live extraction. Rollback is a scoped Git revert in dev, preserving previous release tags and user data; no installed application or profile is replaced by this source change.
+
+Publication evidence: release452130111 at2026-11-20T00:53:22Z, all7native CI jobs success, nine installer digests and checksum manifest matched before/after public, page200 and ARM64 DEB Range206/header valid. Local415/415, focused23/23, both1000-task stress rounds and eight help-dialog viewport/theme checks passed; supplied Muse capture imported4/4real CDN JPEGs. PR#1 merged with identical application tree. Operator explicitly deferred installation while running a job: no install/restart/task mutation. Remaining live DOM/Kubuntu runtime limits are retained in acceptance.md.
