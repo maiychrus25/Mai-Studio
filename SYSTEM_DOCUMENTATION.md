@@ -1,6 +1,6 @@
 # MaiStudio — tài liệu hệ thống
 
-Phiên bản ứng dụng được khảo sát: `0.2.0-dev.3`.
+Phiên bản ứng dụng được khảo sát: `0.2.0-dev.4`.
 
 Trạng thái: pre-release 0.2.0-dev.3 đã công khai, vẫn đang thực hiện functional parity P1–P5; bằng chứng local/CI theo từng phần không chứng nhận full parity hoặc mọi nền tảng/provider. Nghiệm thu và nguồn artifact ghi tại docs/reports/acceptance.md. Anh đã duyệt thiết kế ngày 14/11/2026.
 
@@ -122,6 +122,12 @@ CSV/JSON batch ở `src/core/products.ts` giữ facts/giá/field gốc, parser c
 <!-- docs-check: src/core/products.ts#MAX_PRODUCTS = 1000 -->
 <!-- docs-check: src/core/products.ts#MAX_PRODUCT_BYTES = 32768 -->
 <!-- docs-check: src/core/products.ts#MAX_SOURCE_BYTES = 8388608 -->
+
+## Tiếp tục job sau review — dev 20/11/2026
+
+Bản dev0.2.0-dev.4 sửa checkpoint review cũ ghi đè một lượt đánh giá mới khi tiếp tục autoChecks. Trong reviewAndRepair, chỉ tái dùng review mới nhất từ task khác có fingerprint và asset ID trùng nguồn hiện tại, at mới hơn responseAt của checkpoint (legacy dùng createdAt của task); vision phải modelAssessed, transcript phải semantic=assessed. Review ảnh/video vẫn qua parser hiện có; audio vẫn đo lại stream/VAD, so transcript và cohort. Không thay kết quả khi request cũ còn pending admission, không tự đổi unknown/fail thành pass, không reset số vòng sửa hoặc tạo lại media. Mỗi response lưu responseAt/sourceTaskId, assessment lưu taskId/at; không dùng assessment cũ hơn response vừa checkpoint khi crash trước commit. Các take chia sẻ cùng assetId và review fingerprint nhận verdict mới cho đúng loại image/video/speech trước khi chấm điểm chọn best, không làm tăng số take; checkpoint và task review riêng vẫn giữ lịch sử response.
+
+Tiến trình dự án có Đánh giá lại cảnh lỗi cho job waiting_input ở qualityControl. Dùng studio.run(stage=check) hiện có, chỉ chọn cảnh fail/unknown trong phạm vi shotIds của job, giữ account và yêu cầu xác nhận phí review. Không tạo lại ảnh/video. Sau khi xem kết quả mới, người dùng bấm Tiếp tục job gốc; unknown/fail thật vẫn giữ gate. Bấm Tiếp tục đơn thuần không mua lượt đánh giá mới. Hướng dẫn vision làm rõ face=not_applicable cho insert sản phẩm/tay/chân hoặc cằm/miệng cố ý bị crop và không có khuôn mặt nhận diện được theo kế hoạch; mặt nhận diện được, crop sai yêu cầu, scene/outfit/product vẫn phải được xét. Không tự sửa verdict cũ thành đạt. Prompt đổi làm image-review fingerprint đổi: cần một lượt đánh giá mới, xác nhận tiếp tục có nhắc khả năng tính phí. Không thêm dependency hoặc IPC mới. Chưa áp dụng vào app đang mở: anh đã dặn không cài/restart khi còn job.
 
 ## Luồng chất lượng ảnh và video — dev 16/11/2026
 

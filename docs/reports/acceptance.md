@@ -1,3 +1,25 @@
+## Quality-review resume dev0.2.0-dev.4 — 20/11/2026
+
+**Trạng thái: đã kiểm dev và chuẩn bị artifact Mac ARM64; chưa áp dụng vào app của anh.** Tái hiện bằng fixture thật: fresh explicit review đã pass nhưng Resume job autoChecks phát lại unknown từ checkpoint. RED trên source trước sửa; sau sửa giữ review ảnh/video/ASR mới hơn từ task khác, đúng asset/fingerprint, không mua thêm lượt tạo/review khi Resume dùng được kết quả đó. Review mới vẫn unknown/fail hoặc asset khác vẫn chặn, không đánh dấu đạt thay người dùng. Thêm timestamp/provenance để checkpoint response mới hơn thắng assessment cũ sau crash.
+
+Review độc lập phát hiện best-take có thể khôi phục image pass cũ khi hai video dùng chung ảnh vừa bị đánh fail. Regression hai take RED rồi GREEN; cập nhật từng category cùng asset/fingerprint và score, kiểm cả Resume/Retry không phát sinh request/generation hoặc tăng take. Các guard giữ: source media, tối đa hai vòng sửa, không gửi lại remote admission chưa rõ, selected review không thay cảnh ngoài phạm vi, chỉnh input trong lúc HTTP không áp kết quả cũ, audio/ASR/cohort/voice-fit và bảo toàn output.
+
+```text
+make build: Build succeeded
+make test: 422 tests, 422 pass, 0 fail, 0 cancelled, 0 skipped
+focused quality/review: 31 pass, 0 fail
+make lint: exit 0, zero warnings
+node scripts/check-docs.js: docs-check: OK
+```
+
+UI Electron thật với provider loopback: tám lượt qua hai vòng desktop1440/mobile390 × light/dark, EN vòng1/VI vòng2. Nút đánh giá lại chỉ gửi cảnh fail/unknown trong selection job; cảnh đã pass và cảnh lỗi ngoài selection không được gửi. Hủy dialog không tạo task/request; xác nhận tạo đúng một task review với image+video request, không tạo lại media hoặc chạy job gốc. Job gốc giữ waiting_input, không tràn ngang/lỗi renderer. Harness cuối đợi trạng thái task thực qua IPC, không suy ra hoàn tất từ event/promise sớm.
+
+Stress nguyên script: round1 980succeeded/20cancelled,7805ms; round2 880succeeded/69lỗi429 fixture chủ đích/51cancelled,14759ms. Mỗi vòng1000task, peak2,4ảnh desktop/mobile × light/dark, không lỗi renderer/tràn ngang, reopen không gửi lại. Test/stress/UI data và screenshots dùng thư mục tạm tự dọn.
+
+MacARM prebuilt app: `/var/folders/l0/vg14kkpx6gq1q2cnfg86476w0000gn/T/mai-studio-qc-artifact-rmjsfbgc/mac-arm64/MaiStudio.app`. Native electron-builder26.8.1/Electron41.5.1, app/package/app.getVersion đều0.2.0-dev.4;63 compiled files trong ASAR khớp dist, codesign deep/strict đạt, khởi động với userData riêng/mockKeychain trả bridge/state0project0task và không lỗi renderer. Artifact được giữ riêng để áp dụng sau, không ghi đè app/installer hoặc dữ liệu đang dùng. Không kiểm native Keychain/Gatekeeper/notarization/Kubuntu runtime. Phát hiện sẵn có ngoài phạm vi: nhãn state.version vẫn hardcode0.2.0-dev.1 trong source trước sửa; ghi nhận riêng, không dùng nhãn đó để kết luận version artifact và không sửa lẫn nhiệm vụ này.
+
+Read-only live cho thấy hai task chờ: auto job ở QC và render job dừng do lời thoại shot1 vượt slot. Bản sửa không tự chỉnh checkpoint/media của hai task đó; speech overflow vẫn bị chặn để không cắt mất lời. Anh đã dặn hoãn cài/restart khi có job nên chưa áp dụng, chưa gửi review/generation thật hoặc tuyên bố video đã đạt. Lượt provider mới cần xác nhận qua thao tác đã hiển thị phí.
+
 ## Shopee page gallery Release 0.2.0-dev.3 — 20/11/2026
 
 **Trạng thái: đã kiểm source cuối và phát hành pre-release; chưa cài trên máy anh.** Capture anh gửi cho92509213/27621749954 có bốn ảnh Muse nhưng Mai chọn một ảnh JSON-LD khác. Regression tái hiện trước sửa; shared reader nay ưu tiên gallery rõ ràng và giữ facts/cache-only. Review phát hiện thêm hai regression ở candidate đầu: hero chung đè bộ structured đầy đủ và gallery placeholder rơi sang ảnh gợi ý. Hai bài kiểm mới RED2/2 trước sửa, GREEN2/2 sau sửa; focused suite cuối23/23, gồm generated bookmarklet chạy trong Chromium desktop1440/mobile390 và parse đúng bốn URL anh cung cấp. Không gọi đó là kiểm DOM Shopee live: không có tab sản phẩm khớp trong Chrome để đọc.

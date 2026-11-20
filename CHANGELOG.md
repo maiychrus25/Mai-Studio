@@ -2,6 +2,13 @@
 
 This file records development changes. No production release is declared by a development checkpoint.
 
+## 0.2.0-dev.4 — development candidate
+
+- Resume automatic quality control with the newest matching explicit image/video/speech assessment, preserving unresolved admission, source identity and quality gates.
+- Keep the current assessment/score for an existing take without counting a resume as another generation.
+- Add a confirmed reassessment action for failed/inconclusive shots within the waiting job's scope, reusing the existing review stage and saved media.
+- Installation and restart remain deferred by the operator; no live task/checkpoint is modified by this source change.
+
 ## 0.2.0-dev.3 — pre-release, 2026-11-20
 
 - Fix page capture choosing one JSON-LD image instead of the full scoped product gallery. Explicit gallery containers take priority over generic hero-image classes; valid structured product images remain a fallback.

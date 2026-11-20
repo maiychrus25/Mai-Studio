@@ -14,7 +14,7 @@ import type { Project, Task, TaskContext, TaskResult } from '../src/shared/studi
 
 const png = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+j04sAAAAASUVORK5CYII=', 'base64');
 const verdict = JSON.stringify(Object.fromEntries(['scene', 'face', 'outfit'].map(key => [key, { status: 'pass', reason: 'Controlled provider observation' }])));
-type ReviewPort = { executeReview(task: Task, project: Project, context: TaskContext): Promise<TaskResult>; offline: OfflineAsr };
+type ReviewPort = { executeReview(task: Task, project: Project, context: TaskContext, reuseCurrent?: boolean): Promise<TaskResult>; offline: OfflineAsr };
 async function fixture(handler: http.RequestListener, run: (studio: StudioService, base: string) => Promise<void>) {
   const root = mkdtempSync(join(tmpdir(), 'mai-review-')); const studio = new StudioService(root), server = http.createServer(handler);
   await new Promise<void>(resolve => server.listen(0, '127.0.0.1', resolve));
@@ -46,7 +46,7 @@ test('frame review retains the visual scene description when the clip has a sepa
   await fixture(async (req, res) => { for await (const chunk of req) body += chunk; reply(res); }, async (studio, base) => {
     await studio.invoke('settings.save', { providers: { text: { baseUrl: base } } }); const frame = await photo(studio, 'lake');
     const p = studio.store.saveProject({ name: 'Camera', kind: 'film', data: { shots: [{ id: 'one', prompt: 'A red boat beside a quiet lake', videoPrompt: 'Slow camera push', assetId: frame.id, duration: 1 }] } });
-    await review(studio, p); assert.ok(body.includes('A red boat beside a quiet lake'));
+    await review(studio, p); assert.ok(body.includes('A red boat beside a quiet lake')); assert.ok(body.includes('planned product/hand/foot inserts'));
   });
 });
 
@@ -168,5 +168,47 @@ test('aborting native embedding removes the cropped WAV and never commits a comp
     t.mock.method(offline, 'embed', async (path: string) => { paths.push(path); abort.abort(); abort.signal.throwIfAborted(); return []; });
     await assert.rejects(review(studio, p, taskFor(studio, p), abort.signal), /abort/i);
     assert.equal(paths.length, 1); assert.ok(paths.every(path => !existsSync(path))); assert.equal(studio.store.project(p.id).data.qualityReviews, undefined);
+  });
+});
+
+
+test('automatic review resume keeps a fresh matching transcript instead of replaying a stale ASR response', async () => {
+  let calls = 0;
+  await fixture(async (req, res) => {
+    for await (const _chunk of req) {} calls++;
+    res.setHeader('Content-Type', 'application/json'); res.end(JSON.stringify({ text: calls === 1 ? 'Wrong words' : 'Hello' }));
+  }, async (studio, base) => {
+    await studio.invoke('settings.save', { providers: { asr: { baseUrl: base, model: 'custom-asr' } } });
+    const video = await clip(studio, 'current-speech');
+    const p = studio.store.saveProject({ name: 'Speech resume', kind: 'film', data: { nativeAudio: true, shots: [{ id: 'one', prompt: 'Lake', duration: 3.5, videoAssetId: video.id, dialogue: 'Hello' }] } });
+    const original = taskFor(studio, p);
+    await review(studio, p, original);
+    await review(studio, p);
+    assert.equal(calls, 2);
+    await (studio as unknown as ReviewPort).executeReview(studio.store.task(original.id), studio.store.project(p.id), { signal: AbortSignal.timeout(20000), progress() {}, checkpoint() {} }, true);
+    assert.equal(calls, 2, 'adopting the newer transcript must not submit ASR again');
+    const speech = (studio.store.project(p.id).data.qualityReviews as any)[`${p.id}/one`].speech;
+    assert.equal(speech.heard, 'Hello'); assert.equal(speech.status, 'pass');
+  });
+});
+
+
+test('a completed newer checkpoint wins over an older project review after a crash before commit', async () => {
+  let calls = 0;
+  await fixture(async (req, res) => {
+    for await (const _chunk of req) {} calls++;
+    const checks = JSON.parse(verdict); if (calls === 1) checks.scene.status = 'unknown';
+    res.setHeader('Content-Type', 'application/json'); res.end(JSON.stringify({ choices: [{ message: { content: JSON.stringify(checks) } }] }));
+  }, async (studio, base) => {
+    await studio.invoke('settings.save', { providers: { text: { baseUrl: base } } });
+    const p = await generatedFrame(studio); await review(studio, p);
+    const task = taskFor(studio, p), key = `${p.id}/one`;
+    await assert.rejects((studio as unknown as ReviewPort).executeReview(task, p, { signal: AbortSignal.timeout(20000), progress() {}, checkpoint(value) {
+      studio.store.updateTask(task.id, { checkpoint: { ...studio.store.task(task.id).checkpoint, ...value } });
+      if ((value.reviews as any)?.[key]?.image?.response) throw new Error('Simulated crash after response checkpoint');
+    } }), /Simulated crash/);
+    assert.equal((studio.store.project(p.id).data.qualityReviews as any)[key].image.status, 'unknown');
+    await (studio as unknown as ReviewPort).executeReview(studio.store.task(task.id), studio.store.project(p.id), { signal: AbortSignal.timeout(20000), progress() {}, checkpoint() {} }, true);
+    assert.equal(calls, 2); assert.equal((studio.store.project(p.id).data.qualityReviews as any)[key].image.status, 'pass');
   });
 });

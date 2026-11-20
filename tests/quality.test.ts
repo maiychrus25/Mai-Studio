@@ -144,6 +144,93 @@ test('exhausted repair keeps the better assessed take and retry does not purchas
   });
 });
 
+test('resuming quality control uses a fresh explicit review without replaying its old verdict or buying another generation', async t => {
+  for (const kind of ['image', 'video']) await fixture(async (studio, paths, requests, decide) => {
+    decide(() => videoVerdict(kind === 'video' ? 'unknown' : 'pass'), () => ({ ...imageVerdict, scene: { status: kind === 'image' ? 'unknown' : 'pass', reason: 'Initial evidence is inconclusive' } }));
+    const { p, videos } = await project(studio, paths.slice(0, 1), { autoChecks: true, qualityRetries: 1 }); let generations = 0;
+    t.mock.method(studio as unknown as Port, 'generate', async () => { generations++; return { outputIds: [videos[0].id] }; });
+    const task = await studio.invoke<Task>('studio.run', { projectId: p.id });
+    assert.equal((await finish(studio, task)).status, 'waiting_input'); assert.equal(generations, 1);
+    decide(() => videoVerdict(), () => imageVerdict);
+    const review = await studio.invoke<Task>('studio.run', { projectId: p.id, stage: 'check', shotIds: ['one'] });
+    assert.equal((await finish(studio, review)).status, 'succeeded');
+    assert.equal((studio.store.project(p.id).data.qualityReviews as any)[`${p.id}/one`][kind].status, 'pass');
+    const count = requests.length;
+    await studio.invoke('task.action', { action: 'resume', ids: [task.id] });
+    const done = await finish(studio, task);
+    assert.equal(done.status, 'succeeded', done.error); assert.equal(generations, 1);
+    assert.equal(requests.length, count, 'resume must reuse the separately completed review, not call vision again');
+    assert.equal((studio.store.project(p.id).data.qualityReviews as any)[`${p.id}/one`][kind].status, 'pass');
+    assert.ok(done.outputIds.length);
+  });
+});
+
+test('a new unknown review still pauses on resume without silently passing or buying another review', async t => {
+  await fixture(async (studio, paths, requests, decide) => {
+    decide(() => videoVerdict('unknown'));
+    const { p, videos } = await project(studio, paths.slice(0, 1), { autoChecks: true, qualityRetries: 1 });
+    t.mock.method(studio as unknown as Port, 'generate', async () => ({ outputIds: [videos[0].id] }));
+    const task = await studio.invoke<Task>('studio.run', { projectId: p.id });
+    assert.equal((await finish(studio, task)).status, 'waiting_input');
+    assert.equal((await finish(studio, await studio.invoke<Task>('studio.run', { projectId: p.id, stage: 'check' }))).status, 'succeeded');
+    const count = requests.length;
+    await studio.invoke('task.action', { action: 'resume', ids: [task.id] });
+    assert.equal((await finish(studio, task)).status, 'waiting_input'); assert.equal(requests.length, count);
+    assert.equal((studio.store.project(p.id).data.qualityReviews as any)[`${p.id}/one`].video.status, 'unknown');
+  });
+});
+
+test('a fresh failing review updates the existing take instead of restoring its older unknown assessment', async t => {
+  await fixture(async (studio, paths, requests, decide) => {
+    decide(() => videoVerdict('unknown'));
+    const { p, videos } = await project(studio, paths.slice(0, 1), { autoChecks: true, qualityRetries: 0 });
+    t.mock.method(studio as unknown as Port, 'generate', async () => ({ outputIds: [videos[0].id] }));
+    const task = await studio.invoke<Task>('studio.run', { projectId: p.id }); assert.equal((await finish(studio, task)).status, 'waiting_input');
+    decide(() => videoVerdict('fail'));
+    assert.equal((await finish(studio, await studio.invoke<Task>('studio.run', { projectId: p.id, stage: 'check' }))).status, 'succeeded');
+    const count = requests.length; await studio.invoke('task.action', { action: 'resume', ids: [task.id] });
+    assert.equal((await finish(studio, task)).status, 'waiting_input'); assert.equal(requests.length, count);
+    const data = studio.store.project(p.id).data as any, key = `${p.id}/one`;
+    assert.equal(data.qualityReviews[key].video.status, 'fail'); assert.equal(data.production.qualityTakes[key].length, 1);
+    assert.equal(data.production.qualityTakes[key][0].review.video.status, 'fail');
+  });
+});
+
+test('best-take restoration cannot hide a new failure of an image shared by two video takes', async t => {
+  await fixture(async (studio, paths, requests, decide) => {
+    let reassess = false;
+    decide(index => index === 1 ? { ...videoVerdict('fail'), action: { status: 'unknown', reason: 'Less conclusive second take' } } : videoVerdict('fail'), () => ({ ...imageVerdict, scene: { status: reassess ? 'fail' : 'pass', reason: reassess ? 'The shared frame fails its planned action' : 'Initial frame assessment' } }));
+    const { p, videos } = await project(studio, paths.slice(0, 2), { autoChecks: true, qualityRetries: 1 }); let generations = 0;
+    t.mock.method(studio as unknown as Port, 'generate', async () => ({ outputIds: [videos[generations++].id] }));
+    const task = await studio.invoke<Task>('studio.run', { projectId: p.id }); assert.equal((await finish(studio, task)).status, 'waiting_input');
+    reassess = true;
+    assert.equal((await finish(studio, await studio.invoke<Task>('studio.run', { projectId: p.id, stage: 'check' }))).status, 'succeeded');
+    const count = requests.length, key = `${p.id}/one`;
+    for (const action of ['resume', 'retry']) {
+      await studio.invoke('task.action', { action, ids: [task.id] }); assert.equal((await finish(studio, task)).status, 'waiting_input');
+      const data = studio.store.project(p.id).data as any;
+      assert.equal(data.qualityReviews[key].image.status, 'fail');
+      assert.equal(data.production.qualityTakes[key].length, 2);
+      assert.ok(data.production.qualityTakes[key].every((take: any) => take.review.image.status === 'fail'));
+      assert.equal(generations, 2); assert.equal(requests.length, count);
+    }
+  });
+});
+
+test('resume never adopts an assessment attached to another asset even when its fingerprint is copied', async t => {
+  await fixture(async (studio, paths, requests, decide) => {
+    decide(() => videoVerdict('unknown'));
+    const { p, videos } = await project(studio, paths.slice(0, 2), { autoChecks: true, qualityRetries: 0 });
+    t.mock.method(studio as unknown as Port, 'generate', async () => ({ outputIds: [videos[0].id] }));
+    const task = await studio.invoke<Task>('studio.run', { projectId: p.id }); assert.equal((await finish(studio, task)).status, 'waiting_input');
+    const current = studio.store.project(p.id), key = `${p.id}/one`, reviews = current.data.qualityReviews as any;
+    studio.store.saveProject({ ...current, data: { ...current.data, qualityReviews: { ...reviews, [key]: { ...reviews[key], video: { ...reviews[key].video, assetId: videos[1].id, status: 'pass', checks: videoVerdict() } } } } });
+    const count = requests.length; await studio.invoke('task.action', { action: 'resume', ids: [task.id] });
+    assert.equal((await finish(studio, task)).status, 'waiting_input'); assert.equal(requests.length, count);
+    assert.equal((studio.store.project(p.id).data.qualityReviews as any)[key].video.status, 'unknown');
+  });
+});
+
 test('unknown evidence pauses before automatic repairs and explicit source videos are never replaced', async t => {
   for (const status of ['unknown', 'fail']) await fixture(async (studio, paths, _requests, decide) => {
     decide(() => videoVerdict(status)); const { p, videos } = await project(studio, paths.slice(0, 1), { autoChecks: true, qualityRetries: 2 });

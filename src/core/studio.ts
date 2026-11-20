@@ -1329,7 +1329,7 @@ export class StudioService extends EventEmitter {
       let checkpoint = object(rounds[round] ?? (round === 0 ? task.checkpoint.quality ?? {} : { reviews: structuredClone(object(object(rounds[round - 1] ?? {}).reviews ?? {})) }));
       await this.executeReview({ ...task, input: { ...task.input, stage: 'check' }, checkpoint }, this.store.project(project.id), { ...context,
         checkpoint: value => { checkpoint = { ...checkpoint, ...value }; rounds[round] = checkpoint; save(); },
-      });
+      }, true);
       const latest = this.store.project(project.id), production = { ...object(latest.data.production ?? {}) }, reviews = object(latest.data.qualityReviews ?? {});
       const history = { ...object(production.qualityTakes ?? {}) }, imageIds: string[] = [], videoIds: string[] = [], feedback: Record<string, string> = {};
       let unknown = false, failures = 0;
@@ -1342,7 +1342,16 @@ export class StudioService extends EventEmitter {
         const failed = required.filter(key => object(review[key] ?? {}).status === 'fail'); failures += failed.length;
         const takes = Array.isArray(history[base]) ? history[base] as Array<Record<string, unknown>> : [];
         const imageId = object(production.images ?? {})[base], videoId = object(production.videos ?? {})[base];
-        if (!takes.some(take => take.taskId === task.id && take.imageId === imageId && take.videoId === videoId && take.imageFingerprint === object(production.fingerprints ?? {})[`${base}/image`] && take.videoFingerprint === object(production.fingerprints ?? {})[step.id])) takes.push({ taskId: task.id, round, imageId, videoId, score: reviewScore(review), review,
+        const currentTake = takes.find(take => take.taskId === task.id && take.imageId === imageId && take.videoId === videoId && take.imageFingerprint === object(production.fingerprints ?? {})[`${base}/image`] && take.videoFingerprint === object(production.fingerprints ?? {})[step.id]);
+        for (const take of takes) {
+          const assessed = { ...object(take.review ?? {}) };
+          for (const kind of ['image', 'video', 'speech']) {
+            const previous = object(assessed[kind] ?? {}), current = object(review[kind] ?? {});
+            if (current.assetId && current.assetId === previous.assetId && current.fingerprint === previous.fingerprint && Number(current.at) >= Number(previous.at)) assessed[kind] = current;
+          }
+          take.review = assessed; take.score = reviewScore(assessed);
+        }
+        if (!currentTake) takes.push({ taskId: task.id, round, imageId, videoId, score: reviewScore(review), review,
           imageFingerprint: object(production.fingerprints ?? {})[`${base}/image`], videoFingerprint: object(production.fingerprints ?? {})[step.id], at: Date.now() });
         history[base] = takes.slice(-12);
         if (failed.length) {
@@ -1377,7 +1386,7 @@ export class StudioService extends EventEmitter {
     }
   }
 
-  private async executeReview(task: Task, project: Project, context: TaskContext): Promise<TaskResult> {
+  private async executeReview(task: Task, project: Project, context: TaskContext, reuseCurrent = false): Promise<TaskResult> {
     const dubbing = affiliateDubbing(project);
     if (dubbing) project = await this.prepareAffiliateDubs(task, project, context);
     const initialHash = this.contentFingerprint(project.data);
@@ -1422,7 +1431,7 @@ export class StudioService extends EventEmitter {
         const refs = frame ? [...new Set([frame, ...(imageStep?.refIds ?? castReferences.get(base) ?? []), ...(!imageStep ? productRefs : [])].filter(id => this.store.asset(id).mime.startsWith('image/')))] : [];
         const visualPlan = imageStep?.prompt || visualPlans.get(base) || step.prompt;
         const productCheck = affiliate ? ` Product identity is REQUIRED: compare the generated product against supplied product images for shape, material, pattern, selected color, packaging and supported use. No invented logo, garment, feature or SKU. Return unknown if product evidence is insufficient. Image roles after the generated scene: ${JSON.stringify(refs.slice(1).map((id, index) => ({ image: index + 2, role: id === affiliate.backgroundAssetId ? 'background' : productRefs.includes(id) || affiliate.outfitAssetIds.includes(id) ? 'product' : 'character' })))}. Add "product":{"status":"pass|fail|unknown","reason":"visible evidence or missing source"} to the JSON. Expected host mode: ${affiliate.hostMode}; content style: ${affiliate.contentStyle}. Reject an unexpected talking/visible host or face for hands-only/voiceover shots.` : '';
-        const prompt = frame ? text(`Review these actual images against the supplied visual plan. Image 1 is the generated scene; subsequent images are ${affiliate ? 'labelled product, character or background references' : 'character references'}. Compare scene composition, character face identity and outfit. Do not invent successful checks. If references are insufficient return unknown; if no people are involved mark face/outfit not_applicable. Return ONLY JSON: {"scene":{"status":"pass|fail|unknown","reason":"..."},"face":{"status":"pass|fail|unknown|not_applicable","reason":"..."},"outfit":{"status":"pass|fail|unknown|not_applicable","reason":"..."}}.${productCheck} Visual plan: ${visualPlan}. Cast: ${JSON.stringify(characters.filter(character => character.assetId && refs.includes(character.assetId)).map(({ name, description }) => ({ name, description })))}`, 'Review prompt', 32768) : '';
+        const prompt = frame ? text(`Review these actual images against the supplied visual plan. Image 1 is the generated scene; subsequent images are ${affiliate ? 'labelled product, character or background references' : 'character references'}. Compare scene composition, character face identity and outfit. Do not invent successful checks. If references are insufficient return unknown; if no people are involved mark face/outfit not_applicable. For planned product/hand/foot inserts with no recognizable face, including an intentionally cropped chin or mouth, mark face not_applicable and explain the planned framing. Still assess any recognizable face that is visible; unplanned cropping of a required face is not exempt. Never waive scene, outfit or product checks for a close-up. Return ONLY JSON: {"scene":{"status":"pass|fail|unknown","reason":"..."},"face":{"status":"pass|fail|unknown|not_applicable","reason":"..."},"outfit":{"status":"pass|fail|unknown|not_applicable","reason":"..."}}.${productCheck} Visual plan: ${visualPlan}. Cast: ${JSON.stringify(characters.filter(character => character.assetId && refs.includes(character.assetId)).map(({ name, description }) => ({ name, description })))}`, 'Review prompt', 32768) : '';
         const dub = object(object(production.affiliateDubs ?? {})[base] ?? {}), speechVideo = dubbing ? dub.assetId : video;
         return { base, step, frame, video, speechVideo: typeof speechVideo === 'string' ? speechVideo : undefined, stale: stale || !!dubbing && (dub.videoId !== video || dub.speechId !== (step.dialogue ? object(production.speech ?? {})[base] : undefined)), refs, prompt, visualPlan, imageHash: hash({ frame, prompt, refs, provider: this.store.settings().providers.text }),
           affiliate: !!affiliate, audioRequired: affiliate?.contentStyle === 'asmr', videoHash: hash({ version: affiliate ? 2 : 1, video, frame, visualPlan, prompt: step.prompt, duration: step.duration, nativeAudio: data.nativeAudio, pace: data.pace, fps: data.fps, provider: this.store.settings().providers.text }),
@@ -1441,12 +1450,21 @@ export class StudioService extends EventEmitter {
     const states = object(task.checkpoint.reviews ?? {});
     const stateFor = (base: string, kind: string, fingerprint: string): Record<string, unknown> => {
       const state = object(object(states[base] ?? {})[kind] ?? {});
-      if (state.fingerprint === fingerprint) return state;
-      if (state.remoteSubmitted === true && typeof state.response !== 'string' && state.resolved !== true) throw new NeedsInputError('Input review đã đổi nhưng remote cũ chưa rõ kết quả; cần đối soát trước khi gửi lại');
-      return {};
+      if (state.fingerprint !== fingerprint && state.remoteSubmitted === true && typeof state.response !== 'string' && state.resolved !== true) throw new NeedsInputError('Input review đã đổi nhưng remote cũ chưa rõ kết quả; cần đối soát trước khi gửi lại');
+      // An explicit fresh review supersedes a completed checkpoint, never an unresolved remote request.
+      if (reuseCurrent && !hasPendingAdmission(state)) {
+        const review = object(object(object(this.store.project(project.id).data.qualityReviews ?? {})[base] ?? {})[kind] ?? {});
+        const target = targets.find(value => value.base === base)!;
+        const assetId = kind === 'image' ? target.frame : kind === 'video' ? target.video : target.speechVideo;
+        if (review.fingerprint === fingerprint && review.assetId === assetId && typeof review.taskId === 'string' && review.taskId !== task.id && typeof review.at === 'number' && review.at > Number(state.responseAt ?? task.createdAt)) {
+          if (kind === 'speech' && review.semantic === 'assessed' && typeof review.heard === 'string') return { fingerprint, response: review.heard, resolved: true, responseAt: review.at, sourceTaskId: review.taskId };
+          if (kind !== 'speech' && review.modelAssessed === true && (kind !== 'video' || Array.isArray(review.frameIds) && review.frameIds.length === VIDEO_REVIEW_FRAMES && Array.isArray(review.sampleTimes) && review.sampleTimes.length === VIDEO_REVIEW_FRAMES)) return { fingerprint, response: JSON.stringify(review.checks), frameIds: review.frameIds, sampleTimes: review.sampleTimes, responseAt: review.at, sourceTaskId: review.taskId };
+        }
+      }
+      return state.fingerprint === fingerprint ? state : {};
     };
     const checkpoint = (base: string, kind: string, fingerprint: string, value: Record<string, unknown>): void => {
-      const saved = object(states[base] ?? {}); saved[kind] = { ...stateFor(base, kind, fingerprint), ...value, fingerprint }; states[base] = saved; context.checkpoint({ reviews: states });
+      const saved = object(states[base] ?? {}); saved[kind] = { ...stateFor(base, kind, fingerprint), ...value, fingerprint, ...(typeof value.response === 'string' ? { responseAt: Date.now(), sourceTaskId: task.id } : {}) }; states[base] = saved; context.checkpoint({ reviews: states });
     };
     const analyses = new Map<string, Awaited<ReturnType<typeof analyzeSpeech>>>();
     const audioPresent = new Map<string, boolean>();
@@ -1525,7 +1543,7 @@ export class StudioService extends EventEmitter {
         const checks: Record<string, { status: string; reason: string }> = {};
         for (const kind of ['scene', 'face', 'outfit', ...(target.affiliate ? ['product'] : [])]) { const value = object(parsed[kind]); if (!(kind === 'product' ? ['pass', 'fail', 'unknown'] : ['pass', 'fail', 'unknown', 'not_applicable']).includes(String(value.status))) throw new Error('Invalid image review status'); checks[kind] = { status: String(value.status), reason: text(value.reason, 'Review reason', 4000) }; }
         const status = Object.values(checks).some(value => value.status === 'fail') ? 'fail' : Object.values(checks).some(value => value.status === 'unknown') || checks.scene.status === 'not_applicable' ? 'unknown' : 'pass';
-        patch.image = { status, checks, modelAssessed: true, assetId: frame, fingerprint: target.imageHash, at: Date.now() }; if (status === 'fail') failed++; outputIds.push(frame);
+        patch.image = { status, checks, modelAssessed: true, assetId: frame, fingerprint: target.imageHash, taskId: state.sourceTaskId ?? task.id, at: state.responseAt ?? Date.now() }; if (status === 'fail') failed++; outputIds.push(frame);
       }
       if (video && project.data.videoReview === true && project.data.renderMode !== 'slideshow') {
         const state = stateFor(base, 'video', target.videoHash); let response = typeof state.response === 'string' ? state.response : '';
@@ -1559,15 +1577,15 @@ export class StudioService extends EventEmitter {
         }
         assertCurrent(); const assessment = parseVideoReview(response);
         if (target.affiliate && assessment.checks.identity.status === 'not_applicable') { assessment.checks.identity.status = 'unknown'; assessment.checks.identity.reason = 'Affiliate cần đối chiếu sản phẩm với ảnh cảnh; chưa có đánh giá danh tính sản phẩm'; assessment.status = 'unknown'; }
-        patch.video = { ...assessment, assetId: video, frameIds, sampleTimes, fingerprint: target.videoHash, modelAssessed: true, coverage: 'four_sampled_frames', at: Date.now() };
+        patch.video = { ...assessment, assetId: video, frameIds, sampleTimes, fingerprint: target.videoHash, modelAssessed: true, coverage: 'four_sampled_frames', taskId: state.sourceTaskId ?? task.id, at: state.responseAt ?? Date.now() };
         if (assessment.status === 'fail') failed++; outputIds.push(video);
       }
       if (video && (project.data.nativeAudio === true || dubbing)) {
-        const acoustic = analyses.get(base)!; let heard = '', semantic = 'unknown';
+        const acoustic = analyses.get(base)!; let heard = '', semantic = 'unknown', reviewedAt = Date.now(), reviewTaskId = task.id;
         if (step.dialogue || acoustic.voiced > 0) {
           if (this.store.settings().providers.asr.baseUrl) {
             const state = stateFor(base, 'speech', target.speechHash);
-            if (state.resolved === true && typeof state.response === 'string') heard = state.response;
+            if (state.resolved === true && typeof state.response === 'string') { heard = state.response; reviewedAt = Number(state.responseAt) || reviewedAt; reviewTaskId = typeof state.sourceTaskId === 'string' ? state.sourceTaskId : task.id; }
             else {
               if (state.remoteSubmitted === true) throw new NeedsInputError('Yêu cầu ASR đã gửi; đối soát trước khi gửi lại');
               checkpoint(base, 'speech', target.speechHash, { remoteSubmitted: true });
@@ -1581,7 +1599,7 @@ export class StudioService extends EventEmitter {
           }
         }
         assertCurrent(); const transcript = step.dialogue && semantic === 'assessed' ? compareTranscripts(step.dialogue, heard) : undefined;
-        const speech = applyIdentity({ assetId: target.speechVideo, heard, expected: step.dialogue || '', transcript, semantic, acoustic, fingerprint: target.speechHash, at: Date.now() }, target);
+        const speech = applyIdentity({ assetId: target.speechVideo, heard, expected: step.dialogue || '', transcript, semantic, acoustic, fingerprint: target.speechHash, taskId: reviewTaskId, at: reviewedAt }, target);
         patch.speech = speech; if (speech.status === 'fail') failed++; outputIds.push(video);
       }
       patches.set(base, patch); save(); context.progress(0.4 + (index + 1) / Math.max(1, chosen.length) * 0.6, `Đã kiểm tra ${index + 1}/${chosen.length} shot; ${failed} kết quả chưa đạt`);

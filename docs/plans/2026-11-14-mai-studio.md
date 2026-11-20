@@ -261,3 +261,14 @@ Publication evidence: https://github.com/maiychrus25/Mai-Studio/releases/tag/v0.
 Risk: scoped gallery selectors can differ from the live Shopee layout. The supplied JSON proves the old priority bug, not the actual current DOM. No matching product tab was available for read-only inspection; controlled DOM evidence must not be presented as a live extraction. Rollback is a scoped Git revert in dev, preserving previous release tags and user data; no installed application or profile is replaced by this source change.
 
 Publication evidence: release452130111 at2026-11-20T00:53:22Z, all7native CI jobs success, nine installer digests and checksum manifest matched before/after public, page200 and ARM64 DEB Range206/header valid. Local415/415, focused23/23, both1000-task stress rounds and eight help-dialog viewport/theme checks passed; supplied Muse capture imported4/4real CDN JPEGs. PR#1 merged with identical application tree. Operator explicitly deferred installation while running a job: no install/restart/task mutation. Remaining live DOM/Kubuntu runtime limits are retained in acceptance.md.
+
+## Resume after a fresh quality review — 20/11/2026
+
+Status: DEV VERIFIED422/422; PREBUILT MAC ARTIFACT READY; DO NOT INSTALL/RESTART THE OPERATOR APP WITHOUT REVOKING THE DEFERRAL.
+Scope: StudioService review checkpoint reconciliation, existing ProjectActivity controls, quality/review regression tests and documentation. The new explicit review task must override completed stale responses only for identical current assets/fingerprints; pending remote admission, fail/unknown gates, source media, repair limits and output preservation remain intact. Reuse stage=check and confirmation; no new dependency/IPC or speculative manual-pass override.
+
+- [x] Reproduce unknown checkpoint replay after a fresh successful review; add positive image/video/ASR and negative unknown/foreign-asset/failing-take cases.
+- [x] Verify scoped reassessment/confirmation in the real isolated UI on desktop/mobile and light/dark, review the diff, run build/full test/lint/docs and two stress rounds.
+- [x] Prepare a prebuilt Mac artifact and record checks; preserve the running user's app/data. Applying the fix still requires revoking the explicit installation/restart deferral.
+
+Rollback: revert only this development commit; preserve the existing app, project media and all paid-job admission checkpoints. Model reassessment may remain unknown/fail and is never a quality guarantee.
