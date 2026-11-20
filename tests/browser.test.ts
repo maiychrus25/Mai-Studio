@@ -40,7 +40,7 @@ const png = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR
 async function textFixture(run: (fixture: {
   store: Store; browsers: BrowserManager; task: Task; context: TaskContext; controller: AbortController;
   submitted: string[]; checkpoints: Record<string, unknown>[]; stopped: () => number; disconnected: () => number;
-}) => Promise<void>, options: { stream?: boolean; missing?: boolean; error?: boolean; oversize?: boolean; budget?: boolean; noBusy?: boolean; delayedReply?: boolean; emptyComposer?: boolean; liveComposer?: boolean; lazySubmit?: boolean; delayedComposer?: boolean } = {}) {
+}) => Promise<void>, options: { stream?: boolean; missing?: boolean; error?: boolean; oversize?: boolean; budget?: boolean; noBusy?: boolean; delayedReply?: boolean; emptyComposer?: boolean; liveComposer?: boolean; lazySubmit?: boolean; delayedComposer?: boolean; virtualizedReply?: boolean } = {}) {
   const submitted: string[] = []; let stops = 0; let disconnected = 0; let threadReply = ''; let threadBusy = false;
   const server = createServer((req, res) => {
     if (req.url === '/submit') {
@@ -54,9 +54,10 @@ async function textFixture(run: (fixture: {
     if (req.url === '/stream') { res.writeHead(200, { 'content-type': 'text/plain' }); res.write('partial'); res.on('close', () => { disconnected++; }); return; }
     res.setHeader('content-type', 'text/html; charset=utf-8');
     res.end(`<main data-hatch-composer-root><textarea id="prompt"></textarea><input type="file" multiple><span data-hatch-composer-action-slot><button id="send">Send</button></span><button id="stop" data-testid="hatch-composer-stop-button" hidden>Stop</button>
-      <section id="replies"><article class="reply" data-message-item data-message-role="assistant">OLD PLAN</article></section></main><script>
+      ${options.virtualizedReply ? '<article data-message-item data-message-role="user" data-message-id="old-user">Earlier prompt</article>' : ''}
+      <section id="replies"><article class="reply" data-message-item data-message-role="assistant" ${options.virtualizedReply ? 'data-message-id="old-reply"' : ''}>OLD PLAN</article></section></main><script>
       const send = document.querySelector('#send'), stop = document.querySelector('#stop'), replies = document.querySelector('#replies');
-      const old = ${JSON.stringify(threadReply)}; if (old) { const reply = document.createElement('article'); reply.className = 'reply'; reply.textContent = old; replies.append(reply); }
+      const old = ${JSON.stringify(threadReply)}; if (old) { const reply = document.createElement('article'); reply.className = 'reply'; reply.setAttribute('data-message-id', 'new-reply'); reply.textContent = old; replies.append(reply); }
       stop.hidden = ${!threadBusy}; send.disabled = ${threadBusy};
       if (${!!(options.liveComposer || options.lazySubmit)}) { send.hidden = true; document.querySelector('#prompt').oninput = event => { send.hidden = !event.target.value.trim(); }; }
       document.cookie = 'profile=shared; SameSite=Lax';
@@ -68,7 +69,9 @@ async function textFixture(run: (fixture: {
         history.replaceState({}, '', '/thread/plan');
         if (${!!options.error}) { replies.innerHTML += '<div data-testid="assistant-response-error-notice">Provider refused</div>'; stop.hidden = true; send.disabled = false; return; }
         if (${!!options.delayedReply}) await new Promise(resolve=>setTimeout(resolve, 1800));
-        const reply = document.createElement('article'); reply.className = 'reply'; reply.setAttribute('data-message-item', ''); reply.setAttribute('data-message-role', 'assistant'); replies.append(reply); reply.textContent = 'PARTIAL';
+        const reply = document.createElement('article'); reply.className = 'reply'; reply.setAttribute('data-message-item', ''); reply.setAttribute('data-message-role', 'assistant'); reply.setAttribute('data-message-id', 'new-reply');
+        if (${!!options.virtualizedReply}) { replies.replaceChildren(); const user = document.createElement('article'); user.setAttribute('data-message-item', ''); user.setAttribute('data-message-role', 'user'); user.setAttribute('data-message-id', 'new-user'); user.textContent = document.querySelector('#prompt').value; replies.append(user); }
+        replies.append(reply); reply.textContent = 'PARTIAL';
         if (${!!options.stream}) { window.streamController = new AbortController(); fetch('/stream',{signal:window.streamController.signal}).then(r=>r.text()).catch(()=>{}); return; }
         setTimeout(() => { reply.textContent = ${options.oversize ? "'界'.repeat(180000)" : options.budget ? "'x'.repeat(480000)" : "'新计划 — FINAL PLAN'"}; }, 1400);
         setTimeout(() => { fetch('/complete', { method: 'POST', body: reply.textContent }); stop.hidden = true; send.disabled = ${!!options.emptyComposer}; if (${!!options.emptyComposer}) document.querySelector('#prompt').value = ''; }, 2600);
@@ -108,6 +111,30 @@ test('cold text planning waits for the logged-in composer to hydrate before admi
     assert.equal(await browsers.completeText(task, context), '新计划 — FINAL PLAN');
     assert.equal(submitted.length, 1);
   }, { delayedComposer: true });
+});
+
+test('text review identifies its new reply when virtualization keeps the assistant count unchanged', async () => {
+  await textFixture(async ({ store, browsers, task, context, submitted }) => {
+    assert.equal(await browsers.completeText(task, context), '新计划 — FINAL PLAN');
+    assert.equal(submitted.length, 1);
+    delete task.checkpoint.textResult;
+    await (await browsers.open(store.account(task.accountId))).pages()[0].reload();
+    assert.equal(await browsers.completeText(task, context), '新计划 — FINAL PLAN');
+    assert.equal(submitted.length, 1, 'resume must bind the saved reply without resubmission');
+  }, { virtualizedReply: true });
+});
+
+test('text review cannot adopt remounted history with a novel ID as its accepted reply', async () => {
+  await textFixture(async ({ store, browsers, task, context, submitted }) => {
+    const page = (await browsers.open(store.account(task.accountId))).pages()[0];
+    await page.evaluate(() => {
+      document.querySelector('#replies')!.innerHTML = '<article data-message-item data-message-role="user" data-message-id="old-user-a">Earlier</article><article class="reply" data-message-item data-message-role="assistant" data-message-id="old-a">OLD SUCCESSFUL REVIEW</article><article data-message-item data-message-role="user" data-message-id="old-user-b">Later</article><article class="reply" data-message-item data-message-role="assistant" data-message-id="old-b">OLD PLAN</article>';
+    });
+    task.input.timeoutMs = 3000;
+    task.checkpoint = { remoteSubmitted: true, threadUrl: page.url(), beforeReplyCount: 2, beforeReplyIds: ['old-b', 'old-c'], beforeUserId: 'old-user-b', textCompleted: true };
+    await assert.rejects(browsers.completeText(task, context), NeedsInputError);
+    assert.equal(task.checkpoint.textResult, undefined); assert.equal(submitted.length, 0);
+  }, { virtualizedReply: true });
 });
 
 for (const kind of ['plan', 'image'] as const) test(`cancelling ${kind} during composer hydration prevents remote admission`, async () => {

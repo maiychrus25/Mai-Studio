@@ -264,11 +264,17 @@ Publication evidence: release452130111 at2026-11-20T00:53:22Z, all7native CI job
 
 ## Resume after a fresh quality review — 20/11/2026
 
-Status: DEV VERIFIED422/422; PREBUILT MAC ARTIFACT READY; DO NOT INSTALL/RESTART THE OPERATOR APP WITHOUT REVOKING THE DEFERRAL.
+Status: DEV VERIFIED426/426; APPROVED NATIVE ARTIFACT REPLACEMENT IN PROGRESS. Operator explicitly approved installing/restarting and continuing the existing job; previous deferral is revoked.
 Scope: StudioService review checkpoint reconciliation, existing ProjectActivity controls, quality/review regression tests and documentation. The new explicit review task must override completed stale responses only for identical current assets/fingerprints; pending remote admission, fail/unknown gates, source media, repair limits and output preservation remain intact. Reuse stage=check and confirmation; no new dependency/IPC or speculative manual-pass override.
 
 - [x] Reproduce unknown checkpoint replay after a fresh successful review; add positive image/video/ASR and negative unknown/foreign-asset/failing-take cases.
 - [x] Verify scoped reassessment/confirmation in the real isolated UI on desktop/mobile and light/dark, review the diff, run build/full test/lint/docs and two stress rounds.
-- [x] Prepare a prebuilt Mac artifact and record checks; preserve the running user's app/data. Applying the fix still requires revoking the explicit installation/restart deferral.
+- [x] Prepare and install a prebuilt Mac artifact after approved restart; preserve two accounts, nine generated images, nine clips and all original tasks/assets.
 
 Rollback: revert only this development commit; preserve the existing app, project media and all paid-job admission checkpoints. Model reassessment may remain unknown/fail and is never a quality guarantee.
+
+Review follow-up: preserve new current-take verdict after review-prompt changes and exclude historical take assessments from a different policyFingerprint. New legacy-policy regression RED→GREEN;32 focused cases pass. Repeat full suite and rebuild/recheck artifact before installing the approved update. Keep old job/media and the two-repair limit; no silent unknown/fail pass.
+
+Final checkpoint review: full424/424, build/lint/docs and two1000-task desktop/mobile light/dark stress rounds passed. Best-take restoration also carries completed per-category review responses forward to avoid buying the same assessment on another resume. Native ARM64 artifact signature passed and63 compiled files matched tested dist. Live review exposed a separate text adapter issue: count-based reply identity is unsafe when the DOM replaces old messages. Reproduce unchanged-count replacement in the real browser fixture, bind new stable message IDs, retain ID-less/legacy handling, and reverify before replacing the installed artifact. Image attachment acceptance remains unconfirmed; do not claim provider parity or force unknown to pass.
+
+Browser follow-up verification: remounted history with an unseen ID reproduced a false cached result (RED); bind the first matching user turn after the baseline user and persist its exact assistant ID (GREEN). Read-only reviewer found no remaining turn-binding blocker. Final make build: Build succeeded; make test426/426 with0fail/cancel/skip; lint and docs-check pass. Two isolated stress rounds each1000tasks, desktop/mobile × light/dark: round1 980succeeded/20cancelled,5512ms; round2 882succeeded/67intentional429/51cancelled,10498ms; peak2, four screenshots each, reopen without resubmission. Temporary fixture data and screenshots cleaned.

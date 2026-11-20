@@ -1343,6 +1343,7 @@ export class StudioService extends EventEmitter {
         const takes = Array.isArray(history[base]) ? history[base] as Array<Record<string, unknown>> : [];
         const imageId = object(production.images ?? {})[base], videoId = object(production.videos ?? {})[base];
         const currentTake = takes.find(take => take.taskId === task.id && take.imageId === imageId && take.videoId === videoId && take.imageFingerprint === object(production.fingerprints ?? {})[`${base}/image`] && take.videoFingerprint === object(production.fingerprints ?? {})[step.id]);
+        if (currentTake) { currentTake.review = review; currentTake.score = reviewScore(review); }
         for (const take of takes) {
           const assessed = { ...object(take.review ?? {}) };
           for (const kind of ['image', 'video', 'speech']) {
@@ -1369,12 +1370,21 @@ export class StudioService extends EventEmitter {
       if (round >= limit || !imageIds.length && !videoIds.length) {
         const chosenReviews = { ...reviews }, fingerprints = { ...object(production.fingerprints ?? {}) };
         for (const step of videos) {
-          const base = step.id.replace(/\/video$/, ''), takes = (history[base] as Array<Record<string, unknown>>).filter(take => take.taskId === task.id);
+          const base = step.id.replace(/\/video$/, ''), policy = object(reviews[base] ?? {}).policyFingerprint;
+          const takes = (history[base] as Array<Record<string, unknown>>).filter(take => take.taskId === task.id && typeof policy === 'string' && object(take.review ?? {}).policyFingerprint === policy);
+          if (!takes.length) throw new NeedsInputError('Chưa có take được đánh giá theo quy tắc hiện tại; đánh giá lại trước khi chọn bản dựng');
           const best = takes.reduce((best, take) => Number(take.score) > Number(best.score) ? take : best);
           if (best.imageId && steps.some(value => value.id === `${base}/image`)) { production.images = { ...object(production.images ?? {}), [base]: best.imageId }; fingerprints[`${base}/image`] = best.imageFingerprint; }
           if (best.videoId && !step.videoAssetId) { production.videos = { ...object(production.videos ?? {}), [base]: best.videoId }; fingerprints[step.id] = best.videoFingerprint; }
           chosenReviews[base] = best.review;
-          const saved = object(object(rounds[Number(best.round)] ?? {}).reviews ?? {})[base];
+          const saved = { ...object(object(object(rounds[Number(best.round)] ?? {}).reviews ?? {})[base] ?? {}) };
+          for (const kind of ['image', 'video', 'speech']) {
+            const assessment = object(object(best.review ?? {})[kind] ?? {});
+            if (typeof assessment.fingerprint !== 'string' || typeof assessment.taskId !== 'string' || typeof assessment.at !== 'number') continue;
+            const response = kind === 'speech' ? assessment.semantic === 'assessed' && typeof assessment.heard === 'string' ? assessment.heard : undefined : assessment.modelAssessed === true ? JSON.stringify(assessment.checks) : undefined;
+            if (response !== undefined) saved[kind] = { fingerprint: assessment.fingerprint, response, responseAt: assessment.at, sourceTaskId: assessment.taskId,
+              ...(kind === 'speech' ? { resolved: true } : kind === 'video' ? { frameIds: assessment.frameIds, sampleTimes: assessment.sampleTimes } : {}) };
+          }
           checkpoint.reviews = { ...object(checkpoint.reviews ?? {}), [base]: saved };
         }
         production.fingerprints = fingerprints; rounds[round] = checkpoint; save();
@@ -1434,6 +1444,7 @@ export class StudioService extends EventEmitter {
         const prompt = frame ? text(`Review these actual images against the supplied visual plan. Image 1 is the generated scene; subsequent images are ${affiliate ? 'labelled product, character or background references' : 'character references'}. Compare scene composition, character face identity and outfit. Do not invent successful checks. If references are insufficient return unknown; if no people are involved mark face/outfit not_applicable. For planned product/hand/foot inserts with no recognizable face, including an intentionally cropped chin or mouth, mark face not_applicable and explain the planned framing. Still assess any recognizable face that is visible; unplanned cropping of a required face is not exempt. Never waive scene, outfit or product checks for a close-up. Return ONLY JSON: {"scene":{"status":"pass|fail|unknown","reason":"..."},"face":{"status":"pass|fail|unknown|not_applicable","reason":"..."},"outfit":{"status":"pass|fail|unknown|not_applicable","reason":"..."}}.${productCheck} Visual plan: ${visualPlan}. Cast: ${JSON.stringify(characters.filter(character => character.assetId && refs.includes(character.assetId)).map(({ name, description }) => ({ name, description })))}`, 'Review prompt', 32768) : '';
         const dub = object(object(production.affiliateDubs ?? {})[base] ?? {}), speechVideo = dubbing ? dub.assetId : video;
         return { base, step, frame, video, speechVideo: typeof speechVideo === 'string' ? speechVideo : undefined, stale: stale || !!dubbing && (dub.videoId !== video || dub.speechId !== (step.dialogue ? object(production.speech ?? {})[base] : undefined)), refs, prompt, visualPlan, imageHash: hash({ frame, prompt, refs, provider: this.store.settings().providers.text }),
+          policyHash: hash({ prompt, references: refs.slice(1), visualPlan, motion: step.prompt, duration: step.duration, nativeAudio: data.nativeAudio, pace: data.pace, fps: data.fps, textProvider: this.store.settings().providers.text, asrProvider: this.store.settings().providers.asr, dialogue: step.dialogue, speaker: step.speaker, characters, language: data.language }),
           affiliate: !!affiliate, audioRequired: affiliate?.contentStyle === 'asmr', videoHash: hash({ version: affiliate ? 2 : 1, video, frame, visualPlan, prompt: step.prompt, duration: step.duration, nativeAudio: data.nativeAudio, pace: data.pace, fps: data.fps, provider: this.store.settings().providers.text }),
           speechHash: hash({ video: speechVideo, dialogue: step.dialogue, speaker: step.speaker, characters, language: data.language, provider: this.store.settings().providers.asr }) };
       });
@@ -1520,6 +1531,7 @@ export class StudioService extends EventEmitter {
     const outputIds: string[] = []; let failed = 0;
     for (const [index, target] of chosen.entries()) {
       assertCurrent(); const { base, step, frame, video } = target, patch = patches.get(base) ?? {};
+      patch.policyFingerprint = target.policyHash;
       // A source clip can replace a generated shot; old categories are not current-plan verdicts.
       if (!frame) patch.image = undefined;
       if (!video || project.data.videoReview !== true || project.data.renderMode === 'slideshow') patch.video = undefined;

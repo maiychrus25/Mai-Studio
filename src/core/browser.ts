@@ -108,14 +108,21 @@ export class BrowserManager {
       const composer = page.locator(selectors.composer).first(); const submit = page.locator(selectors.submit).first();
       if (!await this.composerReady(page, selectors.composer, context.signal)) throw new NeedsInputError('Cần đăng nhập Muse hoặc cập nhật selector trước khi tiếp tục.');
       let before = Number(checkpoint.beforeReplyCount);
+      let beforeIds = Array.isArray(checkpoint.beforeReplyIds) && checkpoint.beforeReplyIds.every(id => typeof id === 'string' && id)
+        ? checkpoint.beforeReplyIds as string[] : undefined;
+      let beforeUserId = typeof checkpoint.beforeUserId === 'string' ? checkpoint.beforeUserId : undefined;
+      let replyUserId = typeof checkpoint.replyUserId === 'string' ? checkpoint.replyUserId : undefined;
+      let replyId = typeof checkpoint.replyMessageId === 'string' ? checkpoint.replyMessageId : undefined;
       if (checkpoint.remoteSubmitted !== true) {
         if (await page.locator(selectors.stop).first().isVisible()) throw new NeedsInputError('Thread đang có yêu cầu khác; chờ hoàn tất trước khi gửi kế hoạch.');
         if (files.length) await this.attachReferences(page, files, selectors.fileInput, context.signal);
         await composer.fill(task.prompt, { timeout: 15000 });
         await submit.waitFor({ state: 'visible', timeout: 15000 });
-        // Capture the assistant count immediately before admission, as MuseStudio _ask does.
-        before = await page.locator(selectors.response).count(); context.signal.throwIfAborted();
-        saveCheckpoint({ remoteSubmitted: true, beforeReplyCount: before, submittedAt: Date.now() });
+        const replies = await page.locator(selectors.response).evaluateAll(elements => elements.map(element => element.getAttribute('data-message-id')));
+        beforeUserId = await page.locator('[data-message-item][data-message-role="user"]').evaluateAll(elements => elements.at(-1)?.getAttribute('data-message-id') ?? undefined);
+        before = replies.length; beforeIds = beforeUserId && replies.length && replies.every(id => !!id) ? replies as string[] : undefined;
+        context.signal.throwIfAborted();
+        saveCheckpoint({ remoteSubmitted: true, beforeReplyCount: before, beforeReplyIds: beforeIds, beforeUserId, submittedAt: Date.now() });
         await submit.click({ timeout: 15000 }); context.signal.throwIfAborted();
         threadUrl = page.url(); saveCheckpoint({ threadUrl });
       }
@@ -128,17 +135,38 @@ export class BrowserManager {
           threadUrl = page.url(); saveCheckpoint({ threadUrl });
         }
         if (await page.locator(selectors.errorNotice || '[data-testid="assistant-response-error-notice"]').first().isVisible()) throw new NeedsInputError('Muse báo lỗi trong reply; kiểm tra thread, không tự gửi lại.');
-        const reply = await page.locator(selectors.response).evaluateAll((elements, limit) => {
-          const text = (elements.at(-1) as HTMLElement | undefined)?.innerText?.trim() ?? '';
-          return { count: elements.length, text: text.slice(0, limit + 1) };
-        }, maxBytes);
-        if (reply.count > before && Buffer.byteLength(reply.text) > maxBytes) throw new NeedsInputError('Text reply vượt 512 KiB');
+        const reply = await page.locator(selectors.response).evaluateAll((elements, { limit, ids, count, beforeUserId, userId, replyId, prompt }) => {
+          let element: HTMLElement | undefined;
+          if (ids) {
+            if (replyId) element = elements.find(value => value.getAttribute('data-message-id') === replyId) as HTMLElement | undefined;
+            else {
+              // A remounted historical ID is new to the DOM, but not a reply to this prompt.
+              const messages = Array.from(document.querySelectorAll<HTMLElement>('[data-message-item]'));
+              const anchor = messages.findIndex(value => value.getAttribute('data-message-id') === (userId || beforeUserId));
+              const user = anchor < 0 ? undefined : userId ? messages[anchor] : messages.slice(anchor + 1).find(value => value.getAttribute('data-message-role') === 'user');
+              if (user?.innerText.trim().endsWith(prompt.trim())) {
+                userId = user.getAttribute('data-message-id') ?? undefined;
+                for (const message of messages.slice(messages.indexOf(user) + 1)) {
+                  if (message.getAttribute('data-message-role') === 'user') break;
+                  const id = message.getAttribute('data-message-id');
+                  if (id && !ids.includes(id) && elements.includes(message)) { element = message; break; }
+                }
+              }
+            }
+          } else if (elements.length > count) element = elements.at(-1) as HTMLElement | undefined;
+          return { fresh: !!element, userId, id: element?.getAttribute('data-message-id') ?? '', text: (element?.innerText?.trim() ?? '').slice(0, limit + 1) };
+        }, { limit: maxBytes, ids: beforeIds, count: before, beforeUserId, userId: replyUserId, replyId, prompt: task.prompt });
+        if (reply.fresh && Buffer.byteLength(reply.text) > maxBytes) throw new NeedsInputError('Text reply vượt 512 KiB');
+        if (beforeIds && reply.fresh && reply.id && reply.id !== replyId) {
+          replyId = reply.id; replyUserId = reply.userId; saveCheckpoint({ replyMessageId: replyId, replyUserId });
+        }
         const busy = await page.locator(selectors.stop).first().isVisible();
         if (busy && !busySeen) { busySeen = true; saveCheckpoint({ textBusy: true }); }
         const ready = await composer.isVisible();
-        if (reply.count > before && reply.text && busySeen && !busy && ready && !completed) { completed = true; saveCheckpoint({ textCompleted: true }); }
-        if (reply.count > before && reply.text && completed && !busy && ready) {
-          if (reply.text !== last) { last = reply.text; stableSince = Date.now(); }
+        if (reply.fresh && reply.text && busySeen && !busy && ready && !completed) { completed = true; saveCheckpoint({ textCompleted: true }); }
+        if (reply.fresh && reply.text && completed && !busy && ready) {
+          const identity = `${reply.id}\n${reply.text}`;
+          if (identity !== last) { last = identity; stableSince = Date.now(); }
           else if (Date.now() - stableSince >= 1000) {
             context.signal.throwIfAborted(); saveCheckpoint({ threadUrl, textResult: reply.text });
             this.store.accountStatus(account.id, 'ready'); return reply.text;

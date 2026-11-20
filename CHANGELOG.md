@@ -7,7 +7,9 @@ This file records development changes. No production release is declared by a de
 - Resume automatic quality control with the newest matching explicit image/video/speech assessment, preserving unresolved admission, source identity and quality gates.
 - Keep the current assessment/score for an existing take without counting a resume as another generation.
 - Add a confirmed reassessment action for failed/inconclusive shots within the waiting job's scope, reusing the existing review stage and saved media.
-- Installation and restart remain deferred by the operator; no live task/checkpoint is modified by this source change.
+- Exclude assessments from a different review policy when restoring the best take and preserve its completed review checkpoint on repeated resume.
+- Bind browser text replies to new message IDs when available, retaining legacy count-based checkpoints and admission guards.
+- Install the prebuilt Mac ARM64 application after explicit approval, preserving existing accounts and media; live provider review remains under verification.
 
 ## 0.2.0-dev.3 — pre-release, 2026-11-20
 

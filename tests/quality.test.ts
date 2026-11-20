@@ -217,6 +217,51 @@ test('best-take restoration cannot hide a new failure of an image shared by two 
   });
 });
 
+test('a legacy take cannot restore a verdict from an older review policy after reassessment', async t => {
+  await fixture(async (studio, paths, requests, decide) => {
+    decide(() => videoVerdict('unknown'));
+    const { p, videos } = await project(studio, paths.slice(0, 2), { autoChecks: true, qualityRetries: 0 });
+    t.mock.method(studio as unknown as Port, 'generate', async () => ({ outputIds: [videos[0].id] }));
+    const task = await studio.invoke<Task>('studio.run', { projectId: p.id }); assert.equal((await finish(studio, task)).status, 'waiting_input');
+    const current = studio.store.project(p.id), data = current.data as any, key = `${p.id}/one`;
+    const take = data.production.qualityTakes[key][0];
+    delete take.review.policyFingerprint; take.review.image.fingerprint = 'previous-review-policy';
+    data.production.qualityTakes[key].push({ ...structuredClone(take), videoId: videos[1].id, review: { image: { ...take.review.image, status: 'pass' }, video: { ...take.review.video, assetId: videos[1].id, status: 'fail', checks: videoVerdict('fail') } }, score: -97 });
+    studio.store.saveProject({ ...current, data });
+    decide(() => videoVerdict('fail'), () => Object.fromEntries(['scene', 'face', 'outfit'].map(kind => [kind, { status: 'fail', reason: 'Fresh evidence under the current review policy' }])));
+    assert.equal((await finish(studio, await studio.invoke<Task>('studio.run', { projectId: p.id, stage: 'check' }))).status, 'succeeded');
+    const count = requests.length;
+    for (const action of ['resume', 'retry']) {
+      await studio.invoke('task.action', { action, ids: [task.id] }); assert.equal((await finish(studio, task)).status, 'waiting_input');
+      const latest = studio.store.project(p.id).data as any;
+      assert.equal(latest.qualityReviews[key].image.status, 'fail');
+      assert.equal(latest.production.videos[key], videos[0].id);
+      assert.equal(latest.production.qualityTakes[key].length, 2); assert.equal(requests.length, count);
+    }
+  });
+});
+
+test('resuming a legacy best take preserves its latest review checkpoint across repeated resumes', async t => {
+  await fixture(async (studio, paths, requests, decide) => {
+    decide(index => index ? Object.fromEntries(['action', 'motion', 'continuity', 'identity'].map(kind => [kind, { status: 'fail', reason: 'Worse second take' }])) : videoVerdict('fail'));
+    const { p, videos } = await project(studio, paths.slice(0, 2), { autoChecks: true, qualityRetries: 1 }); let generations = 0;
+    t.mock.method(studio as unknown as Port, 'generate', async () => ({ outputIds: [videos[generations++].id] }));
+    const task = await studio.invoke<Task>('studio.run', { projectId: p.id }); assert.equal((await finish(studio, task)).status, 'waiting_input');
+    const key = `${p.id}/one`, current = studio.store.project(p.id), data = current.data as any;
+    for (const take of data.production.qualityTakes[key]) { take.review.policyFingerprint = 'legacy-policy'; take.review.image.fingerprint = 'legacy-image-policy'; }
+    data.qualityReviews[key].image.fingerprint = 'legacy-image-policy'; studio.store.saveProject({ ...current, data });
+    const saved = studio.store.task(task.id);
+    for (const round of Object.values((saved.checkpoint.qualityControl as any).rounds) as any[]) round.reviews[key].image.fingerprint = 'legacy-image-policy';
+    studio.store.updateTask(task.id, { checkpoint: saved.checkpoint });
+    decide(() => videoVerdict('fail'), () => ({ ...imageVerdict, scene: { status: 'fail', reason: 'Current-policy reassessment fails the shared image' } }));
+    await studio.invoke('task.action', { action: 'resume', ids: [task.id] }); assert.equal((await finish(studio, task)).status, 'waiting_input');
+    const count = requests.length;
+    await studio.invoke('task.action', { action: 'resume', ids: [task.id] }); assert.equal((await finish(studio, task)).status, 'waiting_input');
+    assert.equal(requests.length, count, 'restoring the older generation must retain the newer assessment checkpoint');
+    assert.equal(generations, 2); assert.equal((studio.store.project(p.id).data.qualityReviews as any)[key].image.status, 'fail');
+  });
+});
+
 test('resume never adopts an assessment attached to another asset even when its fingerprint is copied', async t => {
   await fixture(async (studio, paths, requests, decide) => {
     decide(() => videoVerdict('unknown'));
