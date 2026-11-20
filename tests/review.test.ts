@@ -235,3 +235,22 @@ test('v2 overflow no longer fails', async () => {
     assert.equal(speech.reason, undefined); assert.equal(speech.status, 'unknown', 'without a transcript the line stays unknown, never a pass');
   });
 });
+
+test('a v2 shot planned without the product may pass with product not_applicable', async () => {
+  let bodies: string[] = [];
+  const answer = JSON.stringify({ ...Object.fromEntries(['scene', 'face', 'outfit'].map(key => [key, { status: 'pass', reason: 'Controlled provider observation' }])), product: { status: 'not_applicable', reason: 'No product in the frame' } });
+  await fixture(async (req, res) => { let body = ''; for await (const chunk of req) body += chunk; bodies.push(body); res.setHeader('Content-Type', 'application/json'); res.end(JSON.stringify({ choices: [{ message: { content: answer } }] })); }, async (studio, base) => {
+    await studio.invoke('settings.save', { providers: { text: { baseUrl: base } } }); const frame = await photo(studio, 'empty-hands');
+    const project = (productVisible: boolean | undefined, v2: boolean) => studio.store.saveProject({ name: 'Absent product', kind: 'affiliate', data: {
+      affiliate: { contentStyle: 'review', hostMode: 'voiceover', seconds: 15 }, ...(v2 ? { affiliatePlanVersion: 2, productLook: 'A white cotton shirt.' } : {}), product: { name: 'Shirt' }, productAssetIds: [frame.id],
+      shots: [{ id: 'one', prompt: 'Hands fold a towel', duration: 3, assetId: frame.id, beat: 'problem', shotType: 'insert', ...(productVisible === undefined ? {} : { productVisible }) }] } });
+    const absent = project(false, true); await review(studio, absent);
+    assert.equal((studio.store.project(absent.id).data.qualityReviews as any)[`${absent.id}/one`].image.status, 'pass');
+    assert.ok(bodies.some(body => body.includes('intentionally absent')));
+    bodies = [];
+    for (const [visible, v2] of [[true, true], [undefined, true], [false, false]] as const) {
+      const other = project(visible, v2); await assert.rejects(review(studio, other), /Invalid image review status/, `${visible}/${v2}`);
+      assert.ok(!bodies.some(body => body.includes('intentionally absent'))); bodies = [];
+    }
+  });
+});

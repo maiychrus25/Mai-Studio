@@ -100,3 +100,22 @@ test('affiliateCamera applies the rotation', () => {
   assert.equal(camera('fashion', { ...base, index: 4 }), 'arc');
   assert.equal(camera('fashion', { ...base, index: 5 }), 'push');
 });
+
+test('speech window is capped at 9 seconds', () => {
+  const line = Array.from({ length: 30 }, (_, index) => `chữ${index}`).join(' ');
+  for (const kind of ['presenter', 'product'] as const) {
+    const clip = api().affiliateClipPrompt(context(), shot({ kind, line, camera: kind === 'presenter' ? 'locked' : 'arc' }));
+    assert.match(clip, /0\.5–9 s:/);
+    if (kind === 'presenter') assert.match(clip, /\n9–10 s:/);
+    for (const [, start, end] of clip.matchAll(/(\d+(?:\.\d+)?)–(\d+(?:\.\d+)?) s/g)) assert.ok(Number(start) <= Number(end), `${start}–${end}`);
+  }
+  assert.match(api().affiliateClipPrompt(context(), shot({ line: 'Cốc này rất đẹp.' })), /0\.5–3 s:/, 'short lines keep the observed formula');
+});
+
+test('silent presenter shot keeps identity instead of the product template', () => {
+  const clip = api().affiliateClipPrompt(context(), shot({ line: '', motion: 'Holds the mug up.' }));
+  assert.match(clip, /IDENTITY LOCK/); assert.match(clip, /Nobody speaks\./); assert.match(clip, /Camera: LOCKED-OFF/); assert.match(clip, /Action: Holds the mug up\./);
+  assert.ok(!clip.includes('Keep faces outside the frame')); assert.ok(!clip.includes('says this exact line'));
+  const absent = api().affiliateClipPrompt(context(), shot({ line: '', motion: 'Takes a few steps toward the camera.', productVisible: false }));
+  assert.match(absent, /The product is absent from this shot; do not add it\./); assert.match(absent, /Action: preserve the scene's meaningful posture and expression\./);
+});

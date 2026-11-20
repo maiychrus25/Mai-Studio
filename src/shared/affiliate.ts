@@ -102,6 +102,10 @@ export const AFFILIATE_LOOK_BEATS = ['intro', 'hanger', 'wear', 'detail', 'final
 export function affiliateTemplateGroup(contentStyle: AffiliateSettings['contentStyle']): 'talk' | 'fashion' | 'lookbook' | undefined {
   return contentStyle === 'fashion' || contentStyle === 'lookbook' ? contentStyle : contentStyle === 'asmr' || contentStyle === 'pov' ? undefined : 'talk';
 }
+// The single test for "this project uses the Muse v2 flow": a stale marker on asmr/pov never counts.
+export function affiliateV2(project: { kind: string; data: Record<string, unknown> }): boolean {
+  return project.kind === 'affiliate' && project.data.affiliate !== undefined && project.data.affiliatePlanVersion === 2 && affiliateTemplateGroup(readAffiliateSettings(project.data.affiliate).contentStyle) !== undefined;
+}
 export function affiliateMode(settings: AffiliateSettings): { model: boolean; spoken: boolean; handsOnly: boolean; nativeAudio: boolean } {
   const asmr = settings.contentStyle === 'asmr';
   const model = !asmr && (['fashion', 'lookbook'].includes(settings.contentStyle) || settings.hostMode === 'presenter');

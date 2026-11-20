@@ -316,3 +316,29 @@ test('v2 clip speaks numbers as words while subtitles keep the written line', ()
   const english = api().pipelineSteps(museProject({}, { language: 'en' }));
   assert.match(stepOf(english, 'one', 'video').prompt, /"Đế nâng 3cm, tôn dáng!"/); assert.match(stepOf(english, 'one', 'video').prompt, /in English/);
 });
+
+test('fashion and lookbook keep garment photos when productVisible is false', () => {
+  const source = museProject({ contentStyle: 'fashion' });
+  const shots = source.data.shots as any[]; shots[0].productVisible = false; shots[1].productVisible = false;
+  const steps = api().pipelineSteps(source);
+  assert.deepEqual(stepOf(steps, 'one', 'image').refIds, ['p1', 'p2', 'portrait']);
+  assert.deepEqual(stepOf(steps, 'two', 'image').refIds, ['p1', 'p2', 'p3']);
+  assert.match(stepOf(steps, 'two', 'image').prompt, /PRODUCT: Giày sục/); assert.ok(!stepOf(steps, 'two', 'image').prompt.includes('The product is absent'));
+  const look = legacyCases()[1].project, lookbook = { ...look, id: 'muse', data: { ...look.data, affiliatePlanVersion: 2, productLook: 'Linen dresses.', shots: (look.data.shots as any[]).map(shot => ({ ...shot, productVisible: false })) } };
+  const looks = api().pipelineSteps(lookbook);
+  assert.deepEqual(stepOf(looks, 'look0', 'image').refIds, ['blue', 'portrait']); assert.match(stepOf(looks, 'look0', 'image').prompt, /must look EXACTLY like the garment/);
+});
+
+test('a stale marker on asmr or pov stays legacy', () => {
+  const { affiliateV2 } = require('../src/shared/affiliate') as typeof import('../src/shared/affiliate');
+  const { clipWindow } = require('../src/core/studio') as typeof import('../src/core/studio');
+  const source = legacyCases()[0].project, speech = { duration: 10, voiced: 3, f0: null, parts: [{ start: 0.6, end: 4.4 }, { start: 7.9, end: 8.3 }] } as any;
+  for (const contentStyle of ['asmr', 'pov']) {
+    const legacy = { ...source, data: { ...source.data, affiliate: { ...(source.data.affiliate as object), contentStyle, hostMode: 'silent' }, shots: (source.data.shots as any[]).map(({ dialogue, speaker, ...shot }) => shot) } };
+    const marked = { ...legacy, data: { ...legacy.data, affiliatePlanVersion: 2, productLook: 'A shoe.' } };
+    assert.equal(affiliateV2(marked), false);
+    assert.deepEqual(api().pipelineSteps(marked), api().pipelineSteps(legacy));
+    assert.deepEqual(clipWindow(marked.data, 10, 3.75, speech, true), clipWindow(legacy.data, 10, 3.75, speech, true));
+  }
+  assert.equal(affiliateV2(museProject()), true); assert.equal(affiliateV2(source), false);
+});

@@ -1,5 +1,5 @@
 import type { Project } from '../shared/studio';
-import { AFFILIATE_BEATS, AFFILIATE_LANGUAGES, AFFILIATE_LOOK_BEATS, affiliateMode, affiliateSceneCount, affiliateTemplateGroup, readAffiliateSettings, type AffiliateSettings } from '../shared/affiliate';
+import { AFFILIATE_BEATS, AFFILIATE_LANGUAGES, AFFILIATE_LOOK_BEATS, affiliateMode, affiliateSceneCount, affiliateTemplateGroup, affiliateV2, readAffiliateSettings, type AffiliateSettings } from '../shared/affiliate';
 import { buildShots, validateCharacters } from './pipelines';
 import { object, text } from './store';
 
@@ -111,7 +111,7 @@ export function finishAffiliatePlan(project: Project, data: Record<string, unkno
   if (project.kind !== 'affiliate' || project.data.affiliate === undefined) return data;
   const { settings, mode, characters: supplied, ratio, fps } = configuration(project);
   json(raw, 'Affiliate plan');
-  const group = affiliateTemplateGroup(settings.contentStyle), v2 = group !== undefined && (planning || project.data.affiliatePlanVersion === 2);
+  const group = affiliateTemplateGroup(settings.contentStyle), v2 = planning ? group !== undefined : affiliateV2(project);
   const count = affiliateSceneCount(settings), original = timeline(raw.shots, count, settings.seconds), parsed = timeline(data.shots, count, settings.seconds);
   const characters = validateCharacters(raw.characters), parsedCharacters = validateCharacters(data.characters);
   if (characters.length !== (mode.model ? 1 : 0) || parsedCharacters.length !== characters.length) throw new Error('Affiliate plan has an unexpected model/host character');
@@ -203,7 +203,7 @@ export function finishAffiliatePlan(project: Project, data: Record<string, unkno
 
 export function affiliateReviewPrompt(project: Project, data: Record<string, unknown>): string {
   const { settings, mode } = configuration(project);
-  const v2 = data.affiliatePlanVersion === 2, group = affiliateTemplateGroup(settings.contentStyle);
+  const v2 = affiliateV2({ kind: project.kind, data }), group = affiliateTemplateGroup(settings.contentStyle);
   const source = project.data.productSource === undefined ? {} : object(project.data.productSource);
   const shotFields = ['id', 'start', 'duration', 'beat', 'caption', 'dialogue', 'speaker', 'characterIds', 'listenerIds', 'outfitIndex', 'transition', ...v2 ? ['shotType', 'productVisible'] : []];
   let excerpted = false;

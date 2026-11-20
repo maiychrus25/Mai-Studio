@@ -761,3 +761,53 @@ test('partial v2 render stops with a clear message instead of misplacing cuts', 
     await assert.rejects(run({}), /vượt khoảng dựng/, 'legacy partial render keeps its own behaviour');
   } finally { await studio.close(); rmSync(root, { recursive: true, force: true }); }
 });
+
+test('v2 host portrait fingerprint follows the template group', () => {
+  const root = mkdtempSync(join(tmpdir(), 'maistudio-portrait-print-')); const studio = new StudioService(root);
+  try {
+    const print = (contentStyle: string, v2: boolean) => (studio as unknown as { characterFingerprint(project: Project, character: unknown): string }).characterFingerprint({ id: 'p', name: 'p', kind: 'affiliate', createdAt: 1, updatedAt: 1,
+      data: { affiliate: { contentStyle }, product: { name: 'Shirt' }, productAssetIds: ['p1'], ...(v2 ? { affiliatePlanVersion: 2, productLook: 'A shirt.' } : {}) } }, { id: 'host', name: 'Minh', description: 'Short hair' });
+    assert.notEqual(print('review', true), print('fashion', true));
+    assert.equal(print('review', true), print('story', true)); assert.equal(print('fashion', true), print('fashion', true));
+    assert.notEqual(print('review', true), print('review', false));
+    assert.equal(print('review', false), print('fashion', false), 'legacy portraits do not depend on the style');
+  } finally { void studio.close(); rmSync(root, { recursive: true, force: true }); }
+});
+
+test('v2 render measures truncation against the same length as review', async () => {
+  const root = mkdtempSync(join(tmpdir(), 'maistudio-v2-basis-')); const studio = new StudioService(root);
+  try {
+    // Audio stops at 3.0 s while the container runs to 3.5 s; the line runs to the end of the audio.
+    const source = join(root, 'short-audio.mp4');
+    assert.equal(spawnSync(require('ffmpeg-static') as string, ['-v', 'error', '-f', 'lavfi', '-i', 'color=c=blue:s=64x64:r=24:d=3.5', '-f', 'lavfi', '-i', 'sine=frequency=180:sample_rate=16000:duration=2', '-filter_complex', '[1:a]adelay=1000:all=1[a]', '-map', '0:v', '-map', '[a]', '-c:v', 'libx264', '-pix_fmt', 'yuv420p', '-c:a', 'aac', source]).status, 0);
+    const [clip] = await studio.importFiles([source]);
+    const p = await studio.invoke<Project>('project.save', { name: 'basis', kind: 'affiliate', data: { affiliate: { contentStyle: 'review', hostMode: 'voiceover', screenText: false, seconds: 15 }, affiliatePlanVersion: 2, productLook: 'A shirt.',
+      nativeAudio: true, keepAudio: true, width: 64, height: 64, product: { name: 'Shirt' }, shots: [{ id: 'one', prompt: 'Shirt', videoAssetId: clip.id, duration: 3, start: 0, dialogue: 'Áo cotton mềm mại.', beat: 'hook', shotType: 'insert' }] } });
+    const task = await studio.invoke<Task>('studio.run', { projectId: p.id, stage: 'render' });
+    for (let n = 0; n < 1500 && ['draft', 'queued', 'running'].includes(studio.store.task(task.id).status); n++) await delay(10);
+    const done = studio.store.task(task.id); assert.equal(done.status, 'waiting_input', done.error); assert.match(done.error, /bị cắt ở cuối clip/);
+  } finally { await studio.close(); rmSync(root, { recursive: true, force: true }); }
+});
+
+test('v2 captions and flashes land on the measured cut points', async t => {
+  const root = mkdtempSync(join(tmpdir(), 'maistudio-v2-cuts-')); const studio = new StudioService(root);
+  const flashes: number[][] = []; const merge = MediaTools.prototype.merge;
+  t.mock.method(MediaTools.prototype, 'merge', function (this: MediaTools, ...args: Parameters<MediaTools['merge']>) { flashes.push([...(args[2].flashes ?? [])]); return merge.apply(this, args); });
+  try {
+    const source = join(root, 'line.mp4');
+    assert.equal(spawnSync(require('ffmpeg-static') as string, ['-v', 'error', '-f', 'lavfi', '-i', 'color=c=blue:s=64x64:r=24:d=3.5', '-f', 'lavfi', '-i', 'sine=frequency=180:sample_rate=16000:duration=1.5', '-filter_complex', '[1:a]adelay=1000:all=1,apad=whole_dur=3.5[a]', '-map', '0:v', '-map', '[a]', '-c:v', 'libx264', '-pix_fmt', 'yuv420p', '-c:a', 'aac', '-t', '3.5', source]).status, 0);
+    const [clip] = await studio.importFiles([source]);
+    const shots = ['one', 'two', 'three'].map((id, index) => ({ id, prompt: 'Shirt on the cabinet', videoAssetId: clip.id, duration: 0.6, start: index * 0.6, dialogue: `Câu số ${index + 1} về áo.`, caption: `Chữ ${index + 1}`, beat: 'hook', shotType: 'insert', ...(index ? { transition: 'flash' } : {}) }));
+    const p = await studio.invoke<Project>('project.save', { name: 'cuts', kind: 'affiliate', data: { affiliate: { contentStyle: 'review', hostMode: 'voiceover', screenText: true, endCard: false, aiLabel: false, adLabel: false, showPrice: false, seconds: 15 },
+      affiliatePlanVersion: 2, productLook: 'A shirt.', nativeAudio: true, keepAudio: true, width: 64, height: 64, product: { name: 'Shirt' }, shots } });
+    const task = await studio.invoke<Task>('studio.run', { projectId: p.id, stage: 'render' });
+    for (let n = 0; n < 2000 && ['draft', 'queued', 'running'].includes(studio.store.task(task.id).status); n++) await delay(10);
+    const done = studio.store.task(task.id); assert.equal(done.status, 'succeeded', done.error);
+    const { readFileSync } = await import('node:fs');
+    const captions = await studio.invoke<Array<{ start: number; end: number; text: string }>>('srt.parse', { text: readFileSync(join(root, 'work', task.id, 'affiliate-captions.srt'), 'utf8') });
+    const cuts = [0, ...captions.map(cue => cue.end)];
+    assert.equal(captions.length, 3); assert.ok(cuts[3] > 3, `measured timeline ${cuts[3]} is longer than the 1.8 s plan`);
+    captions.forEach((cue, index) => { assert.equal(cue.text, `Chữ ${index + 1}`); assert.ok(Math.abs(cue.start - cuts[index]) < 0.002); assert.ok(cue.end - cue.start > 1, JSON.stringify(captions)); });
+    const flash = flashes.at(-1)!; assert.equal(flash.length, 2); flash.forEach((value, index) => assert.ok(Math.abs(value - cuts[index + 1]) < 0.002, `${flash} vs ${cuts}`));
+  } finally { await studio.close(); rmSync(root, { recursive: true, force: true }); }
+});

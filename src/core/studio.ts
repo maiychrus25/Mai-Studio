@@ -28,7 +28,7 @@ import { analyzeSpeech, compareTranscripts, compareSpeakers } from './acoustics'
 import { parseVideoReview, qualityRetries, qualityRepairFeedback, reviewScore, videoReviewPrompt, VIDEO_REVIEW_FRAMES } from './quality';
 import { downloadShopeeImage, parseShopeeCapture, resolveShopeeLink, shopeeImageUrl, shopeeLink, shopeeOffer, MAX_SHOPEE_IMAGES, MAX_SHOPEE_CAPTURE_BYTES } from './shopee';
 import { shopeeBookmarklet } from '../shared/shopee-capture';
-import { readAffiliateSettings, affiliateMode, MAX_AFFILIATE_REFERENCES } from '../shared/affiliate';
+import { readAffiliateSettings, affiliateMode, affiliateTemplateGroup, affiliateV2, MAX_AFFILIATE_REFERENCES } from '../shared/affiliate';
 import { affiliateReviewPrompt, parseAffiliateReview } from './affiliate';
 import { affiliateCaptionCues, affiliatePostText, affiliateSpeechWindow, alignAffiliateShots, detectAffiliateBeats } from './affiliate-edit';
 
@@ -53,7 +53,7 @@ function directorEligible(project: Project): boolean {
 export function clipWindow(data: Record<string, unknown>, duration: number, requested: number, speech?: Awaited<ReturnType<typeof analyzeSpeech>>, affiliate = false): { start: number; duration: number; speechOverflow?: boolean; truncated?: boolean } {
   if (!speech) return { start: 0, duration: Math.min(requested, duration) };
   if (!speech.parts.length) throw new NeedsInputError('Clip chưa phát hiện lời nói để căn hình và phụ đề');
-  if (affiliate && data.affiliatePlanVersion === 2) return affiliateSpeechWindow(duration, speech.parts, ['fashion', 'lookbook'].includes(readAffiliateSettings(data.affiliate).contentStyle) ? requested : undefined)!;
+  if (affiliate && affiliateV2({ kind: 'affiliate', data })) return affiliateSpeechWindow(duration, speech.parts, ['fashion', 'lookbook'].includes(readAffiliateSettings(data.affiliate).contentStyle) ? requested : undefined)!;
   const lead = data.pace === 'drama' ? 0.18 : 0.45, hold = data.pace === 'drama' ? 0.4 : 0.75, minimum = data.pace === 'drama' ? 1.6 : 2.6;
   const start = Math.max(0, speech.parts[0].start - lead), end = Math.min(duration, Math.max(speech.parts.at(-1)!.end + hold, start + minimum));
   if (affiliate) return { start, duration: Math.min(requested, duration - start), speechOverflow: speech.parts.at(-1)!.end - start > requested - 0.1 };
@@ -696,7 +696,7 @@ export class StudioService extends EventEmitter {
     };
     const stills = new Map<string, string>(); let position = 0;
     // v2 spoken clips run for their measured speech, so they follow each other instead of the planned starts.
-    const measuredCuts = project.kind === 'affiliate' && project.data.affiliate !== undefined && project.data.affiliatePlanVersion === 2 && !dubbing && project.data.nativeAudio === true && project.data.renderMode !== 'slideshow' ? [0] : undefined;
+    const measuredCuts = affiliateV2(project) && !dubbing && project.data.nativeAudio === true && project.data.renderMode !== 'slideshow' ? [0] : undefined;
     for (let index = 0; index < steps.length; index++) {
       const step = steps[index]; context.signal.throwIfAborted();
       const base = step.id.replace(/\/(image|video|speech)$/, '');
@@ -753,7 +753,8 @@ export class StudioService extends EventEmitter {
           if (!info.hasAudio) throw new NeedsInputError(`Clip ${base} chưa có lời thoại; kiểm tra hoặc tạo lại trước khi dựng`);
           const analysis = await this.withMedia(context.signal, () => analyzeSpeech(path, this.media().executablePath, context.signal));
           if (!analysis.parts.length) throw new NeedsInputError(`Clip ${base} chưa phát hiện lời nói để căn hình và phụ đề`);
-          const window = clipWindow(project.data, info.duration, step.duration, analysis, project.kind === 'affiliate' && project.data.affiliate !== undefined); trimStart = window.start; duration = window.duration;
+          // v2 measures the clip where both picture and decoded sound exist, the same basis as speech review.
+          const window = clipWindow(project.data, measuredCuts ? Math.min(info.duration, analysis.duration) : info.duration, step.duration, analysis, project.kind === 'affiliate' && project.data.affiliate !== undefined); trimStart = window.start; duration = window.duration;
           if (window.speechOverflow && (stage === 'render' || project.data.autoChecks !== true)) throw new NeedsInputError(`Lời thoại shot ${base} vượt khoảng dựng; review và tạo lại clip trước khi xuất để không cắt mất lời`);
           if (window.truncated && (stage === 'render' || project.data.autoChecks !== true)) throw new NeedsInputError(`Lời thoại shot ${base} bị cắt ở cuối clip; tạo lại clip để nói trọn câu trước khi xuất`);
           nativeCues.push({ index: nativeCues.length + 1, start: start + analysis.parts[0].start - trimStart, end: Math.min(start + duration, start + analysis.parts.at(-1)!.end - trimStart), text: step.dialogue });
@@ -1206,7 +1207,7 @@ export class StudioService extends EventEmitter {
   }
   private characterFingerprint(project: Project, character: Character): string {
     const data = project.data, affiliate = project.kind === 'affiliate' && data.affiliate !== undefined ? readAffiliateSettings(data.affiliate) : undefined;
-    return createHash('sha256').update(JSON.stringify({ character, style: data.style ?? '', styleText: data.styleText ?? '', ...(affiliate ? { product: data.product, productAssetIds: data.productAssetIds, outfits: affiliate.contentStyle === 'lookbook' ? affiliate.outfitAssetIds : [] } : {}), ...(affiliatePromptContext(project) ? { template: 'muse-v2' } : {}) })).digest('hex');
+    return createHash('sha256').update(JSON.stringify({ character, style: data.style ?? '', styleText: data.styleText ?? '', ...(affiliate ? { product: data.product, productAssetIds: data.productAssetIds, outfits: affiliate.contentStyle === 'lookbook' ? affiliate.outfitAssetIds : [] } : {}), ...(affiliateV2(project) ? { template: affiliateTemplateGroup(readAffiliateSettings(data.affiliate).contentStyle) } : {}) })).digest('hex');
   }
   private async executeCharacters(task: Task, project: Project, context: TaskContext): Promise<TaskResult> {
     const characters = validateCharacters(project.data.characters);
@@ -1367,7 +1368,7 @@ export class StudioService extends EventEmitter {
           const imageFailed = failed.includes('image');
           if (imageFailed && steps.some(value => value.id === `${base}/image`)) imageIds.push(base);
           if (project.data.renderMode !== 'slideshow' && !step.videoAssetId && (!imageFailed || imageIds.includes(base)) && (!affiliateDubbing(project) || failed.some(key => key !== 'speech'))) videoIds.push(base);
-          feedback[base] = qualityRepairFeedback(review, project.kind === 'affiliate' && project.data.affiliate !== undefined && (project.data.affiliatePlanVersion !== 2 || affiliateDubbing(project)) ? step.duration : undefined);
+          feedback[base] = qualityRepairFeedback(review, project.kind === 'affiliate' && project.data.affiliate !== undefined && (!affiliateV2(project) || affiliateDubbing(project)) ? step.duration : undefined);
         }
       }
       production.qualityTakes = history; this.store.saveProject({ ...latest, data: { ...latest.data, production } });
@@ -1420,10 +1421,13 @@ export class StudioService extends EventEmitter {
       const explicitFrames = new Map<string, string>();
       const visualPlans = new Map<string, string>();
       const castReferences = new Map<string, string[]>();
+      // Only talk-group v2 shots may plan the product out of frame; fashion/lookbook models always wear it.
+      const talkV2 = affiliateV2(current) && affiliateTemplateGroup(readAffiliateSettings(data.affiliate).contentStyle) === 'talk', absentProducts = new Set<string>();
       const collect = (source: Record<string, unknown>, scope: string): void => {
         if (source.shots !== undefined || source.scenes === undefined) {
           for (const shot of buildShots(source)) {
             const base = `${scope}/${encodeURIComponent(shot.id)}`; visualPlans.set(base, shot.prompt); if (shot.assetId) explicitFrames.set(base, shot.assetId);
+            if (talkV2 && shot.productVisible === false) absentProducts.add(base);
             const scene = Array.isArray(source.scenes) ? source.scenes.map(object).find(value => value.id === shot.sceneId) : undefined;
             const ids = [...(shot.characterIds ?? (scene?.characterIds as string[] | undefined) ?? (source.characterIds as string[] | undefined) ?? []), ...(shot.listenerIds ?? []), ...(shot.speaker ? [shot.speaker] : [])];
             castReferences.set(base, characters.filter(character => ids.includes(character.id) && character.assetId).map(character => character.assetId!));
@@ -1446,12 +1450,12 @@ export class StudioService extends EventEmitter {
         const productRefs = affiliate ? (Array.isArray(data.productAssetIds) ? data.productAssetIds as string[] : []) : [];
         const refs = frame ? [...new Set([frame, ...(imageStep?.refIds ?? castReferences.get(base) ?? []), ...(!imageStep ? productRefs : [])].filter(id => this.store.asset(id).mime.startsWith('image/')))] : [];
         const visualPlan = imageStep?.prompt || visualPlans.get(base) || step.prompt;
-        const productCheck = affiliate ? ` Product identity is REQUIRED: compare the generated product against supplied product images for shape, material, pattern, selected color, packaging and supported use. No invented logo, garment, feature or SKU. Return unknown if product evidence is insufficient. Image roles after the generated scene: ${JSON.stringify(refs.slice(1).map((id, index) => ({ image: index + 2, role: id === affiliate.backgroundAssetId ? 'background' : productRefs.includes(id) || affiliate.outfitAssetIds.includes(id) ? 'product' : 'character' })))}. Add "product":{"status":"pass|fail|unknown","reason":"visible evidence or missing source"} to the JSON. Expected host mode: ${affiliate.hostMode}; content style: ${affiliate.contentStyle}. Reject an unexpected talking/visible host or face for hands-only/voiceover shots.` : '';
+        const productCheck = affiliate ? `${absentProducts.has(base) ? ' The product is intentionally absent from this shot by plan and must not appear. Product status: not_applicable when it is absent, fail if it appears, unknown if the frame cannot show it.' : ' Product identity is REQUIRED: compare the generated product against supplied product images for shape, material, pattern, selected color, packaging and supported use. No invented logo, garment, feature or SKU. Return unknown if product evidence is insufficient.'} Image roles after the generated scene: ${JSON.stringify(refs.slice(1).map((id, index) => ({ image: index + 2, role: id === affiliate.backgroundAssetId ? 'background' : productRefs.includes(id) || affiliate.outfitAssetIds.includes(id) ? 'product' : 'character' })))}. Add "product":{"status":"${absentProducts.has(base) ? 'not_applicable|fail|unknown' : 'pass|fail|unknown'}","reason":"visible evidence or missing source"} to the JSON. Expected host mode: ${affiliate.hostMode}; content style: ${affiliate.contentStyle}. Reject an unexpected talking/visible host or face for hands-only/voiceover shots.` : '';
         const prompt = frame ? text(`Review these actual images against the supplied visual plan. Image 1 is the generated scene; subsequent images are ${affiliate ? 'labelled product, character or background references' : 'character references'}. Compare scene composition, character face identity and outfit. Do not invent successful checks. If references are insufficient return unknown; if no people are involved mark face/outfit not_applicable. For planned product/hand/foot inserts with no recognizable face, including an intentionally cropped chin or mouth, mark face not_applicable and explain the planned framing. Still assess any recognizable face that is visible; unplanned cropping of a required face is not exempt. Never waive scene, outfit or product checks for a close-up. Return ONLY JSON: {"scene":{"status":"pass|fail|unknown","reason":"..."},"face":{"status":"pass|fail|unknown|not_applicable","reason":"..."},"outfit":{"status":"pass|fail|unknown|not_applicable","reason":"..."}}.${productCheck} Visual plan: ${visualPlan}. Cast: ${JSON.stringify(characters.filter(character => character.assetId && refs.includes(character.assetId)).map(({ name, description }) => ({ name, description })))}`, 'Review prompt', 32768) : '';
         const dub = object(object(production.affiliateDubs ?? {})[base] ?? {}), speechVideo = dubbing ? dub.assetId : video;
         return { base, step, frame, video, speechVideo: typeof speechVideo === 'string' ? speechVideo : undefined, stale: stale || !!dubbing && (dub.videoId !== video || dub.speechId !== (step.dialogue ? object(production.speech ?? {})[base] : undefined)), refs, prompt, visualPlan, imageHash: hash({ frame, prompt, refs, provider: this.store.settings().providers.text }),
           policyHash: hash({ prompt, references: refs.slice(1), visualPlan, motion: step.prompt, duration: step.duration, nativeAudio: data.nativeAudio, pace: data.pace, fps: data.fps, textProvider: this.store.settings().providers.text, asrProvider: this.store.settings().providers.asr, dialogue: step.dialogue, speaker: step.speaker, characters, language: data.language }),
-          affiliate: !!affiliate, audioRequired: affiliate?.contentStyle === 'asmr', videoHash: hash({ version: affiliate ? 2 : 1, video, frame, visualPlan, prompt: step.prompt, duration: step.duration, nativeAudio: data.nativeAudio, pace: data.pace, fps: data.fps, provider: this.store.settings().providers.text }),
+          affiliate: !!affiliate, ...(absentProducts.has(base) ? { productAbsent: true } : {}), audioRequired: affiliate?.contentStyle === 'asmr', videoHash: hash({ version: affiliate ? 2 : 1, video, frame, visualPlan, prompt: step.prompt, duration: step.duration, nativeAudio: data.nativeAudio, pace: data.pace, fps: data.fps, provider: this.store.settings().providers.text }),
           speechHash: hash({ video: speechVideo, dialogue: step.dialogue, speaker: step.speaker, characters, language: data.language, provider: this.store.settings().providers.asr }) };
       });
     };
@@ -1484,13 +1488,13 @@ export class StudioService extends EventEmitter {
       const saved = object(states[base] ?? {}); saved[kind] = { ...stateFor(base, kind, fingerprint), ...value, fingerprint, ...(typeof value.response === 'string' ? { responseAt: Date.now(), sourceTaskId: task.id } : {}) }; states[base] = saved; context.checkpoint({ reviews: states });
     };
     const analyses = new Map<string, Awaited<ReturnType<typeof analyzeSpeech>>>();
-    const audioPresent = new Map<string, boolean>();
+    const audioPresent = new Map<string, boolean>(), lengths = new Map<string, number>();
     const points: Parameters<typeof compareSpeakers>[0] = [];
     if (project.data.nativeAudio === true || dubbing) for (const [index, target] of targets.entries()) {
       if (!target.speechVideo || target.stale) continue;
       const path = this.store.assetPath(target.speechVideo), media = this.media();
       const info = await media.probe(path, context.signal);
-      audioPresent.set(target.base, info.hasAudio);
+      audioPresent.set(target.base, info.hasAudio); lengths.set(target.base, info.duration);
       const acoustic = info.hasAudio ? await this.withMedia(context.signal, () => analyzeSpeech(path, media.executablePath, context.signal)) : { duration: info.duration, voiced: 0, parts: [], f0: null };
       assertCurrent(); analyses.set(target.base, acoustic);
       const span = acoustic.parts.filter(part => part.end - part.start >= 0.8).sort((a, b) => (b.end - b.start) - (a.end - a.start))[0];
@@ -1518,7 +1522,7 @@ export class StudioService extends EventEmitter {
       else if (target.step.speaker && identity.status === 'unknown' && status !== 'fail') status = 'unknown';
       if (target.audioRequired && !audioPresent.get(target.base)) return { ...speech, identity, status: 'fail', reason: 'Clip ASMR không có luồng âm thanh thao tác' };
       const measured = analyses.get(target.base);
-      const window = !dubbing && target.affiliate && target.step.dialogue && measured?.parts.length ? clipWindow(project.data, measured.duration, target.step.duration, measured, true) : undefined;
+      const window = !dubbing && target.affiliate && target.step.dialogue && measured?.parts.length ? clipWindow(project.data, affiliateV2(project) ? Math.min(lengths.get(target.base) ?? measured.duration, measured.duration) : measured.duration, target.step.duration, measured, true) : undefined;
       if (window?.speechOverflow) return { ...speech, identity, status: 'fail', reason: 'Lời nói vượt thời lượng shot; nói đúng câu ngắn gọn hơn trong khoảng dựng, không bỏ hoặc đổi từ' };
       if (window?.truncated) return { ...speech, identity, status: 'fail', reason: 'Lời nói bị cắt ở cuối clip; tạo lại clip để nói trọn câu trước giây cuối, không bỏ hoặc đổi từ' };
       return { ...speech, identity, status };
@@ -1561,7 +1565,7 @@ export class StudioService extends EventEmitter {
         assertCurrent(); let parsed: Record<string, unknown>;
         try { parsed = object(JSON.parse(response.trim().replace(/^```(?:json)?\s*\n?([\s\S]*?)\n?```$/i, '$1'))); } catch { throw new Error('Image review must return valid JSON'); }
         const checks: Record<string, { status: string; reason: string }> = {};
-        for (const kind of ['scene', 'face', 'outfit', ...(target.affiliate ? ['product'] : [])]) { const value = object(parsed[kind]); if (!(kind === 'product' ? ['pass', 'fail', 'unknown'] : ['pass', 'fail', 'unknown', 'not_applicable']).includes(String(value.status))) throw new Error('Invalid image review status'); checks[kind] = { status: String(value.status), reason: text(value.reason, 'Review reason', 4000) }; }
+        for (const kind of ['scene', 'face', 'outfit', ...(target.affiliate ? ['product'] : [])]) { const value = object(parsed[kind]); if (!(kind === 'product' && !target.productAbsent ? ['pass', 'fail', 'unknown'] : ['pass', 'fail', 'unknown', 'not_applicable']).includes(String(value.status))) throw new Error('Invalid image review status'); checks[kind] = { status: String(value.status), reason: text(value.reason, 'Review reason', 4000) }; }
         const status = Object.values(checks).some(value => value.status === 'fail') ? 'fail' : Object.values(checks).some(value => value.status === 'unknown') || checks.scene.status === 'not_applicable' ? 'unknown' : 'pass';
         patch.image = { status, checks, modelAssessed: true, assetId: frame, fingerprint: target.imageHash, taskId: state.sourceTaskId ?? task.id, at: state.responseAt ?? Date.now() }; if (status === 'fail') failed++; outputIds.push(frame);
       }

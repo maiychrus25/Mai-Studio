@@ -61,7 +61,8 @@ const languageName = (context: AffiliatePromptContext) => LANGUAGE_NAMES[context
 const voiceLock = (context: AffiliatePromptContext) => context.language === 'vi' ? `VOICE LOCK — ${ACCENT_PHRASES[context.accent]}. ` : '';
 const hostName = (context: AffiliatePromptContext) => context.host?.name ?? (context.group === 'talk' ? 'the presenter' : 'the model');
 const quoted = (line: string) => `"${line.replace(/\s+/g, ' ').trim().replace(/"/g, '”')}"`;
-const speechEnd = (context: AffiliatePromptContext, line: string) => context.group === 'lookbook' ? 3 : context.group === 'fashion' ? 4 : Math.round(1.6 + 0.3 * line.trim().split(/\s+/).length);
+// Capped so a long line still leaves the closing 9–10 s segment of the 10-second clip.
+const speechEnd = (context: AffiliatePromptContext, line: string) => context.group === 'lookbook' ? 3 : context.group === 'fashion' ? 4 : Math.min(9, Math.round(1.6 + 0.3 * line.trim().split(/\s+/).length));
 const isSpoken = (context: AffiliatePromptContext, shot: AffiliatePromptShot) => !!shot.line.trim() && context.hostMode !== 'silent';
 const lookOf = (context: AffiliatePromptContext, shot: AffiliatePromptShot) => {
   const index = shot.outfitIndex ?? 0, look = context.outfitLooks?.[index];
@@ -135,8 +136,10 @@ export function affiliateImagePrompt(context: AffiliatePromptContext, shot: Affi
 function talkClip(context: AffiliatePromptContext, shot: AffiliatePromptShot): string {
   const name = hostName(context), motion = cleanMotion(shot.motion), camera = CAMERA_LINES[shot.camera]('product'), end = speechEnd(context, shot.line);
   const emotion = shot.emotion || 'Natural, clear';
+  const presenterHead = `Create ONE continuous 10-second ${ratioWord(context).toLowerCase()} video from the attached image, using it as the exact first frame. Keep ${name}'s face, hair, outfit, the place and the lighting exactly as in the image. If the PRODUCT is visible, match its initial placement, scale, packaging, shape, colors and label, then allow only its planned movement in the action below; never teleport or redesign it, and keep its exact shape and printed brand name from the first frame (never turn it into a real object of the same kind). If absent, do not add it. Real-time speed, no slow motion, no cuts; natural smartphone-video feel.`;
+  const presenterMeaning = `${VISUAL_MEANING(shot.scene)}${shot.productVisible ? '' : ' The product is absent from this shot; do not add it.'}`;
   if (isSpoken(context, shot) && context.hostMode === 'presenter' && shot.kind === 'presenter') return [
-    `Create ONE continuous 10-second ${ratioWord(context).toLowerCase()} video from the attached image, using it as the exact first frame. Keep ${name}'s face, hair, outfit, the place and the lighting exactly as in the image. If the PRODUCT is visible, match its initial placement, scale, packaging, shape, colors and label, then allow only its planned movement in the action below; never teleport or redesign it, and keep its exact shape and printed brand name from the first frame (never turn it into a real object of the same kind). If absent, do not add it. Real-time speed, no slow motion, no cuts; natural smartphone-video feel.`,
+    presenterHead,
     `IDENTITY LOCK: ${name} stays exactly the same person as in the first frame for the whole clip — same face shape, eyes, eyebrows, nose, lips, skin tone and hairstyle while talking and moving; no morphing, no face change.`,
     CAMERA_LINES.locked(''),
     `0–0.5 s: ${name} looks into the camera, mouth closed${shot.productVisible ? ", matching the product's initial placement in the image before the planned action" : ''}.`,
@@ -146,8 +149,12 @@ function talkClip(context: AffiliatePromptContext, shot: AffiliatePromptShot): s
     `${end}–10 s: ${name} stops talking and settles naturally in the same scene; nobody speaks.`,
     `${voiceLock(context)}${name}'s voice (host_v1): ${context.host?.voice ?? ''}. The same voice in every clip of this video.`,
     'Sound: the voice is clear and in front; only very quiet room tone. No background music, no singing, no other voices. No subtitles, no text, no logos, no watermark, no new people.',
-    `${VISUAL_MEANING(shot.scene)}${shot.productVisible ? '' : ' The product is absent from this shot; do not add it.'}`,
+    presenterMeaning,
   ].join('\n');
+  // No Muse sample: a line-less presenter shot (keepScript) keeps the presenter's identity instead of the faceless product template.
+  if (!isSpoken(context, shot) && shot.kind === 'presenter' && context.host) return [presenterHead, identityLock(name), CAMERA_LINES.locked(''),
+    `Action: ${motion || "preserve the scene's meaningful posture and expression."}`,
+    'Nobody speaks. Sound: only quiet natural ambient sound. No music, no voices, no subtitles, no text, no logos, no watermark.', presenterMeaning].join('\n');
   const head = `Create ONE continuous 10-second ${ratioWord(context).toLowerCase()} video from the attached image, using it as the exact first frame. Keep the place, lighting and identities in the image the same. If the PRODUCT is visible, match its initial placement, scale, packaging, shape, colors and label, then allow only its planned movement in the action below; never teleport or redesign it, and keep its exact shape and printed brand name from the first frame (never turn it into a real object of the same kind). If absent, do not add it.`;
   if (!isSpoken(context, shot)) return [`${head} Real-time speed, no cuts.`, camera, `Action: ${(motion || "preserve the scene's meaningful pose and object detail.").replace(/\.$/, '')}`,
     'Nobody speaks. Sound: only quiet natural ambient sound. No music, no voices, no subtitles, no text, no logos, no watermark.', `${VISUAL_MEANING(shot.scene)}${PRODUCT_VISUAL_TAIL}`].join('\n');

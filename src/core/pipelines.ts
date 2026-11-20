@@ -1,6 +1,6 @@
 import type { Character, Project, Shot } from '../shared/studio';
 import { parseSrt } from './media';
-import { readAffiliateSettings, affiliateMode, affiliateTemplateGroup, type AffiliateSettings } from '../shared/affiliate';
+import { readAffiliateSettings, affiliateMode, affiliateTemplateGroup, affiliateV2, type AffiliateSettings } from '../shared/affiliate';
 import { affiliateCamera, affiliateClipPrompt, affiliateImagePrompt, type AffiliatePromptContext, type AffiliatePromptShot } from './affiliate-prompts';
 import { spokenVietnamese } from './acoustics';
 
@@ -119,9 +119,8 @@ export function affiliateDubbing(project: Pick<Project, 'kind' | 'data'>): { voi
 const AFFILIATE_DEFAULT_LOOK = 'Photorealistic smartphone video: natural skin texture, real everyday places, soft natural daylight, authentic social-media product video look, true-to-life colors';
 export function affiliatePromptContext(project: Pick<Project, 'kind' | 'data'>): AffiliatePromptContext | undefined {
   const data = project.data;
-  if (project.kind !== 'affiliate' || data.affiliate === undefined || data.affiliatePlanVersion !== 2) return;
-  const settings = readAffiliateSettings(data.affiliate), group = affiliateTemplateGroup(settings.contentStyle);
-  if (!group) return;
+  if (!affiliateV2(project)) return;
+  const settings = readAffiliateSettings(data.affiliate), group = affiliateTemplateGroup(settings.contentStyle)!;
   const host = affiliateMode(settings).model ? validateCharacters(data.characters)[0] : undefined, product = data.product === undefined ? {} : record(data.product, 'product');
   return { group, hostMode: settings.hostMode, ratio: (data.ratio ?? '9:16') as AffiliatePromptContext['ratio'], language: typeof data.language === 'string' && data.language ? data.language : 'vi', accent: settings.accent,
     style: [data.style, data.styleText].filter(value => typeof value === 'string' && value.trim()).join('. ') || AFFILIATE_DEFAULT_LOOK, place: '',
@@ -131,7 +130,8 @@ export function affiliatePromptContext(project: Pick<Project, 'kind' | 'data'>):
     ...(Array.isArray(data.outfitLooks) ? { outfitLooks: data.outfitLooks as AffiliatePromptContext['outfitLooks'] } : {}) };
 }
 function affiliateMuseStep(context: AffiliatePromptContext, settings: AffiliateSettings, shot: Shot, index: number, place: string, productRefs: string[], hostAsset: string | undefined): { image: string; clip: string; refIds: string[] } {
-  const kind = shot.shotType === 'single' ? 'presenter' : 'product', visible = shot.productVisible !== false, lookbook = context.group === 'lookbook';
+  // Fashion and lookbook models always wear the garment, so their shots keep the product.
+  const kind = shot.shotType === 'single' ? 'presenter' : 'product', visible = context.group !== 'talk' || shot.productVisible !== false, lookbook = context.group === 'lookbook';
   const photos = lookbook ? productRefs : visible ? productRefs.slice(0, kind === 'presenter' ? 2 : 3) : [];
   const host = (lookbook || kind === 'presenter') && hostAsset ? [hostAsset] : [];
   const refIds = [...new Set([...(shot.assetId ? [shot.assetId] : []), ...photos, ...host, ...(settings.backgroundAssetId ? [settings.backgroundAssetId] : [])])];
