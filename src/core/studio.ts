@@ -779,7 +779,7 @@ export class StudioService extends EventEmitter {
     }
     if (['images', 'videos', 'speech'].includes(stage)) { context.checkpoint({ outputIds: [...new Set(stageIds)] }); return { outputIds: [...new Set(stageIds)], message: `Hoàn tất bước ${stage}` }; }
     if (fastShots) {
-      const edit = affiliateFastEdit(fastShots, fastEdit!.speechSpeed); let at = 0;
+      const edit = affiliateFastEdit(fastShots, fastEdit!.speechSpeed, Number(project.data.fps) || 24); let at = 0;
       for (const segment of edit.segments) { clips.push({ path: fastShots[segment.shot].path, start: at, trimStart: segment.trimStart, trimEnd: segment.trimEnd, duration: segment.duration, speed: fastEdit!.speechSpeed, punch: segment.punch, pop: segment.pop }); at += segment.duration; }
       measuredCuts!.splice(0, measuredCuts!.length, ...edit.cuts); nativeCues.push(...edit.cues);
     }

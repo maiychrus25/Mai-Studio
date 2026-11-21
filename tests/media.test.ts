@@ -961,3 +961,32 @@ test('slideshow rejects speed, punch and pop', async () => {
     await assert.rejects(tools().slideshow([{ path: image, duration: 0.2, ...extra }], join(root, 'slideshow-invalid.mp4'), options, context()), /speed|punch|pop/i);
   }
 });
+
+test('punch and pop keep square pixels on a 720x1280 frame', { timeout: 30000 }, async () => {
+  const output = join(root, 'portrait-effects.mp4');
+  await tools().merge([
+    { path: sound, trimStart: 0, trimEnd: 0.33, duration: 0.3, speed: 1.1, pop: true },
+    { path: sound, trimStart: 0, trimEnd: 0.33, duration: 0.3, speed: 1.1, punch: true },
+    { path: sound, trimStart: 0, trimEnd: 0.3 },
+    { path: sound, trimStart: 0.1, trimEnd: 0.43, duration: 0.3, speed: 1.1, punch: true },
+  ], output, { width: 720, height: 1280, fps: 30 }, context(AbortSignal.timeout(25000)));
+  const video = (await inspect(output)).streams.find(stream => stream.codec_type === 'video') as { width?: number; height?: number; sample_aspect_ratio?: string };
+  assert.deepEqual([video.width, video.height, video.sample_aspect_ratio], [720, 1280, '1:1']);
+});
+
+test('every hierarchical chunk keeps the retime and crop of the inputs that set them', { timeout: 60000 }, async () => {
+  const inputs = Array.from({ length: 101 }, (_, index) => ({ path: silent, trimStart: 0, trimEnd: 0.22, duration: 0.2, speed: 1.1, punch: index % 2 === 1 }));
+  const recorded = await recordedMerge('hierarchy-effects-filters-ffmpeg');
+  await recorded.media.merge(inputs, join(root, 'hierarchy-effects-filters.mp4'), { width: 64, height: 64, fps: 20 }, context(AbortSignal.timeout(55000)));
+  const chunks = (await recorded.calls()).map(args => args[args.indexOf('-filter_complex') + 1]).filter(graph => graph?.includes('trim=start='));
+  assert.equal(chunks.length, 2);
+  chunks.forEach((graph, chunk) => {
+    const filters = graph.split(';').filter(filter => /^\[\d+:v:0\]/.test(filter));
+    assert.equal(filters.length, chunk ? 1 : 100);
+    filters.forEach((filter, index) => {
+      const input = chunk * 100 + index;
+      assert.ok(filter.includes('setpts=(PTS-STARTPTS)/1.1'), `input ${input} retime`);
+      assert.equal(filter.includes('crop=iw/1.1:ih/1.1'), inputs[input].punch, `input ${input} punch`);
+    });
+  });
+});

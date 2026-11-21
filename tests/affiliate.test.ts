@@ -395,3 +395,20 @@ test('affiliate settings default to fast pace at 1.1 and reject invalid values',
     assert.throws(() => shared().readAffiliateSettings(value), /affiliate|invalid/i, JSON.stringify(value));
   }
 });
+
+// sha256 of the planning and review prompts built by main (before pace/speechSpeed existed) for the same projects.
+const MAIN_PROMPTS = [
+  ['b62e859236bed074dbdfa122d433255412729b7d1229236bc95a9b98f0d475f9', '2bd521948364ba5c65a169e937bcdfa684f7acf9080c5c7fc8aeadd4797d2a99'],
+  ['4d469bfa401cb8adcdda2c71fc1efa40fa42ebf43127a57affd6408a6c09c249', '117fd71c67287f59d2732bdfa6d76ae3bfceb9b7edd67a81ca5197ec5ee90861'],
+];
+
+test('render-only pace and speech speed never reach planning or review prompts', () => {
+  const { createHash } = require('node:crypto') as typeof import('node:crypto');
+  const hash = (value: string) => createHash('sha256').update(value).digest('hex');
+  const prompts = [project({ contentStyle: 'review' }), project({ contentStyle: 'fashion', hostMode: 'presenter' })].map(source => {
+    const planning = core().affiliatePlanningPrompt(source), review = core().affiliateReviewPrompt(source, fixture(source).data);
+    assert.doesNotMatch(planning + review, /"pace"|"speechSpeed"/);
+    return [hash(planning), hash(review)];
+  });
+  assert.deepEqual(prompts, MAIN_PROMPTS);
+});

@@ -34,6 +34,8 @@ function json(value: unknown, label: string, max = 512 * 1024): string {
     return text(result, `${label} JSON`, max);
   } catch { throw new Error(`Invalid ${label} JSON: nonfinite value or limit/prototype violation`); }
 }
+// Render-only options never reach planning or review prompts.
+function promptSettings({ pace: _pace, speechSpeed: _speechSpeed, ...settings }: AffiliateSettings): Omit<AffiliateSettings, 'pace' | 'speechSpeed'> { return settings; }
 function configuration(project: Project) {
   if (project.kind !== 'affiliate' || project.data.affiliate === undefined) throw new Error('Explicit Affiliate configuration is required');
   const settings = readAffiliateSettings(project.data.affiliate); const mode = affiliateMode(settings);
@@ -54,7 +56,7 @@ export function affiliatePlanningPrompt(project: Project): string {
   const count = affiliateSceneCount(settings);
   const boundaries = Array.from({ length: count + 1 }, (_, index) => Math.round(index * settings.seconds * 1000 / count) / 1000);
   const timeline = boundaries.slice(0, -1).map((start, index) => ({ start, duration: Math.round((boundaries[index + 1] - start) * 1000) / 1000 }));
-  const input = { settings, mode, language, ratio, style: project.data.style, styleText: project.data.styleText, script: project.data.script, keepScript: project.data.keepScript === true,
+  const input = { settings: promptSettings(settings), mode, language, ratio, style: project.data.style, styleText: project.data.styleText, script: project.data.script, keepScript: project.data.keepScript === true,
     product: project.data.product, productSource: project.data.productSource, productAssetIds: project.data.productAssetIds,
     suppliedCharacters: characters, timeline };
   const group = affiliateTemplateGroup(settings.contentStyle), narrator = settings.hostMode === 'voiceover' && !mode.model;
@@ -223,7 +225,7 @@ facts: compare every factual spoken claim, caption, social post caption/hashtags
 structure: check the ${settings.contentStyle} recipe, exactly ${affiliateSceneCount(settings)} shots, contiguous timeline totaling ${settings.seconds} seconds, hook and causal progression, usable actions, selected outfit order and one persistent caption for ASMR/POV and scene-specific outfit captions for lookbook. Recipe: ${RECIPES[settings.contentStyle]}${v2 ? ` Muse shape: one product fact per shot; beat only from ${(group === 'lookbook' ? AFFILIATE_LOOK_BEATS : AFFILIATE_BEATS).join(', ')}${group === 'lookbook' ? ', per outfit hanger → wear → detail, ending with final' : ', typically hook → intro → (benefit, demo) repeated → proof → offer → cta, with proof and offer numbers only from the source'}; shotType insert (no recognizable face) or single (host or model visible); ${group === 'talk' ? 'one short spoken line per shot' : 'speech only on the first and last shot, each middle shot with a distinct short caption'}; an insert shot may carry the host's line as an off-screen voice. Shot durations are nominal because spoken shots are cut to the measured speech.` : ''}
 Also check that each described action and problem hook can use the actual source product without changing its shape, height, pattern or SKU or inventing a defect. Fail a plan requiring an incompatible substitute while keeping source-product references locked. ${v2 ? 'Check that each action is simple and each line is one short sentence;' : 'Check that action and dialogue can complete together in each shot\'s allotted seconds;'} empty-dialogue inserts must not request a speaking host. Missing or excerpted physical evidence is unknown, never an assumed pass.
 host: check ${json(mode, 'Affiliate review host')} against every shot: single consistent model and voice, correct host mode, chosen gender/age/accent/pose, offscreen voiceover, no speech for silent/ASMR, hands-only ASMR and first-person POV with presenter only in the final shot. Reject unselected character/outfit/asset references. Image/video prompts are reviewed separately by scene QC; never infer rendered face/voice quality from this script. Report unknown for script/source evidence that cannot establish a requested check. Physical descriptions excerpted: ${excerpted}; use unknown if an excerpt prevents a structural or host assessment, never pretend the missing text was reviewed.
-SETTINGS: ${json(settings, 'Affiliate review settings')}
+SETTINGS: ${json(promptSettings(settings), 'Affiliate review settings')}
 SOURCE: ${json({ product: project.data.product, provenance: { method: source.method, url: source.url, importedAt: source.importedAt, capturedAt: source.capturedAt, missingFields: source.missingFields } }, 'Affiliate review source', 32768)}
 CANDIDATE: ${json(candidate, 'Affiliate review candidate', 32768)}`, 'Affiliate review request', 32768);
 }

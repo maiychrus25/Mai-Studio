@@ -68,6 +68,9 @@ export function AffiliateWorkflow({ project, data, onChange, onRun }: {
   const recommendation = settings.contentStyle === 'fashion' ? 'presenter' : settings.contentStyle === 'snack' ? 'voiceover' : montage ? 'silent' : undefined;
   const recommendedHost = AFFILIATE_HOSTS.find(option => option.id === recommendation);
   const recommended = recommendation && (settings.hostMode !== recommendation || montage && settings.seconds !== 15);
+  // Mirrors the render's fast-edit condition (spec 5.1); an unplanned project may still become v2.
+  const fastEditable = affiliateTemplateGroup(settings.contentStyle) === 'talk' && settings.hostMode !== 'silent' && data.renderMode !== 'slideshow' && data.affiliateDub !== true
+    && (!Array.isArray(data.shots) || !data.shots.length || data.affiliatePlanVersion === 2);
   const patch = (changes: Record<string, unknown>) => {
     const next = { ...settings, ...record(data.affiliate), ...changes };
     onChange({ affiliate: next, ...((next.hostMode === 'silent' || next.contentStyle === 'asmr') && data.affiliateDub === true ? { affiliateDub: false } : {}) });
@@ -146,7 +149,7 @@ export function AffiliateWorkflow({ project, data, onChange, onRun }: {
         <Field label={t('Kiểu nội dung', 'Content style')} hint={style ? t(style.hintVi, style.hintEn) : undefined}><select value={settings.contentStyle} disabled={disabled} onChange={event => patch({ contentStyle: event.target.value })}>{options(AFFILIATE_STYLES)}</select></Field>
         <Field label={t('Cách dẫn dắt', 'Host mode')}><select value={settings.hostMode} disabled={disabled} onChange={event => patch({ hostMode: event.target.value })}>{options(AFFILIATE_HOSTS)}</select></Field>
         <Field label={t('Thời lượng mục tiêu', 'Target duration')} hint={affiliateTemplateGroup(settings.contentStyle) && data.affiliateDub !== true ? t('Video có lời được cắt theo lời nói thật nên có thể dài hoặc ngắn hơn mục tiêu.', 'Spoken videos are cut to the measured speech, so the result can run longer or shorter than the target.') : undefined}><select value={settings.seconds} disabled={disabled} onChange={event => patch({ seconds: Number(event.target.value) })}>{[15, 30, 45, 60].map(seconds => <option key={seconds} value={seconds}>{seconds} {t('giây', 'seconds')}</option>)}</select></Field>
-        {affiliateTemplateGroup(settings.contentStyle) === 'talk' && data.affiliateDub !== true && <>
+        {fastEditable && <>
           <Field label={t('Nhịp dựng', 'Edit pace')}><select value={settings.pace} disabled={disabled} onChange={event => patch({ pace: event.target.value })}>{options(AFFILIATE_PACES)}</select></Field>
           <Field label={t('Tốc độ nói', 'Speech speed')}><select value={settings.speechSpeed} disabled={disabled || settings.pace !== 'fast'} onChange={event => patch({ speechSpeed: Number(event.target.value) })}>{AFFILIATE_SPEECH_SPEEDS.map(speed => <option key={speed.id} value={speed.id}>{t(speed.vi, speed.en)}</option>)}</select></Field>
         </>}

@@ -54,7 +54,24 @@ export function phraseCues(text: string, parts: Span[], maxWords = MAX_WORDS): A
   let spans = parts.filter(part => Number.isFinite(part.start) && Number.isFinite(part.end) && part.end > part.start).sort((a, b) => a.start - b.start);
   if (!words.length || !spans.length) return [];
   if (spans.length > words.length) spans = [...spans].sort((a, b) => (b.end - b.start) - (a.end - a.start)).slice(0, words.length).sort((a, b) => a.start - b.start);
-  const sizes = allocate(words.length, spans), cues: Array<{ start: number; end: number; text: string }> = [];
+  let sizes = allocate(words.length, spans);
+  // A part that would hold a single word joins its nearer neighbour, so no cue is a lone word.
+  while (spans.length > 1 && sizes.some(size => size < MIN_WORDS)) {
+    const i = sizes.findIndex(size => size < MIN_WORDS);
+    const a = i > 0 && (i === spans.length - 1 || spans[i].start - spans[i - 1].end <= spans[i + 1].start - spans[i].end) ? i - 1 : i;
+    spans = [...spans.slice(0, a), { start: spans[a].start, end: spans[a + 1].end }, ...spans.slice(a + 2)];
+    sizes = allocate(words.length, spans);
+  }
+  // Each boundary between parts may move one word to a better-scoring cut.
+  let ideal = 0, previous = 0;
+  sizes = sizes.map((size, index) => {
+    ideal += size;
+    if (index === sizes.length - 1) return words.length - previous;
+    const from = Math.max(previous + MIN_WORDS, ideal - 1), to = Math.min(words.length - MIN_WORDS * (sizes.length - 1 - index), ideal + 1);
+    const at = from <= to ? bestCut(words, from, to, ideal).at : ideal, chosen = at - previous;
+    previous = at; return chosen;
+  });
+  const cues: Array<{ start: number; end: number; text: string }> = [];
   let offset = 0;
   spans.forEach((span, index) => {
     const chunks = splitWords(words.slice(offset, offset + sizes[index]), maxWords), length = span.end - span.start;
@@ -71,8 +88,9 @@ export function phraseCues(text: string, parts: Span[], maxWords = MAX_WORDS): A
   });
 }
 
-function check(shots: FastEditShot[], speed: number): void {
+function check(shots: FastEditShot[], speed: number, fps?: number): void {
   if (!Number.isFinite(speed) || speed < 0.5 || speed > 2) throw new Error('Speed must be between 0.5 and 2');
+  if (fps !== undefined && !(Number.isInteger(fps) && fps > 0)) throw new Error('fps must be a positive integer');
   shots.forEach((shot, index) => {
     const { clipDuration, window } = shot, values = [clipDuration, window.start, window.duration, ...shot.parts.flatMap(part => [part.start, part.end])];
     if (values.some(value => !Number.isFinite(value))) throw new Error(`Shot ${index + 1} has a non-finite time`);
@@ -97,19 +115,30 @@ function shotPieces(shot: FastEditShot, speed: number): { pieces: Span[]; spoken
   return { pieces: kept.length ? kept : [pieces.reduce((a, b) => (b.end - b.start > a.end - a.start ? b : a))], spoken };
 }
 
-export function affiliateFastEdit(shots: FastEditShot[], speed: number): FastEditResult {
-  check(shots, speed);
-  const segments: FastEditSegment[] = [], cuts = [0], cues: Cue[] = [];
+// merge renders whole output frames; widen each piece to whole frames (end first, then start) so audio is never trimmed mid-word.
+function framePieces(pieces: Span[], clipDuration: number, frame: number): Span[] {
+  return pieces.reduce<Span[]>((out, piece, index) => {
+    const lo = out.at(-1)?.end ?? 0, hi = pieces[index + 1]?.start ?? clipDuration;
+    let frames = Math.ceil((piece.end - piece.start) / frame - EPS), end = Math.min(piece.start + frames * frame, hi);
+    const start = Math.max(lo, end - frames * frame);
+    if (end - start < frames * frame - EPS) { frames = Math.max(1, Math.floor((end - start) / frame + EPS)); end = start + frames * frame; }
+    return [...out, { start, end }];
+  }, []);
+}
+
+export function affiliateFastEdit(shots: FastEditShot[], speed: number, fps?: number): FastEditResult {
+  check(shots, speed, fps);
+  const segments: FastEditSegment[] = [], cuts = [0], cues: Cue[] = [], every = fps ? Math.round(FAST_PUNCH_EVERY * fps) / fps : FAST_PUNCH_EVERY;
   shots.forEach((shot, index) => {
-    const { pieces, spoken } = shotPieces(shot, speed), base = cuts[index];
+    const { pieces: raw, spoken } = shotPieces(shot, speed), pieces = fps ? framePieces(raw, shot.clipDuration, speed / fps) : raw, base = cuts[index];
     let punch = false, clock = base;
     const map: Array<{ piece: Span; at: number }> = [];
     for (const piece of pieces) {
       map.push({ piece, at: clock });
       let cursor = piece.start;
       while ((piece.end - cursor) / speed > FAST_PUNCH_EVERY * NO_SPLIT_FACTOR + EPS) {
-        const trimEnd = cursor + FAST_PUNCH_EVERY * speed;
-        segments.push({ shot: index, trimStart: cursor, trimEnd, duration: FAST_PUNCH_EVERY, punch, pop: !segments.length });
+        const trimEnd = cursor + every * speed;
+        segments.push({ shot: index, trimStart: cursor, trimEnd, duration: every, punch, pop: !segments.length });
         punch = !punch; cursor = trimEnd;
       }
       const duration = (piece.end - cursor) / speed;

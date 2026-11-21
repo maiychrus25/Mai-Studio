@@ -915,3 +915,20 @@ test('changing pace or speech speed invalidates the rendered output', async t =>
     }
   } finally { await studio.close(); rmSync(root, { recursive: true, force: true }); }
 });
+
+test('fast edit captions and flashes land on the fast-edit cuts', async t => {
+  const root = mkdtempSync(join(tmpdir(), 'maistudio-fast-cuts-')); const studio = new StudioService(root); const calls = captureMerge(t);
+  try {
+    const [clip] = await studio.importFiles([gapClip(root)]);
+    const p = await studio.invoke<Project>('project.save', { name: 'fast cuts', kind: 'affiliate', data: talkProject(clip.id, { screenText: true, endCard: false, aiLabel: false, adLabel: false, showPrice: false }) });
+    const done = await renderStage(studio, p.id); assert.equal(done.status, 'succeeded', done.error);
+    const { inputs, options } = calls.at(-1)!;
+    assert.equal(inputs.length, 4, 'two segments per shot');
+    const cut = inputs[2].start, total = inputs[3].start + inputs[3].duration;
+    const { readFileSync } = await import('node:fs');
+    const captions = await studio.invoke<Array<{ start: number; end: number; text: string }>>('srt.parse', { text: readFileSync(join(root, 'work', done.id, 'affiliate-captions.srt'), 'utf8') });
+    assert.deepEqual(captions.map(cue => cue.text), ['Chữ 1', 'Chữ 2']);
+    for (const [actual, expected] of [[captions[0].start, 0], [captions[0].end, cut], [captions[1].start, cut], [captions[1].end, total]]) assert.ok(Math.abs(actual - expected) < 0.002, `${JSON.stringify(captions)} vs cut ${cut}, total ${total}`);
+    assert.equal(options.flashes.length, 1); assert.ok(Math.abs(options.flashes[0] - cut) < 1e-9, `${options.flashes} vs ${cut}`);
+  } finally { await studio.close(); rmSync(root, { recursive: true, force: true }); }
+});

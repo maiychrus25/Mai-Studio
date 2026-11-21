@@ -353,9 +353,9 @@ export class MediaTools {
           args.push('-threads', '1', ...(images ? ['-loop', '1', '-framerate', String(settings.fps)] : []), '-protocol_whitelist', 'file,pipe', '-i', clip.path);
           const sourceTrim = clip.trimEnd === undefined ? `duration=${length}` : `start=${clip.trimStart}:end=${clip.speed === undefined ? Math.min(clip.trimEnd, clip.trimStart + length) : clip.trimEnd}`;
           const retime = clip.speed === undefined ? 'setpts=PTS-STARTPTS' : `setpts=(PTS-STARTPTS)/${clip.speed}`;
-          const punch = clip.punch ? `,crop=iw/1.1:ih/1.1:(iw-iw/1.1)/2:(ih-ih/1.1)*0.4,scale=${settings.width}:${settings.height}` : '';
+          const punch = clip.punch ? `,crop=iw/1.1:ih/1.1:(iw-iw/1.1)/2:(ih-ih/1.1)*0.4,scale=${settings.width}:${settings.height},setsar=1` : '';
           const popFrames = Math.max(1, Math.round(0.4 * settings.fps));
-          const pop = clip.pop ? `,zoompan=z='1.15-0.15*min(1,on/${popFrames})':x='(iw-iw/zoom)/2':y='(ih-ih/zoom)*0.4':d=1:s=${settings.width}x${settings.height}:fps=${settings.fps}` : '';
+          const pop = clip.pop ? `,zoompan=z='1.15-0.15*min(1,on/${popFrames})':x='(iw-iw/zoom)/2':y='(ih-ih/zoom)*0.4':d=1:s=${settings.width}x${settings.height}:fps=${settings.fps},setsar=1` : '';
           const motionFrames = Math.max(1, Math.round(length * settings.fps) - 1);
           const motion = images && settings.motion === 'kenburns'
             ? `,zoompan=z='1+0.06*min(1,on/${motionFrames})':x='(iw-iw/zoom)*min(1,on/${motionFrames})':y='(ih-ih/zoom)/2':d=1:s=${settings.width}x${settings.height}:fps=${settings.fps}` : '';
