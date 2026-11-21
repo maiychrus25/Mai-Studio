@@ -780,7 +780,7 @@ export class StudioService extends EventEmitter {
     if (['images', 'videos', 'speech'].includes(stage)) { context.checkpoint({ outputIds: [...new Set(stageIds)] }); return { outputIds: [...new Set(stageIds)], message: `Hoàn tất bước ${stage}` }; }
     if (fastShots) {
       const edit = affiliateFastEdit(fastShots, fastEdit!.speechSpeed, Number(project.data.fps) || 24); let at = 0;
-      for (const segment of edit.segments) { clips.push({ path: fastShots[segment.shot].path, start: at, trimStart: segment.trimStart, trimEnd: segment.trimEnd, duration: segment.duration, speed: fastEdit!.speechSpeed, punch: segment.punch, pop: segment.pop }); at += segment.duration; }
+      for (const segment of edit.segments) { clips.push({ path: fastShots[segment.shot].path, start: at, trimStart: segment.trimStart, trimEnd: segment.trimEnd, duration: segment.duration, speed: fastEdit!.speechSpeed }); at += segment.duration; }
       measuredCuts!.splice(0, measuredCuts!.length, ...edit.cuts); nativeCues.push(...edit.cues);
     }
     if (!clips.length) throw new Error('Pipeline chưa có clip để dựng');

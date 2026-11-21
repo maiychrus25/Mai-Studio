@@ -835,7 +835,7 @@ const renderStage = async (studio: StudioService, projectId: string): Promise<Ta
   return studio.store.task(task.id);
 };
 
-test('fast edit render cuts silences, punches and speeds up spoken shots', async t => {
+test('fast edit render cuts silences and speeds up spoken shots without zoom', async t => {
   const root = mkdtempSync(join(tmpdir(), 'maistudio-fast-')); const studio = new StudioService(root); const calls = captureMerge(t);
   try {
     const [clip] = await studio.importFiles([gapClip(root)]);
@@ -844,8 +844,7 @@ test('fast edit render cuts silences, punches and speeds up spoken shots', async
     const inputs = calls.at(-1)!.inputs;
     assert.ok(inputs.length > 2, `more segments than shots: ${inputs.length}`);
     assert.ok(inputs.every(input => input.speed === 1.1), JSON.stringify(inputs));
-    assert.equal(inputs[0].pop, true); assert.ok(inputs.slice(1).every(input => input.pop !== true));
-    assert.deepEqual(inputs.map(input => input.punch), [false, true, false, true]);
+    assert.ok(inputs.every(input => input.punch === undefined && input.pop === undefined), 'no automatic zoom');
     const { analyzeSpeech } = require('../src/core/acoustics') as typeof import('../src/core/acoustics');
     const speech = await analyzeSpeech(studio.store.assetPath(clip.id), require('ffmpeg-static') as string, new AbortController().signal);
     for (const shot of [inputs.slice(0, 2), inputs.slice(2)]) for (const part of speech.parts) assert.ok(shot.some(input => input.trimStart <= part.start && input.trimEnd >= part.end), `no spoken word is cut: ${JSON.stringify(part)} in ${JSON.stringify(shot)}`);

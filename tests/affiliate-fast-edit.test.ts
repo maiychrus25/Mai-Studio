@@ -4,7 +4,7 @@ import assert from 'node:assert/strict';
 type Span = { start: number; end: number };
 const api = () => require('../src/core/affiliate-fast-edit') as {
   affiliateFastEdit(shots: Array<{ clipDuration: number; window: { start: number; duration: number }; parts: Span[]; dialogue?: string }>, speed: number): {
-    segments: Array<{ shot: number; trimStart: number; trimEnd: number; duration: number; punch: boolean; pop: boolean }>; cuts: number[]; cues: Array<{ index: number; start: number; end: number; text: string }> };
+    segments: Array<{ shot: number; trimStart: number; trimEnd: number; duration: number }>; cuts: number[]; cues: Array<{ index: number; start: number; end: number; text: string }> };
   phraseCues(text: string, parts: Span[], maxWords?: number): Array<Span & { text: string }>;
 };
 const near = (actual: number, expected: number) => assert.ok(Math.abs(actual - expected) < 1e-9, `${actual} != ${expected}`);
@@ -15,24 +15,22 @@ const WEAK = 'hay được để từ với × - của những là x rất có t
 test('jump cut keeps 0.08 seconds around a silence over 0.3', () => {
   const { segments } = api().affiliateFastEdit([shot({ start: 0.38, duration: 4.42 }, [{ start: 0.5, end: 1.6 }, { start: 2.4, end: 4.5 }])], 1);
   nearAll(segments.flatMap(s => [s.trimStart, s.trimEnd]), [0.38, 1.68, 2.32, 4.8]);
-  assert.deepEqual(segments.map(s => s.punch), [false, true]);
+  assert.ok(segments.every(s => !('punch' in s) && !('pop' in s)), 'no zoom effects');
 });
 
 test('gaps up to 0.3 seconds are not cut', () => {
   const { segments } = api().affiliateFastEdit([shot({ start: 0.38, duration: 4.42 }, [{ start: 0.5, end: 1.6 }, { start: 1.9, end: 3 }])], 1);
   nearAll([segments[0].trimStart, segments.at(-1)!.trimEnd], [0.38, 4.8]);
-  assert.deepEqual(segments.map(s => s.punch), [false, true, false]);
-  near(segments[0].trimEnd, segments[1].trimStart);
+  assert.equal(segments.length, 1);
 });
 
-test('long speech is split every 1.7 seconds', () => {
+test('long continuous speech stays one segment', () => {
   const { segments } = api().affiliateFastEdit([shot({ start: 0.4, duration: 8.2 }, [{ start: 0.5, end: 8.3 }])], 1);
-  nearAll([segments[0].trimStart, ...segments.map(s => s.trimEnd)], [0.4, 2.1, 3.8, 5.5, 7.2, 8.6]);
-  assert.deepEqual(segments.map(s => s.punch), [false, true, false, true, false]);
-  segments.forEach(s => assert.ok(s.duration >= 0.12));
+  assert.equal(segments.length, 1);
+  nearAll([segments[0].trimStart, segments[0].trimEnd], [0.4, 8.6]);
   const fast = api().affiliateFastEdit([shot({ start: 0.4, duration: 8.2 }, [{ start: 0.5, end: 8.3 }])], 1.1).segments;
-  near(fast[0].trimEnd - fast[0].trimStart, 1.7 * 1.1);
-  near(fast[0].duration, 1.7);
+  assert.equal(fast.length, 1);
+  near(fast[0].duration, 8.2 / 1.1);
 });
 
 test('tiny pieces are dropped', () => {
@@ -43,20 +41,16 @@ test('tiny pieces are dropped', () => {
 
 test('silent shot is one piece and speed applies', () => {
   const { segments } = api().affiliateFastEdit([{ clipDuration: 5, window: { start: 0, duration: 3 }, parts: [] }], 1.1);
-  near(segments.reduce((sum, s) => sum + s.duration, 0), 3 / 1.1);
-  const one = api().affiliateFastEdit([{ clipDuration: 5, window: { start: 0, duration: 2.5 }, parts: [] }], 1.1).segments;
-  assert.equal(one.length, 1);
-  near(one[0].duration, 2.5 / 1.1);
+  assert.equal(segments.length, 1);
+  near(segments[0].duration, 3 / 1.1);
 });
 
-test('pop only on the first segment and cuts follow the output timeline', () => {
+test('cuts follow the output timeline', () => {
   const { segments, cuts } = api().affiliateFastEdit([shot({ start: 0, duration: 2 }, [{ start: 0.1, end: 1.9 }]), shot({ start: 0, duration: 3 }, [{ start: 0.1, end: 2.9 }])], 1.1);
-  assert.deepEqual(segments.map(s => s.pop), segments.map((_, i) => i === 0));
   assert.equal(cuts.length, 3);
   near(cuts[0], 0);
   near(cuts[2], segments.reduce((sum, s) => sum + s.duration, 0));
   near(cuts[1], segments.filter(s => s.shot === 0).reduce((sum, s) => sum + s.duration, 0));
-  assert.equal(segments.find(s => s.shot === 1)?.punch, false);
 });
 
 test('parts outside the window are ignored', () => {
@@ -108,7 +102,7 @@ test('segments are whole output frames and still cover every speech part', () =>
   const spans: Span[] = [];
   for (const s of segments) { const last = spans.at(-1); if (last && Math.abs(last.end - s.trimStart) < 1e-9) last.end = s.trimEnd; else spans.push({ start: s.trimStart, end: s.trimEnd }); }
   for (const part of parts) assert.ok(spans.some(span => span.start <= part.start && span.end >= part.end), `${JSON.stringify(part)} in ${JSON.stringify(spans)}`);
-  assert.ok(segments.length > 2, 'the long parts are still split');
+  assert.equal(segments.length, 2, 'one jump cut, no zoom splits');
   for (const fps of [0, 23.976, NaN]) assert.throws(() => edit([shot({ start: 0.38, duration: 7.5 }, parts)], 1.1, fps), /fps/);
 });
 

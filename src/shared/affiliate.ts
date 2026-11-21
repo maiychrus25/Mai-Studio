@@ -30,7 +30,7 @@ export const AFFILIATE_LANGUAGES = [
   { id: 'ru', vi: 'Tiếng Nga', en: 'Russian' }, { id: 'tr', vi: 'Tiếng Thổ Nhĩ Kỳ', en: 'Turkish' }, { id: 'hi', vi: 'Tiếng Hindi', en: 'Hindi' }, { id: 'ar', vi: 'Tiếng Ả Rập', en: 'Arabic' },
 ] as const;
 export const AFFILIATE_LANGUAGES16 = AFFILIATE_LANGUAGES;
-export const AFFILIATE_PACES = [{ id: 'fast', vi: 'Nhanh kiểu TikTok — cắt khoảng lặng, đổi khung', en: 'Fast — cut silences, switch framing' }, { id: 'plain', vi: 'Gọn — giữ nguyên clip', en: 'Plain — keep clips whole' }] as const;
+export const AFFILIATE_PACES = [{ id: 'fast', vi: 'Nhanh kiểu TikTok — cắt khoảng lặng', en: 'Fast — cut silences' }, { id: 'plain', vi: 'Gọn — giữ nguyên clip', en: 'Plain — keep clips whole' }] as const;
 export const AFFILIATE_SPEECH_SPEEDS = [{ id: 1, vi: '1,0×', en: '1.0×' }, { id: 1.1, vi: '1,1× (khuyên dùng)', en: '1.1× (recommended)' }, { id: 1.2, vi: '1,2×', en: '1.2×' }] as const;
 export const AFFILIATE_AGES = [{ id: 'young', vi: '20–25 tuổi', en: '20–25 years' }, { id: 'adult', vi: '26–35 tuổi', en: '26–35 years' }, { id: 'middle', vi: '36–50 tuổi', en: '36–50 years' }] as const;
 export const AFFILIATE_GENDERS = [{ id: 'female', vi: 'Nữ', en: 'Female' }, { id: 'male', vi: 'Nam', en: 'Male' }] as const;

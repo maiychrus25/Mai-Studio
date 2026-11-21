@@ -1,7 +1,7 @@
 import type { Cue } from './media';
 
-export const FAST_JUMP_GAP = 0.3, FAST_JUMP_KEEP = 0.08, FAST_PUNCH_EVERY = 1.7, FAST_MIN_PIECE = 0.12;
-const NO_SPLIT_FACTOR = 1.5, MIN_WORDS = 2, MAX_WORDS = 6, REACH = 2, MIN_CUE = 0.2, CUE_GAP = 0.02, EPS = 1e-9;
+export const FAST_JUMP_GAP = 0.3, FAST_JUMP_KEEP = 0.08, FAST_MIN_PIECE = 0.12;
+const MIN_WORDS = 2, MAX_WORDS = 6, REACH = 2, MIN_CUE = 0.2, CUE_GAP = 0.02, EPS = 1e-9;
 const WEAK_END = new Set('hay được để từ với × - của những là x rất có thì cho mà các một đến và không hoặc – khi'.split(' '));
 const VI_HEAD = new Set('gọn di bảo kích chất thiết sản giá thương cao chuyển hằng mỗi trẻ người công đặc nổi tiện thoải sang mềm sạch nhẹ bền chắc tinh tự hiện hoàn phù dễ thông khuyến chính đầy giao thanh dung cảm phong màu kiểu tay đeo xách da'.split(' '));
 
@@ -11,7 +11,7 @@ export interface FastEditShot {
   parts: Array<{ start: number; end: number }>;
   dialogue?: string;
 }
-export interface FastEditSegment { shot: number; trimStart: number; trimEnd: number; duration: number; punch: boolean; pop: boolean }
+export interface FastEditSegment { shot: number; trimStart: number; trimEnd: number; duration: number }
 export interface FastEditResult { segments: FastEditSegment[]; cuts: number[]; cues: Cue[] }
 type Span = { start: number; end: number };
 
@@ -128,22 +128,15 @@ function framePieces(pieces: Span[], clipDuration: number, frame: number): Span[
 
 export function affiliateFastEdit(shots: FastEditShot[], speed: number, fps?: number): FastEditResult {
   check(shots, speed, fps);
-  const segments: FastEditSegment[] = [], cuts = [0], cues: Cue[] = [], every = fps ? Math.round(FAST_PUNCH_EVERY * fps) / fps : FAST_PUNCH_EVERY;
+  const segments: FastEditSegment[] = [], cuts = [0], cues: Cue[] = [];
   shots.forEach((shot, index) => {
     const { pieces: raw, spoken } = shotPieces(shot, speed), pieces = fps ? framePieces(raw, shot.clipDuration, speed / fps) : raw, base = cuts[index];
-    let punch = false, clock = base;
+    let clock = base;
     const map: Array<{ piece: Span; at: number }> = [];
     for (const piece of pieces) {
       map.push({ piece, at: clock });
-      let cursor = piece.start;
-      while ((piece.end - cursor) / speed > FAST_PUNCH_EVERY * NO_SPLIT_FACTOR + EPS) {
-        const trimEnd = cursor + every * speed;
-        segments.push({ shot: index, trimStart: cursor, trimEnd, duration: every, punch, pop: !segments.length });
-        punch = !punch; cursor = trimEnd;
-      }
-      const duration = (piece.end - cursor) / speed;
-      segments.push({ shot: index, trimStart: cursor, trimEnd: piece.end, duration, punch, pop: !segments.length });
-      punch = !punch; clock += (piece.end - piece.start) / speed;
+      segments.push({ shot: index, trimStart: piece.start, trimEnd: piece.end, duration: (piece.end - piece.start) / speed });
+      clock += (piece.end - piece.start) / speed;
     }
     cuts.push(clock);
     const toOutput = (time: number): number => {
