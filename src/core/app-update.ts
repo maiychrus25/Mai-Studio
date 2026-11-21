@@ -1,6 +1,6 @@
 import { createHash } from 'node:crypto';
-import { createWriteStream } from 'node:fs';
-import { mkdir, readFile, rename, rm } from 'node:fs/promises';
+import { createReadStream, createWriteStream } from 'node:fs';
+import { mkdir, rename, rm } from 'node:fs/promises';
 import { join } from 'node:path';
 import { Readable, Transform } from 'node:stream';
 import { pipeline } from 'node:stream/promises';
@@ -49,7 +49,15 @@ export async function downloadVerified(url: string, target: string, file: Update
 }
 
 async function matches(path: string, sha512: string): Promise<boolean> {
-  try { return createHash('sha512').update(await readFile(path)).digest('base64') === sha512; } catch { return false; }
+  try { const hash = createHash('sha512'); for await (const chunk of createReadStream(path)) hash.update(chunk); return hash.digest('base64') === sha512; } catch { return false; }
+}
+
+export interface InstallerHandoff { install(isSilent: boolean, isForceRunAfter: boolean): boolean; quitAndInstallCalled: boolean }
+// electron-updater's install() sets quitAndInstallCalled before trying and only quitAndInstall() clears it, so clear it here to allow a retry.
+export function handOffInstaller(updater: InstallerHandoff, forceRunAfter: boolean): void {
+  if (updater.install(true, forceRunAfter)) return;
+  updater.quitAndInstallCalled = false;
+  throw new Error('Không chuyển được sang trình cài bản cập nhật');
 }
 
 export class AppUpdates {

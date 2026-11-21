@@ -11,7 +11,8 @@ export function updateMessage(update: UpdateView, t: Translate): string {
     case 'checking': return t('Đang kiểm tra bản mới…', 'Checking for updates…');
     case 'latest': return t('Đang dùng bản mới nhất.', 'You are on the latest version.');
     case 'available': return t(`Có bản ${version}.`, `${version} is available.`);
-    case 'downloading': return t(`Đang tải ${version} — ${update.percent ?? 0}%.`, `Downloading ${version} — ${update.percent ?? 0}%.`);
+    // No percentage here: this text sits in a live region and would be re-announced on every progress tick.
+    case 'downloading': return t(`Đang tải ${version}…`, `Downloading ${version}…`);
     case 'downloaded': return update.mode === 'dmg'
       ? t(`Đã mở bộ cài ${version}. Kéo MaiStudio vào Applications, thoát app này rồi mở lại.`, `${version} installer is open. Drag MaiStudio to Applications, quit this app and open it again.`)
       : t(`${version} đã tải xong, sẵn sàng cài.`, `${version} is downloaded and ready to install.`);
@@ -39,8 +40,8 @@ export function UpdateBanner() {
   const [dismissed, setDismissed] = useState('');
   const key = `${update.version}:${update.status}`;
   if (!update.version || !['available', 'downloading', 'downloaded', 'error'].includes(update.status) || dismissed === key) return null;
-  return <div className="update-banner" role="status">
-    <div><strong>{t(`Có bản MaiStudio ${update.version}`, `MaiStudio ${update.version} is available`)}</strong><p>{update.status !== 'available' ? updateMessage(update, t)
+  return <div className="update-banner">
+    <div><strong>{t(`Có bản MaiStudio ${update.version}`, `MaiStudio ${update.version} is available`)}</strong><p role="status">{update.status !== 'available' ? updateMessage(update, t)
       : update.mode === 'install' ? t('Tải nền; xong thì bấm Khởi động lại để cài.', 'Downloads in the background; then restart to install.')
         : update.mode === 'dmg' ? t('Tải dmg đúng máy, kiểm sha512 rồi mở để anh kéo vào Applications.', 'Downloads the dmg for this Mac, checks its sha512 and opens it for you to drag into Applications.')
           : t('Bản .deb cần tải từ trang phát hành.', 'The .deb build is downloaded from the release page.')}</p></div>
@@ -56,6 +57,6 @@ export function UpdatePanel() {
     <p className="inline-note">MaiStudio v{state.version} · {t('Bản mới lấy từ trang phát hành GitHub công khai và được kiểm sha512 trước khi cài.', 'Updates come from the public GitHub releases page and are checked by sha512 before installing.')}</p>
     <p className={`update-state update-${update.status}`} role="status">{updateMessage(update, t)}</p>
     {update.status === 'downloading' && <progress max={100} value={update.percent ?? 0} aria-label={t('Tiến độ tải bản cập nhật', 'Update download progress')}/>}
-    <div className="actions"><Button disabled={busy || update.status === 'unsupported' || update.status === 'checking' || update.status === 'downloading'} onClick={() => void act(() => invoke('update.check'))}>{t('Kiểm tra cập nhật', 'Check for updates')}</Button><UpdateAction update={update}/></div>
+    <div className="actions"><Button disabled={busy || ['unsupported', 'checking', 'downloading', 'downloaded'].includes(update.status)} onClick={() => void act(() => invoke('update.check'))}>{t('Kiểm tra cập nhật', 'Check for updates')}</Button><UpdateAction update={update}/></div>
   </>;
 }

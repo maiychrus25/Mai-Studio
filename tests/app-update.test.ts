@@ -1,11 +1,11 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { createHash } from 'node:crypto';
-import { existsSync, mkdtempSync, readdirSync, readFileSync, rmSync } from 'node:fs';
+import { existsSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { setTimeout as delay } from 'node:timers/promises';
-import { AppUpdates, RELEASES_URL, allowPrerelease, downloadVerified, pickMacDmg, type UpdateDeps, type UpdateFile } from '../src/core/app-update';
+import { AppUpdates, RELEASES_URL, allowPrerelease, downloadVerified, handOffInstaller, pickMacDmg, type UpdateDeps, type UpdateFile } from '../src/core/app-update';
 import { StudioService } from '../src/core/studio';
 
 const sha512 = (data: Buffer) => createHash('sha512').update(data).digest('base64');
@@ -163,4 +163,28 @@ test('studio state shows the running version and update state; update.check reac
     studio.store.updateTask(task.id, { status: 'running' });
     await assert.rejects(studio.invoke('update.install'), /Đợi công việc/);
   } finally { await studio.close(); await plain.close(); rmSync(plain.store.root, { recursive: true, force: true }); rmSync(root, { recursive: true, force: true }); rmSync(dir, { recursive: true, force: true }); }
+});
+
+test('a failed installer handoff can be retried without restarting the app', () => {
+  // Mirrors electron-updater's BaseUpdater.install(): it marks itself called before trying and ignores later calls.
+  const updater = { quitAndInstallCalled: false, works: false, calls: 0, install(_silent: boolean, _forceRun: boolean) {
+    if (this.quitAndInstallCalled) return false; this.quitAndInstallCalled = true; this.calls++; return this.works;
+  } };
+  assert.throws(() => handOffInstaller(updater, true), /trình cài/);
+  assert.equal(updater.quitAndInstallCalled, false);
+  updater.works = true;
+  handOffInstaller(updater, true); assert.equal(updater.calls, 2);
+});
+
+test('macOS re-verifies a downloaded dmg before opening it again', async () => {
+  const body = Buffer.from('arm64 dmg');
+  const { updates, calls, dir } = harness({ platform: 'darwin', arch: 'arm64', check: async () => ({ version: '1.2.0', files: macFiles(body), available: true }), fetch: fakeFetch(body) });
+  try {
+    await updates.check(); await updates.install(() => {});
+    await until(() => updates.view().status === 'downloaded');
+    writeFileSync(join(dir, 'MaiStudio-1.2.0-arm64.dmg'), 'tampered');
+    assert.deepEqual(await updates.install(() => {}), { downloading: true });
+    await until(() => calls.opened.length === 2);
+    assert.deepEqual(readFileSync(join(dir, 'MaiStudio-1.2.0-arm64.dmg')), body);
+  } finally { rmSync(dir, { recursive: true, force: true }); }
 });

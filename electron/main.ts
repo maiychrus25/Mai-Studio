@@ -2,11 +2,11 @@ import { app, BrowserWindow, clipboard, dialog, ipcMain, net, protocol, safeStor
 import { join, resolve } from 'node:path';
 import { copyFile, readFile } from 'node:fs/promises';
 import { existsSync } from 'node:fs';
-import { autoUpdater, type BaseUpdater } from 'electron-updater';
+import { autoUpdater } from 'electron-updater';
 import { StudioService } from '../src/core/studio';
 import { object, publicUrl, redact } from '../src/core/store';
 import type { StudioCommand } from '../src/shared/studio';
-import { AppUpdates } from '../src/core/app-update';
+import { AppUpdates, handOffInstaller, type InstallerHandoff } from '../src/core/app-update';
 import { mediaResponse } from './media';
 
 protocol.registerSchemesAsPrivileged([{ scheme: 'studio-media', privileges: { secure: true, standard: true, supportFetchAPI: true, stream: true } }]);
@@ -123,7 +123,7 @@ function installDownloadedUpdate(): void {
   const renamed = (path: string) => { target = path; };
   autoUpdater.once('appimage-filename-updated', renamed);
   // AppImage: forceRunAfter would start the new AppImage while this instance still holds the single-instance lock; relaunch after exit instead.
-  try { if (!(autoUpdater as BaseUpdater).install(true, !appImage)) throw new Error('Không chuyển được sang trình cài bản cập nhật'); }
+  try { handOffInstaller(autoUpdater as unknown as InstallerHandoff, !appImage); }
   finally { autoUpdater.off('appimage-filename-updated', renamed); }
   if (appImage) app.relaunch({ execPath: target, args: [] });
   app.quit();
