@@ -1,4 +1,4 @@
-import { app, BrowserWindow, clipboard, dialog, ipcMain, protocol, safeStorage, shell } from 'electron';
+import { app, BrowserWindow, clipboard, dialog, ipcMain, net, protocol, safeStorage, shell } from 'electron';
 import { join, resolve } from 'node:path';
 import { copyFile, readFile } from 'node:fs/promises';
 import { existsSync } from 'node:fs';
@@ -6,7 +6,7 @@ import { autoUpdater } from 'electron-updater';
 import { StudioService } from '../src/core/studio';
 import { object, publicUrl, redact } from '../src/core/store';
 import type { StudioCommand } from '../src/shared/studio';
-import { SignedUpdateGate } from '../src/core/updates';
+import { AppUpdates, handOffInstaller, type InstallerHandoff } from '../src/core/app-update';
 import { mediaResponse } from './media';
 
 protocol.registerSchemesAsPrivileged([{ scheme: 'studio-media', privileges: { secure: true, standard: true, supportFetchAPI: true, stream: true } }]);
@@ -15,8 +15,7 @@ if (isolatedRoot) app.setPath('userData', resolve(isolatedRoot));
 let window: BrowserWindow | undefined;
 let studio: StudioService | undefined;
 let quitting = false;
-let updateReady = false;
-let downloadedUpdate: { path: string; version: string } | undefined;
+let updates: AppUpdates | undefined;
 const allowedFolders = new Set<string>();
 const allowedExecutables = new Set<string>();
 const singleInstance = app.requestSingleInstanceLock();
@@ -43,17 +42,28 @@ async function start(): Promise<void> {
   const root = app.getPath('userData');
   const keyFile = join(process.resourcesPath, 'license-public.pem');
   const licensePublicKey = existsSync(keyFile) ? await readFile(keyFile, 'utf8') : process.env.MAISTUDIO_LICENSE_PUBLIC_KEY;
-  const updateGate = licensePublicKey ? new SignedUpdateGate({ publicKey: licensePublicKey, platform: process.platform, arch: process.arch, currentVersion: app.getVersion() }) : undefined;
-  const updateFeed = process.env.MAISTUDIO_UPDATE_FEED;
-  if (updateFeed) { autoUpdater.setFeedURL({ provider: 'generic', url: publicUrl(updateFeed) }); autoUpdater.autoDownload = false; }
-  autoUpdater.on('error', error => { studio?.store.log(redact(error.message), 'error'); studio?.emit('changed'); });
-  autoUpdater.on('update-downloaded', info => {
-    updateReady = false;
-    if (!updateGate) { studio?.store.log('Update authority public key chưa được cấu hình', 'error'); return; }
-    void updateGate.verifyFile(info.downloadedFile, info.version).then(() => { downloadedUpdate = { path: info.downloadedFile, version: info.version }; updateReady = true; studio?.emit('changed'); })
-      .catch(error => { downloadedUpdate = undefined; studio?.store.log(redact(String(error)), 'error'); studio?.emit('changed'); });
+  // GitHub releases feed from app-update.yml (build.publish); electron-updater checks sha512 from latest*.yml before update-downloaded.
+  autoUpdater.autoDownload = false; autoUpdater.autoInstallOnAppQuit = false;
+  updates = new AppUpdates({
+    version: app.getVersion(), packaged: app.isPackaged, platform: process.platform, arch: process.arch, appImage: !!process.env.APPIMAGE,
+    downloadDir: join(app.getPath('temp'), 'mai-studio-updates'),
+    check: async prerelease => {
+      autoUpdater.allowPrerelease = prerelease;
+      const result = await autoUpdater.checkForUpdates();
+      return result && { version: result.updateInfo.version, files: result.updateInfo.files, available: result.isUpdateAvailable };
+    },
+    download: () => autoUpdater.downloadUpdate(),
+    install: installDownloadedUpdate,
+    openPath: async path => { const failure = await shell.openPath(path); if (failure) throw new Error(failure); },
+    openExternal: async url => { await shell.openExternal(publicUrl(url)); },
+    fetch: ((url, init) => net.fetch(String(url), init)) as typeof fetch,
+    changed: () => { studio?.emit('changed'); },
   });
+  autoUpdater.on('error', error => updates?.failed(error));
+  autoUpdater.on('download-progress', progress => updates?.progress(progress.percent));
+  autoUpdater.on('update-downloaded', () => updates?.downloaded());
   studio = new StudioService(root, {
+    version: app.getVersion(),
     commercial: app.isPackaged && !!licensePublicKey,
     licensePublicKey,
     encryption: {
@@ -65,21 +75,9 @@ async function start(): Promise<void> {
       copyText: async value => { clipboard.writeText(value); },
       openAsset: async path => { shell.showItemInFolder(path); },
       exportAsset: async (path, name) => { const chosen = await dialog.showSaveDialog({ defaultPath: name }); if (!chosen.canceled && chosen.filePath) await copyFile(path, chosen.filePath); else throw new Error('Đã hủy lưu tệp'); },
-      checkUpdate: async () => {
-        if (!app.isPackaged || !updateFeed || !updateGate) throw new Error('Cần update feed và public key authority cho bản phát hành');
-        const hub = studio!.store.settings().providers.license.baseUrl; if (!hub) throw new Error('Cấu hình License Hub để xác minh signed update manifest');
-        await updateGate.check(hub, updateFeed);
-        const update = await autoUpdater.checkForUpdates();
-        if (!update) throw new Error('Không đọc được update metadata');
-        updateGate.assertMetadata(update.updateInfo);
-        return { version: update?.updateInfo.version ?? app.getVersion(), downloaded: updateReady };
-      },
-      installUpdate: async beforeInstall => {
-        if (!updateGate || !updateFeed || !app.isPackaged) throw new Error('Chưa có signed update feed');
-        if (!updateReady) { const info = await autoUpdater.checkForUpdates(); if (!info) throw new Error('Kiểm tra signed update trước khi tải'); updateGate.assertMetadata(info.updateInfo); await autoUpdater.downloadUpdate(); return { downloading: true }; }
-        if (!downloadedUpdate) throw new Error('Update chưa được xác minh'); await updateGate.verifyFile(downloadedUpdate.path, downloadedUpdate.version);
-        beforeInstall(); autoUpdater.quitAndInstall(); return { installing: true };
-      },
+      checkUpdate: () => updates!.check(),
+      installUpdate: beforeInstall => updates!.install(beforeInstall),
+      updateState: () => updates!.view(),
     },
   });
   allowedFolders.add(studio.store.settings().outputDir);
@@ -116,6 +114,19 @@ async function start(): Promise<void> {
     if (selected.canceled || !selected.filePaths[0]) return null; allowedFolders.add(selected.filePaths[0]); return selected.filePaths[0];
   });
   await createWindow();
+  void updates.check();
+}
+// Like quitAndInstall, but a failed handoff throws so the studio unlocks instead of waiting for a quit that never comes.
+function installDownloadedUpdate(): void {
+  const appImage = process.platform === 'linux';
+  let target = process.env.APPIMAGE ?? process.execPath;
+  const renamed = (path: string) => { target = path; };
+  autoUpdater.once('appimage-filename-updated', renamed);
+  // AppImage: forceRunAfter would start the new AppImage while this instance still holds the single-instance lock; relaunch after exit instead.
+  try { handOffInstaller(autoUpdater as unknown as InstallerHandoff, !appImage); }
+  finally { autoUpdater.off('appimage-filename-updated', renamed); }
+  if (appImage) app.relaunch({ execPath: target, args: [] });
+  app.quit();
 }
 if (singleInstance) app.whenReady().then(start).catch(async error => { dialog.showErrorBox('MaiStudio startup', redact(String(error))); quitting = true; await studio?.close(); app.exit(1); });
 app.on('before-quit', event => {

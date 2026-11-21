@@ -2,16 +2,13 @@ name: Build
 on:
   push:
     branches: [main]
+    tags: ['v*']
   workflow_dispatch:
     inputs:
       package_artifacts:
         description: Build unsigned desktop test artifacts after validation
         type: boolean
         default: false
-      release_tag:
-        description: Optional version tag for a draft release after all checks pass
-        type: string
-        default: ''
   pull_request:
 permissions:
   contents: read
@@ -71,7 +68,7 @@ jobs:
       - run: node scripts/check-docs.js
   package:
     name: Đóng gói ${{ matrix.name }}
-    if: github.event_name == 'workflow_dispatch' && inputs.package_artifacts
+    if: (github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v')) || (github.event_name == 'workflow_dispatch' && inputs.package_artifacts)
     timeout-minutes: 60
     strategy:
       fail-fast: false
@@ -121,9 +118,9 @@ jobs:
           if-no-files-found: error
           retention-days: 14
   release:
-    name: Prepare draft release
+    name: Publish release
     needs: [verify, package]
-    if: github.event_name == 'workflow_dispatch' && inputs.package_artifacts && inputs.release_tag != ''
+    if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v')
     runs-on: ubuntu-24.04
     timeout-minutes: 20
     permissions:
@@ -132,68 +129,24 @@ jobs:
       - uses: actions/checkout@v4
         with:
           persist-credentials: false
+      - uses: actions/setup-node@v4
+        with: { node-version: 24 }
       - uses: actions/download-artifact@v4
         with:
           pattern: mai-studio-*
           path: installers
-      - name: Verify installers and create a draft
+      - name: Verify installers and update metadata, then publish
         env:
           GH_TOKEN: ${{ github.token }}
           GH_REPO: ${{ github.repository }}
-          RELEASE_TAG: ${{ inputs.release_tag }}
+          RELEASE_TAG: ${{ github.ref_name }}
         run: |
-          python3 <<'PY'
-          from pathlib import Path
-          import hashlib, json, os, re, shutil, subprocess
-          version = json.loads(Path('package.json').read_text())['version']
-          tag = os.environ['RELEASE_TAG']
-          assert re.fullmatch(r'\d+\.\d+\.\d+-dev\.\d+', version) and tag == 'v' + version, 'Release tag must match the development package version'
-          expected = {
-              'macos-arm64': {f'MaiStudio-{version}-arm64.dmg', f'MaiStudio-{version}-arm64-mac.zip'},
-              'macos-x64': {f'MaiStudio-{version}.dmg', f'MaiStudio-{version}-mac.zip'},
-              'linux-arm64': {f'MaiStudio-{version}-arm64.AppImage', f'mai-studio_{version}_arm64.deb'},
-              'linux-x64': {f'MaiStudio-{version}.AppImage', f'mai-studio_{version}_amd64.deb'},
-              'windows-x64': {f'MaiStudio Setup {version}.exe'},
-          }
-          staging = Path(os.environ['RUNNER_TEMP']) / 'release-files'
-          staging.mkdir()
-          files = []
-          for platform, names in expected.items():
-              directory = Path('installers') / ('mai-studio-' + platform)
-              actual = {p.name for p in directory.iterdir() if p.suffix in {'.dmg', '.zip', '.deb', '.AppImage', '.exe'}}
-              assert actual == names, f'Unexpected installer set for {platform}: {actual}'
-              for name in sorted(names):
-                  source = directory / name
-                  assert source.is_file() and not source.is_symlink() and source.stat().st_size > 0
-                  target = staging / name.replace(' ', '.')
-                  assert not target.exists(), 'Duplicate release asset name'
-                  shutil.copyfile(source, target)
-                  files.append(target)
-          assert len(files) == 9
-          lines = []
-          for path in sorted(files):
-              with path.open('rb') as stream:
-                  lines.append(hashlib.file_digest(stream, 'sha256').hexdigest() + '  ' + path.name)
-          checksum_text = '\n'.join(lines) + '\n'
-          manifest = staging / 'SHA256SUMS.txt'
-          manifest.write_text(checksum_text)
-          run_url = f"https://github.com/{os.environ['GH_REPO']}/actions/runs/{os.environ['GITHUB_RUN_ID']}"
-          notes = staging / 'release-notes.md'
-          notes.write_text(f'''MaiStudio {version} — bản phát triển thử nghiệm cho macOS ARM64/Intel, Linux ARM64/x64 và Windows x64.
-
-          - Sửa lỗi Invalid Shopee product numeric fact: dùng giá đơn khi khoảng giá được đánh dấu -1.
-          - Nhập đủ tối đa 9 ảnh gallery, giữ kiểm tra ảnh và checkpoint hủy/thử lại.
-          - Sửa bookmarklet ưu tiên gallery sản phẩm trước một ảnh SEO; sau cập nhật cần chép lại mã và thay URL dấu trang cũ.
-          - Nguồn build: {os.environ['GITHUB_SHA']}.
-          - CI: {run_url}. Bản nháp chỉ được tạo sau verify và năm job đóng gói thành công.
-          - Linux ARM64/Kubuntu: tải file _arm64.deb; ARM64 AppImage cũng có trong Assets.
-
-          macOS ký ad-hoc, chưa notarized; Windows chưa ký chứng chỉ tin cậy. Chưa chứng nhận runtime mọi OS/provider hoặc đầy đủ Muse parity. Không bật auto-update hoặc deploy service.
-
-          SHA256 của các bộ cài:
-          ```text
-          {checksum_text}```
-          ''')
-          subprocess.run(['gh', 'release', 'create', tag, '--repo', os.environ['GH_REPO'], '--target', os.environ['GITHUB_SHA'], '--draft', '--prerelease', '--title', f'MaiStudio {version} — Shopee fixes and 9 images', '--notes-file', str(notes), *map(str, files), str(manifest)], check=True)
-          print(f'Draft {tag}: nine installers and checksum manifest uploaded; publication requires final verification.')
-          PY
+          if gh release view "$RELEASE_TAG" >/dev/null 2>&1; then
+            echo "Release $RELEASE_TAG already exists; refusing to overwrite it." >&2
+            exit 1
+          fi
+          staging="$RUNNER_TEMP/release-files"
+          node scripts/prepare-release.js installers "$staging"
+          prerelease=()
+          if [[ "$RELEASE_TAG" == *-* ]]; then prerelease=(--prerelease); fi
+          gh release create "$RELEASE_TAG" --verify-tag "${prerelease[@]}" --title "MaiStudio ${RELEASE_TAG#v}" --notes-file "$staging/release-notes.md" "$staging"/assets/*
