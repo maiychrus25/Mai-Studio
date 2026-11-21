@@ -4,9 +4,9 @@
 
 Ứng dụng desktop sản xuất ảnh/video bằng TypeScript, Electron và FFmpeg cho macOS, Linux và Windows. Xây dựng từ thiết kế hành vi MuseStudio 1.13.12; không cần chạy EXE hoặc DLL/PYD Windows của sản phẩm gốc.
 
-Đây là bản thử nghiệm **0.2.0-dev.4**, đã công khai ngày20/11/2026, sửa tiếp tục job sau một lượt review mới, thêm đánh giá lại các cảnh lỗi bằng media đã lưu và căn thời lượng/lời cho Affiliate. Có mẫu Affiliate thật trên Mac ARM64 với một số bước chỉnh dựng thủ công; chưa chứng nhận mọi provider/hệ điều hành hoặc full parity. Các bản sửa Shopee trước đó được giữ; sau nâng cấp từ bản lấy ảnh cũ cần thay URL dấu trang bằng mã lấy sản phẩm mới. Xem [tài liệu hệ thống](SYSTEM_DOCUMENTATION.md), [nghiệm thu](docs/reports/acceptance.md) và [giới hạn tương đương](docs/reports/parity.md).
+Đây là bản thử nghiệm **0.2.0-dev.5** (21/11/2026): Video Aff chạy toàn bộ luồng ra video kèm danh sách cảnh cần xem lại thay vì dừng giữa chừng, dựng tay dự án kiểu cũ có lời tràn không còn dừng, tìm lại nhạc Muse sau khi tải lại trang, và cập nhật ngay trong app từ release GitHub (Windows/Linux AppImage tự cài; macOS tải, kiểm tra rồi mở bộ cài). Chưa chứng nhận mọi provider/hệ điều hành hoặc full parity. Xem [tài liệu hệ thống](SYSTEM_DOCUMENTATION.md), [nghiệm thu](docs/reports/acceptance.md) và [giới hạn tương đương](docs/reports/parity.md).
 
-Tải [bản 0.2.0-dev.4](https://github.com/maiychrus25/Mai-Studio/releases/tag/v0.2.0-dev.4): macOS Apple Silicon/Intel, Linux ARM64/x64 và Windows x64, kèm `SHA256SUMS.txt`. CI verify và đủ năm job đóng gói thành công; chín digest upload khớp manifest, bộ cài cũ vẫn được giữ nguyên. Kubuntu ARM64 dùng `mai-studio_0.2.0-dev.4_arm64.deb`. GitHub Packages dành cho registry npm/container, không chứa bộ cài desktop này.
+Tải [bản mới nhất](https://github.com/maiychrus25/Mai-Studio/releases): macOS Apple Silicon/Intel, Linux ARM64/x64 và Windows x64, kèm `SHA256SUMS.txt`. Từ 0.2.0-dev.5, app tự báo bản mới; máy đang dùng 0.2.0-dev.4 trở về trước cần cài tay 0.2.0-dev.5 một lần. Kubuntu ARM64 dùng tệp `_arm64.deb`. GitHub Packages dành cho registry npm/container, không chứa bộ cài desktop này.
 
 ## Phạm vi hiện tại
 
