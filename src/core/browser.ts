@@ -11,7 +11,7 @@ import { Store, publicUrl } from './store';
 import { NeedsInputError } from './queue';
 import type { Account, Task, TaskContext, TaskResult } from '../shared/studio';
 
-const MUSIC_IMPORT_HINT = 'Nhạc có thể đã có trong Muse: mở tài khoản, tải MP3 ở reply cuối, nhập vào Thư viện rồi chọn làm file nhạc của dự án. Không tự gửi lại để tránh tạo trùng.';
+const MUSIC_IMPORT_HINT = 'Nhạc có thể đã có trong Muse: mở tài khoản, chỉ tải MP3 nằm ngay dưới yêu cầu nhạc của task này (nếu reply cuối nằm dưới một yêu cầu cũ thì nhạc chưa được tạo), nhập vào Thư viện rồi chọn làm file nhạc của dự án. Không tự gửi lại để tránh tạo trùng.';
 /** The newest user message before a music submit; reply counts differ after a page reload, this anchor does not. */
 type UserAnchor = { count: number; id: string; text: string };
 
@@ -26,6 +26,8 @@ export function browserExecutable(configured = ''): string {
 }
 export class BrowserManager {
   private readonly contexts = new Map<string, Promise<BrowserContext>>();
+  /** When a resumed music task first saw an undecidable reply owner; cleared once it resolves. */
+  private readonly musicUnknownSince = new Map<string, number>();
   constructor(private readonly store: Store, private readonly secret: (key: string) => string = () => '') {}
   async open(account: Account, signal?: AbortSignal): Promise<BrowserContext> {
     signal?.throwIfAborted();
@@ -310,8 +312,13 @@ export class BrowserManager {
         }
         return owner === 'ours' && !(user!.compareDocumentPosition(element) & Node.DOCUMENT_POSITION_FOLLOWING) ? 'waiting' : owner;
       }, { prompt: task.prompt, anchor: anchor ?? null });
+      if (state !== 'unknown') this.musicUnknownSince.delete(task.id);
       if (state === 'before' || state === 'waiting') return;
       if (state === 'unknown') {
+        // A reload may hydrate replies before user messages; only give up once the anchor stays undecidable for 3 s.
+        const since = this.musicUnknownSince.get(task.id) ?? Date.now(); this.musicUnknownSince.set(task.id, since);
+        if (count <= beforeReplyCount && Date.now() - since < 3000) return;
+        this.musicUnknownSince.delete(task.id);
         if (count <= beforeReplyCount) throw new NeedsInputError(`Không xác định được reply nhạc của yêu cầu này sau khi trang Muse tải lại. ${MUSIC_IMPORT_HINT}`);
         // Live page: the reply count still grew past the baseline, as before.
       }
