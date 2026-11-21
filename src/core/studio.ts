@@ -820,6 +820,8 @@ export class StudioService extends EventEmitter {
     }
     const affiliate = project.kind === 'affiliate' && project.data.affiliate !== undefined ? readAffiliateSettings(project.data.affiliate) : undefined;
     if (affiliate) options.subtitleMarginV = 52;
+    // Affiliate music is normalized before its volume so quiet masters (often -20 LUFS) stay audible under the voice.
+    if (affiliate && options.musicPath) options.musicLoudness = -10;
     const title = !affiliate && typeof project.data.titleCard === 'string' ? project.data.titleCard.trim() : '';
     const ending = !affiliate && typeof project.data.endCard === 'string' ? project.data.endCard.trim() : '';
     const product = project.data.product && project.data.productOverlay !== false ? object(project.data.product) : undefined;
@@ -871,7 +873,7 @@ export class StudioService extends EventEmitter {
       const rendered = await this.media().probe(output, context.signal);
       const timed = voices.map(voice => ({ ...voice, duration: Math.min(voice.duration ?? rendered.duration - voice.start, rendered.duration - voice.start) }));
       if (timed.some(voice => voice.duration <= 0)) throw new Error('Lời đọc bắt đầu ngoài timeline đã dựng');
-      final = join(folder, 'voiced.mp4'); await this.withMedia(context.signal, () => this.media().dub(output, timed, final, { width: options.width, height: options.height, fps: options.fps, musicPath: options.musicPath, volume: options.volume, voiceVolume: options.voiceVolume, ducking: options.ducking, keepAudio: project.data.keepAudio === true }, mediaContext));
+      final = join(folder, 'voiced.mp4'); await this.withMedia(context.signal, () => this.media().dub(output, timed, final, { width: options.width, height: options.height, fps: options.fps, musicPath: options.musicPath, volume: options.volume, musicLoudness: options.musicLoudness, voiceVolume: options.voiceVolume, ducking: options.ducking, keepAudio: project.data.keepAudio === true }, mediaContext));
     }
     const info = await this.media().probe(final, context.signal); const asset = await this.store.importAsset(final, { taskId: task.id, projectId: task.projectId, duration: info.duration }, context.signal);
     const current = this.store.project(project.id);

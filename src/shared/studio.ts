@@ -59,6 +59,7 @@ export interface MediaOptions {
   flashes?: number[];
   fit?: 'pad' | 'crop'; fadeIn?: number; fadeOut?: number; audioFadeIn?: number; audioFadeOut?: number;
   ducking?: boolean;
+  musicLoudness?: number;
   fitVoice?: boolean;
   voiceSpeed?: number; voiceVolume?: number;
   motion?: 'none' | 'kenburns';

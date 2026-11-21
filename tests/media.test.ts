@@ -990,3 +990,22 @@ test('every hierarchical chunk keeps the retime and crop of the inputs that set 
     });
   });
 });
+
+test('musicLoudness normalizes the music bed before its volume, whatever the track loudness', { timeout: 30000 }, async () => {
+  const video = join(root, 'music-level-video.mp4');
+  await exec(ffmpegPath, ['-v', 'error', '-f', 'lavfi', '-i', 'color=c=black:s=160x120:r=10', '-t', '4', '-c:v', 'libx264', '-pix_fmt', 'yuv420p', video]);
+  const loudness = async (path: string) => Number(/I:\s+(-?[\d.]+) LUFS/.exec((await exec(ffmpegPath, ['-hide_banner', '-nostats', '-i', path, '-map', '0:a:0', '-af', 'ebur128', '-f', 'null', '-'])).stderr.split('Summary:').at(-1)!)![1]);
+  const levels: number[] = [];
+  for (const amplitude of [0.02, 0.5]) {
+    const music = join(root, `music-level-${amplitude}.wav`), output = join(root, `music-level-${amplitude}.mp4`);
+    await exec(ffmpegPath, ['-v', 'error', '-f', 'lavfi', '-i', `anoisesrc=color=pink:amplitude=${amplitude}:sample_rate=48000:seed=7`, '-t', '4', music]);
+    await tools().merge([{ path: video }], output, { ...options, musicPath: music, volume: 0.14, musicLoudness: -10 }, context(AbortSignal.timeout(20000)));
+    levels.push(await loudness(output));
+  }
+  const expected = -10 + 20 * Math.log10(0.14);
+  levels.forEach(level => assert.ok(Math.abs(level - expected) < 2, `music bed ${level} LUFS, expected about ${expected.toFixed(1)}`));
+  const raw = join(root, 'music-level-raw.mp4');
+  await tools().merge([{ path: video }], raw, { ...options, musicPath: join(root, 'music-level-0.02.wav'), volume: 0.14 }, context(AbortSignal.timeout(20000)));
+  assert.ok(await loudness(raw) < -45, 'without musicLoudness the music keeps its own level');
+  for (const bad of [-31, -4, NaN]) await assert.rejects(tools().merge([{ path: video }], raw, { ...options, musicPath: join(root, 'music-level-0.02.wav'), musicLoudness: bad }, context()), /musicLoudness/);
+});

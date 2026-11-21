@@ -153,6 +153,7 @@ function renderOptions(options: MediaOptions): RenderOptions {
   const fps = number(options.fps ?? 30, 1, 60, 'fps');
   const volume = number(options.volume ?? 1, 0, 4, 'volume');
   if (options.voiceVolume !== undefined) number(options.voiceVolume, 0, 1, 'voiceVolume');
+  if (options.musicLoudness !== undefined) number(options.musicLoudness, -30, -5, 'musicLoudness');
   if (options.voiceSpeed !== undefined) number(options.voiceSpeed, 0.8, 1.25, 'voiceSpeed');
   if (options.fit !== undefined && options.fit !== 'pad' && options.fit !== 'crop') throw new Error('Invalid fit: expected pad or crop');
   if (options.ducking !== undefined && typeof options.ducking !== 'boolean') throw new Error('Invalid ducking: expected a boolean');
@@ -469,7 +470,7 @@ export class MediaTools {
       number(info.duration, 0.001, 3600, 'music duration');
       args.push('-threads', '1', '-protocol_whitelist', 'file,pipe', '-i', music);
       const loop = info.duration < duration ? `aloop=loop=-1:size=${Math.ceil(info.duration * 48000)},` : '';
-      filters.push(`[${inputCount}:a:0]asetpts=PTS-STARTPTS,aresample=48000,aformat=channel_layouts=stereo,${loop}volume=${options.volume},atrim=duration=${duration}[music]`);
+      filters.push(`[${inputCount}:a:0]asetpts=PTS-STARTPTS,aresample=48000,aformat=channel_layouts=stereo,${loop}${options.musicLoudness === undefined ? '' : `loudnorm=I=${options.musicLoudness}:TP=-1.5:LRA=11,aresample=48000,`}volume=${options.volume},atrim=duration=${duration}[music]`);
       if (audio) {
         let musicLabel = 'music';
         if (options.ducking === true) {

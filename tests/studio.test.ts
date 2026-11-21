@@ -890,6 +890,19 @@ test('plain pace and legacy projects render as before', async t => {
   } finally { await studio.close(); rmSync(root, { recursive: true, force: true }); }
 });
 
+test('affiliate render normalizes its music bed to -10 LUFS before the music volume', async t => {
+  const root = mkdtempSync(join(tmpdir(), 'maistudio-music-')); const studio = new StudioService(root); const calls = captureMerge(t);
+  try {
+    const wav = join(root, 'quiet-music.wav');
+    assert.equal(spawnSync(require('ffmpeg-static') as string, ['-v', 'error', '-f', 'lavfi', '-i', 'anoisesrc=color=pink:amplitude=0.02:sample_rate=48000', '-t', '8', wav]).status, 0);
+    const [clip, music] = await studio.importFiles([gapClip(root), wav]);
+    const project = await studio.invoke<Project>('project.save', { name: 'music', kind: 'affiliate', data: { ...talkProject(clip.id), musicId: music.id, musicVolume: 0.14, musicDucking: true } });
+    const done = await renderStage(studio, project.id); assert.equal(done.status, 'succeeded', done.error);
+    const options = calls.at(-1)!.options;
+    assert.equal(options.musicLoudness, -10); assert.equal(options.volume, 0.14); assert.equal(options.musicPath, studio.store.assetPath(music.id));
+  } finally { await studio.close(); rmSync(root, { recursive: true, force: true }); }
+});
+
 test('changing pace or speech speed invalidates the rendered output', async t => {
   const root = mkdtempSync(join(tmpdir(), 'maistudio-pace-')); const studio = new StudioService(root); const calls = captureMerge(t);
   try {

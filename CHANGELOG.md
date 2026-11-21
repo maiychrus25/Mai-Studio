@@ -4,6 +4,7 @@ This file records development changes. No production release is declared by a de
 
 ## Unreleased — development
 
+- Normalize Video Aff background music to −10 LUFS before applying its volume (new `musicLoudness` media option), so the music bed is audible at the chosen level whatever the track's mastering; a quiet −20 LUFS track at 14% used to sit more than 20 dB under the voice. Other project kinds mix music as before.
 - Plan Video Aff scripts in Muse's shape for nine content styles (one fact per shot, labelled beats, product/presenter shots, `productLook`, `productVisible`, outfit and narrator descriptions) behind a stored `affiliatePlanVersion: 2` marker. Planning these styles always requires the v2 shape (one repair attempt, then the existing stop); ASMR, POV and saved projects that are not re-planned keep the previous path.
 - Compose v2 image, clip and host-portrait prompts from Muse's observed templates with Muse's reference order; spoken Vietnamese lines in clip prompts read numbers and units as words while frames and subtitles keep the written line.
 - Cut v2 spoken clips at the measured speech (0.12 s lead, 0.30 s hold, 1 s run gap) and place them back to back; a line ending in the last 0.15 s stops render and fails speech review instead of being clipped. Captions and flashes follow the real cuts, so spoken videos can run longer or shorter than the target.
