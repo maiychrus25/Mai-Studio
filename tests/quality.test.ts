@@ -546,3 +546,18 @@ test('non-affiliate run-all and videos stage still stop on failing and unknown r
     assert.equal((studio.store.project(p.id).data.production as any).attention, undefined);
   });
 });
+
+test('affiliate run-all repairs a silent spoken clip within the budget, then renders it and lists the shot', async t => {
+  await fixture(async (studio, paths, _requests, decide) => {
+    decide(() => affiliateMotion(), affiliateImage);
+    const { p, videos } = await affiliateProject(studio, paths.slice(0, 2), 1, { qualityRetries: 1, nativeAudio: true, keepAudio: true, affiliate: { contentStyle: 'review', hostMode: 'voiceover', seconds: 15, screenText: false } });
+    const spoken = studio.store.saveProject({ ...p, data: { ...p.data, shots: (p.data.shots as any[]).map(shot => ({ ...shot, dialogue: 'Áo cotton mềm mại.' })) } }); let calls = 0;
+    t.mock.method(studio as unknown as Port, 'generate', async () => ({ outputIds: [videos[calls++ % videos.length].id] }));
+    const done = await finish(studio, await studio.invoke<Task>('studio.run', { projectId: spoken.id }));
+    assert.equal(done.status, 'succeeded', done.error); assert.equal(calls, 2, 'the silent clip is repaired once, never beyond qualityRetries');
+    assert.equal(done.message, 'Đã xuất video Affiliate. 1 cảnh cần xem lại: cảnh 1 (không nghe rõ lời thoại).');
+    assert.equal((studio.store.project(p.id).data.qualityReviews as any)[`${p.id}/one`].speech.status, 'fail');
+    const manual = await finish(studio, await studio.invoke<Task>('studio.run', { projectId: spoken.id, stage: 'render' }));
+    assert.equal(manual.status, 'waiting_input'); assert.equal(manual.error, 'Clip cảnh 1 không có tiếng; bấm "Tạo lại clip riêng cảnh này" ở cảnh 1 rồi dựng lại');
+  });
+});
