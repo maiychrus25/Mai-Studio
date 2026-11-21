@@ -292,11 +292,16 @@ export class MediaTools {
     context.signal.throwIfAborted();
     const settings = renderOptions(options);
     if (!Array.isArray(inputs) || !inputs.length || inputs.length > MAX_SEQUENCE_INPUTS) throw new Error(`Invalid input count: expected 1–${MAX_SEQUENCE_INPUTS}`);
-    const clips: Array<{ path: string; duration: number; start: number; hasAudio: boolean; trimStart: number; trimEnd?: number }> = [];
+    const clips: Array<{ path: string; duration: number; start: number; hasAudio: boolean; trimStart: number; trimEnd?: number; speed?: number; punch: boolean; pop: boolean }> = [];
     let duration = 0;
     for (const input of inputs) {
       if (!input || typeof input !== 'object') throw new Error('Invalid media input');
       if (images && (input.trimStart !== undefined || input.trimEnd !== undefined)) throw new Error('Still images do not support source trims; set duration instead');
+      const effects = input.speed !== undefined || input.punch !== undefined || input.pop !== undefined;
+      if (images && effects) throw new Error('Still images do not support speed, punch or pop');
+      for (const flag of [input.punch, input.pop]) if (flag !== undefined && typeof flag !== 'boolean') throw new Error('Invalid punch/pop: expected boolean');
+      const speed = input.speed === undefined ? undefined : number(input.speed, 0.5, 2, 'speed');
+      if (speed !== undefined && (input.trimStart === undefined || input.trimEnd === undefined)) throw new Error('speed requires trimStart and trimEnd');
       const path = await file(input.path);
       if (images) await run(this.ffmpegPath, ['-hide_banner', '-nostdin', '-v', 'error', '-threads', '1', '-protocol_whitelist', 'file,pipe', '-i', path, '-map', '0:v:0', '-frames:v', '1', '-f', 'null', '-'], context.signal);
       const info = images ? undefined : await this.probe(path, context.signal);
@@ -304,11 +309,12 @@ export class MediaTools {
       const trimStart = images ? 0 : number(input.trimStart === undefined ? 0 : input.trimStart, 0, info!.duration, 'trimStart');
       const trimEnd = images ? undefined : number(input.trimEnd === undefined ? info!.duration : input.trimEnd, 0, info!.duration, 'trimEnd');
       if (trimEnd !== undefined && trimEnd <= trimStart) throw new Error('Invalid source trim: trimEnd must exceed trimStart');
-      const length = number(input.duration ?? (images ? 5 : trimEnd! - trimStart), 0.001, 3600, 'input duration');
+      const length = number(input.duration ?? (images ? 5 : (trimEnd! - trimStart) / (speed ?? 1)), 0.001, 3600, 'input duration');
+      if (speed !== undefined && Math.abs(length - (trimEnd! - trimStart) / speed) > 1 / settings.fps + 1e-9) throw new Error('Invalid duration: must equal (trimEnd - trimStart) / speed');
       const start = number(input.start === undefined ? duration : input.start, 0, MAX_DURATION, 'input start');
       if (start < duration - 1e-9) throw new Error('Invalid media timeline: overlapping or reversed starts');
       const position = Math.max(start, duration);
-      clips.push({ path, duration: length, start: position, hasAudio: info?.hasAudio ?? false, trimStart, trimEnd });
+      clips.push({ path, duration: length, start: position, hasAudio: info?.hasAudio ?? false, trimStart, trimEnd, speed, punch: input.punch === true, pop: input.pop === true });
       duration = number(position + length, 0.001, MAX_DURATION, 'total timeline duration');
     }
     const hasAudio = settings.keepAudio && clips.some(clip => clip.hasAudio);
@@ -345,12 +351,16 @@ export class MediaTools {
             segments.push(`[gapV${index}]${hasAudio ? `[gapA${index}]` : ''}`);
           }
           args.push('-threads', '1', ...(images ? ['-loop', '1', '-framerate', String(settings.fps)] : []), '-protocol_whitelist', 'file,pipe', '-i', clip.path);
-          const sourceTrim = clip.trimEnd === undefined ? `duration=${length}` : `start=${clip.trimStart}:end=${Math.min(clip.trimEnd, clip.trimStart + length)}`;
+          const sourceTrim = clip.trimEnd === undefined ? `duration=${length}` : `start=${clip.trimStart}:end=${clip.speed === undefined ? Math.min(clip.trimEnd, clip.trimStart + length) : clip.trimEnd}`;
+          const retime = clip.speed === undefined ? 'setpts=PTS-STARTPTS' : `setpts=(PTS-STARTPTS)/${clip.speed}`;
+          const punch = clip.punch ? `,crop=iw/1.1:ih/1.1:(iw-iw/1.1)/2:(ih-ih/1.1)*0.4,scale=${settings.width}:${settings.height}` : '';
+          const popFrames = Math.max(1, Math.round(0.4 * settings.fps));
+          const pop = clip.pop ? `,zoompan=z='1.15-0.15*min(1,on/${popFrames})':x='(iw-iw/zoom)/2':y='(ih-ih/zoom)*0.4':d=1:s=${settings.width}x${settings.height}:fps=${settings.fps}` : '';
           const motionFrames = Math.max(1, Math.round(length * settings.fps) - 1);
           const motion = images && settings.motion === 'kenburns'
             ? `,zoompan=z='1+0.06*min(1,on/${motionFrames})':x='(iw-iw/zoom)*min(1,on/${motionFrames})':y='(ih-ih/zoom)/2':d=1:s=${settings.width}x${settings.height}:fps=${settings.fps}` : '';
-          filters.push(`[${index}:v:0]setpts=PTS-STARTPTS,trim=${sourceTrim},setpts=PTS-STARTPTS,${this.scale(settings)}${motion},tpad=stop_mode=clone:stop_duration=${length},trim=${absolute ? `end_frame=${lastFrame - firstFrame}` : `duration=${length}`}[v${index}]`);
-          if (hasAudio) filters.push(clip.hasAudio ? `[${index}:a:0]asetpts=PTS-STARTPTS,atrim=${sourceTrim},asetpts=PTS-STARTPTS,aresample=48000,aformat=sample_fmts=fltp:channel_layouts=stereo,apad,atrim=duration=${length}[a${index}]` : `anullsrc=r=48000:cl=stereo,atrim=duration=${length}[a${index}]`);
+          filters.push(`[${index}:v:0]setpts=PTS-STARTPTS,trim=${sourceTrim},${retime},${this.scale(settings)}${punch}${pop}${motion},tpad=stop_mode=clone:stop_duration=${length},trim=${absolute ? `end_frame=${lastFrame - firstFrame}` : `duration=${length}`}[v${index}]`);
+          if (hasAudio) filters.push(clip.hasAudio ? `[${index}:a:0]asetpts=PTS-STARTPTS,atrim=${sourceTrim},asetpts=PTS-STARTPTS${clip.speed === undefined ? '' : `,atempo=${clip.speed}`},aresample=48000,aformat=sample_fmts=fltp:channel_layouts=stereo,apad,atrim=duration=${length}[a${index}]` : `anullsrc=r=48000:cl=stereo,atrim=duration=${length}[a${index}]`);
           segments.push(`[v${index}]${hasAudio ? `[a${index}]` : ''}`);
           end = absolute ? lastFrame / settings.fps : clip.start + clip.duration;
         }

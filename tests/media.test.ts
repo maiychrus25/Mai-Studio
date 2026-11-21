@@ -879,3 +879,85 @@ test('a reserved subtitle margin keeps spoken words above the Affiliate price fo
   for (let y = 0; y < 426; y++) for (let x = 0; x < 240; x++) { const offset = (y * 240 + x) * 3; if (pixels[offset] > 200 && pixels[offset + 1] > 200 && pixels[offset + 2] > 200) { rows.push(y); break; } }
   assert.ok(rows.length > 5); assert.ok(Math.min(...rows) > 426 * 0.7 && Math.max(...rows) < 426 * 0.83, 'spoken subtitle has a dedicated band above the footer');
 });
+
+async function framedSource(name: string, seconds: number, rate = 10) {
+  const path = join(root, name);
+  await exec(ffmpegPath, ['-v', 'error', '-f', 'lavfi', '-i', `color=c=green:s=160x120:r=${rate},drawbox=x=0:y=0:w=160:h=120:color=red:t=4`, '-f', 'lavfi', '-i', 'sine=frequency=440:sample_rate=48000', '-t', String(seconds), '-c:v', 'libx264', '-pix_fmt', 'yuv420p', '-c:a', 'aac', path]);
+  return path;
+}
+const pixel = (data: Buffer, x: number, y: number, width = 160) => [...data.subarray((y * width + x) * 3, (y * width + x) * 3 + 3)];
+
+test('inputs without speed, punch or pop build the same filters', async () => {
+  const recorded = await recordedMerge('plain-filters-ffmpeg');
+  await recorded.media.merge([{ path: sound }, { path: trimSource, start: 0.7, duration: 0.3, trimStart: 0.4, trimEnd: 0.8 }], join(root, 'plain-filters.mp4'), options, context());
+  const graph = (await recorded.calls())[0];
+  const scale = 'scale=160:120:force_original_aspect_ratio=decrease,pad=160:120:(ow-iw)/2:(oh-ih)/2,setsar=1,fps=10,format=yuv420p';
+  assert.equal(graph[graph.indexOf('-filter_complex') + 1], [
+    `[0:v:0]setpts=PTS-STARTPTS,trim=start=0:end=0.6,setpts=PTS-STARTPTS,${scale},tpad=stop_mode=clone:stop_duration=0.6,trim=end_frame=6[v0]`,
+    '[0:a:0]asetpts=PTS-STARTPTS,atrim=start=0:end=0.6,asetpts=PTS-STARTPTS,aresample=48000,aformat=sample_fmts=fltp:channel_layouts=stereo,apad,atrim=duration=0.6[a0]',
+    'color=c=black:s=160x120:r=10:d=0.1,trim=end_frame=1,setsar=1,format=yuv420p[gapV1]',
+    'anullsrc=r=48000:cl=stereo,atrim=duration=0.1[gapA1]',
+    `[1:v:0]setpts=PTS-STARTPTS,trim=start=0.4:end=0.7,setpts=PTS-STARTPTS,${scale},tpad=stop_mode=clone:stop_duration=0.3,trim=end_frame=3[v1]`,
+    '[1:a:0]asetpts=PTS-STARTPTS,atrim=start=0.4:end=0.7,asetpts=PTS-STARTPTS,aresample=48000,aformat=sample_fmts=fltp:channel_layouts=stereo,apad,atrim=duration=0.3[a1]',
+    '[v0][a0][gapV1][gapA1][v1][a1]concat=n=3:v=1:a=1[concatenated][sourceAudio]',
+    '[concatenated]setpts=N/(10*TB)[video]',
+  ].join(';'));
+});
+
+test('speed 1.1 shortens the segment and keeps audio', async () => {
+  const source = await framedSource('speed-source.mp4', 2.2);
+  const output = join(root, 'speed.mp4');
+  await tools().merge([{ path: source, trimStart: 0, trimEnd: 2.2, duration: 2, speed: 1.1 }], output, options, context(AbortSignal.timeout(15000)));
+  const info = await inspect(output);
+  assert.ok(Math.abs(Number(info.format.duration) - 2) <= 0.1, info.format.duration);
+  assert.ok(info.streams.some(stream => stream.codec_type === 'audio'));
+});
+
+test('punch keeps the frame size and crops the centre', async () => {
+  const source = await framedSource('punch-source.mp4', 1);
+  const plain = join(root, 'punch-plain.mp4'); const punched = join(root, 'punch.mp4');
+  await tools().merge([{ path: source }], plain, options, context(AbortSignal.timeout(15000)));
+  await tools().merge([{ path: source, punch: true }], punched, options, context(AbortSignal.timeout(15000)));
+  const info = (await inspect(punched)).streams.find(stream => stream.codec_type === 'video')!;
+  assert.deepEqual([info.width, info.height], [160, 120]);
+  assert.ok(pixel(await rgbFrame(plain, 0.5), 1, 1)[0] > 200 && pixel(await rgbFrame(plain, 0.5), 1, 1)[1] < 60, 'border is red without punch');
+  for (const [x, y] of [[1, 1], [158, 1], [1, 118], [158, 118]]) {
+    const [r, g] = pixel(await rgbFrame(punched, 0.5), x, y);
+    assert.ok(g > 100 && r < 100, `border pixel ${x},${y} is cropped away`);
+  }
+});
+
+test('pop renders and returns to full frame after 0.4 seconds', async () => {
+  const source = await framedSource('pop-source.mp4', 1.5);
+  const output = join(root, 'pop.mp4');
+  await tools().merge([{ path: source, pop: true }], output, options, context(AbortSignal.timeout(15000)));
+  const info = (await inspect(output)).streams.find(stream => stream.codec_type === 'video')!;
+  assert.deepEqual([info.width, info.height], [160, 120]);
+  const first = pixel(await rgbFrame(output, 0), 1, 1); const later = pixel(await rgbFrame(output, 1), 1, 1);
+  assert.ok(first[1] > 100 && first[0] < 100, 'first frame is zoomed in');
+  assert.ok(later[0] > 200 && later[1] < 60, 'frame is back to 1.0 after the pop');
+});
+
+test('speed and punch apply in hierarchical batches', { timeout: 60000 }, async () => {
+  const inputs = Array.from({ length: 101 }, (_, index) => ({ path: silent, trimStart: 0, trimEnd: 0.22, duration: 0.2, speed: 1.1, punch: index % 2 === 1 }));
+  const output = join(root, 'hierarchy-speed.mp4');
+  await tools().merge(inputs, output, { width: 64, height: 64, fps: 20 }, context(AbortSignal.timeout(55000)));
+  const seconds = Number((await inspect(output)).format.duration);
+  console.log(`hierarchical speed duration ${seconds} expected ${101 * 0.2}`);
+  assert.ok(Math.abs(seconds - 101 * 0.2) <= 0.05, String(seconds));
+});
+
+test('invalid speed, missing trims or mismatched duration throw', async () => {
+  const media = tools(); const output = join(root, 'speed-invalid.mp4');
+  const base = { path: silent, trimStart: 0, trimEnd: 0.55, duration: 0.5, speed: 1.1 };
+  for (const bad of [{ speed: 0.4 }, { speed: 2.1 }, { speed: NaN }, { speed: '1.1' }, { trimEnd: undefined }, { trimStart: undefined }, { duration: 0.3 }, { punch: 'yes' }, { pop: 1 }]) {
+    await assert.rejects(media.merge([{ ...base, ...bad } as never], output, options, context()), /speed|trim|duration|punch|pop/i, JSON.stringify(bad));
+  }
+  await media.merge([base], output, options, context());
+});
+
+test('slideshow rejects speed, punch and pop', async () => {
+  for (const extra of [{ speed: 1.1 }, { punch: true }, { pop: true }, { punch: false }]) {
+    await assert.rejects(tools().slideshow([{ path: image, duration: 0.2, ...extra }], join(root, 'slideshow-invalid.mp4'), options, context()), /speed|punch|pop/i);
+  }
+});

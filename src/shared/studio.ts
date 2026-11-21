@@ -50,7 +50,7 @@ export interface TaskContext {
   checkpoint(value: Record<string, unknown>): void;
 }
 export interface TaskResult { outputIds: string[]; message?: string }
-export interface MediaInput { path: string; duration?: number; start?: number; caption?: string; trimStart?: number; trimEnd?: number }
+export interface MediaInput { path: string; duration?: number; start?: number; caption?: string; trimStart?: number; trimEnd?: number; speed?: number; punch?: boolean; pop?: boolean }
 export interface MediaOptions {
   width?: number; height?: number; fps?: number; musicPath?: string; volume?: number; keepAudio?: boolean;
   subtitlePath?: string; subtitleMarginV?: number; captionPath?: string; title?: string;
