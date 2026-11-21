@@ -11,6 +11,10 @@ import { Store, publicUrl } from './store';
 import { NeedsInputError } from './queue';
 import type { Account, Task, TaskContext, TaskResult } from '../shared/studio';
 
+const MUSIC_IMPORT_HINT = 'Nhạc có thể đã có trong Muse: mở tài khoản, tải MP3 ở reply cuối, nhập vào Thư viện rồi chọn làm file nhạc của dự án. Không tự gửi lại để tránh tạo trùng.';
+/** The newest user message before a music submit; reply counts differ after a page reload, this anchor does not. */
+type UserAnchor = { count: number; id: string; text: string };
+
 export function browserExecutable(configured = ''): string {
   const paths = [configured, process.env.MAISTUDIO_BROWSER_PATH ?? '',
     ...(process.platform === 'darwin' ? ['/Applications/Google Chrome.app/Contents/MacOS/Google Chrome', '/Applications/Chromium.app/Contents/MacOS/Chromium'] :
@@ -213,6 +217,8 @@ export class BrowserManager {
     } else if (page.url() === 'about:blank') await page.goto(account.url, { waitUntil: 'domcontentloaded' });
     const beforeReplyCount = Number.isSafeInteger(checkpoint.beforeReplyCount) ? Number(checkpoint.beforeReplyCount) : checkpoint.remoteSubmitted === true ? undefined : await page.locator(selectors.response).count();
     const before = Array.isArray(checkpoint.beforeUrls) ? checkpoint.beforeUrls as string[] : await this.mediaUrls(page, selectors.response, task.kind);
+    let userAnchor: UserAnchor | undefined = Number.isSafeInteger(checkpoint.beforeUserCount) ? { count: Number(checkpoint.beforeUserCount),
+      id: typeof checkpoint.beforeUserId === 'string' ? checkpoint.beforeUserId : '', text: typeof checkpoint.beforeUserText === 'string' ? checkpoint.beforeUserText : '' } : undefined;
     if (checkpoint.remoteSubmitted !== true) {
       const composer = page.locator(selectors.composer).first();
       if (!await this.composerReady(page, selectors.composer, context.signal)) throw new NeedsInputError('Cần đăng nhập Muse hoặc cập nhật selector. Mở tài khoản rồi tiếp tục task.');
@@ -225,7 +231,11 @@ export class BrowserManager {
         : `Create a video with aspect ratio ${ratio}${files.length ? ' from the attached image (image-to-video)' : ''}. Do not ask follow-up questions, just generate the video directly.\n\n${task.prompt}`;
       await composer.fill(prompt, { timeout: 15000 }); context.signal.throwIfAborted();
       const submit = page.locator(selectors.submit).first(); await submit.waitFor({ state: 'visible', timeout: 15000 });
-      context.checkpoint({ remoteSubmitted: true, beforeUrls: before, beforeReplyCount, submittedAt: Date.now() });
+      if (task.kind === 'music') userAnchor = await page.locator('[data-message-item][data-message-role="user"]').evaluateAll(elements => {
+        const last = elements.at(-1) as HTMLElement | undefined;
+        return { count: elements.length, id: last?.getAttribute('data-message-id') ?? '', text: (last?.innerText ?? '').replace(/\s+/g, ' ').trim().slice(0, 2000) };
+      });
+      context.checkpoint({ remoteSubmitted: true, beforeUrls: before, beforeReplyCount, ...userAnchor && { beforeUserCount: userAnchor.count, beforeUserId: userAnchor.id, beforeUserText: userAnchor.text }, submittedAt: Date.now() });
       await submit.click({ timeout: 15000 });
       context.checkpoint({ threadUrl: page.url() });
     }
@@ -252,31 +262,60 @@ export class BrowserManager {
           if (/^Video generation (?:isn't|is not) available for (?:your|this)(?: [A-Za-z][A-Za-z0-9_-]{0,63})? account in your country or region\b/i.test(reply)) throw new NeedsInputError('Provider không cho phép tạo video cho tài khoản ở quốc gia/khu vực hiện tại. Giữ yêu cầu đã gửi để đối soát; không tự gửi lại.');
         }
         if (task.kind === 'music' && !busy && !urls.length) {
-          const id = await this.musicAttachment(page, selectors.response, task, context, beforeReplyCount);
+          const id = await this.musicAttachment(page, selectors.response, task, context, beforeReplyCount, userAnchor);
           if (id) { this.store.accountStatus(account.id, 'ready'); return { outputIds: [id] }; }
         }
         context.progress(Math.min(0.9, 0.05 + (Date.now() - started) / timeout * 0.8), 'Đang chờ kết quả từ Muse');
         await delay(500, undefined, { signal: context.signal });
       }
-      throw new NeedsInputError('Chưa nhận được media trong thời gian chờ. Kiểm tra thread và tiếp tục để tránh gửi trùng.');
+      throw new NeedsInputError(task.kind === 'music' ? `Chưa nhận được nhạc trong thời gian chờ. ${MUSIC_IMPORT_HINT}` : 'Chưa nhận được media trong thời gian chờ. Kiểm tra thread và tiếp tục để tránh gửi trùng.');
     } finally {
       if (context.signal.aborted && selectors.stop) await page.locator(selectors.stop).first().click({ timeout: 1500 }).catch(() => {});
     }
   }
-  private async musicAttachment(page: Page, selector: string, task: Task, context: TaskContext, beforeReplyCount: number | undefined): Promise<string | undefined> {
+  private async musicAttachment(page: Page, selector: string, task: Task, context: TaskContext, beforeReplyCount: number | undefined, anchor: UserAnchor | undefined): Promise<string | undefined> {
     const responses = page.locator(selector), count = await responses.count();
-    if (!count || beforeReplyCount !== undefined && count <= beforeReplyCount) return;
+    if (!count) return;
     const reply = responses.last();
     if (!await reply.getByRole('button', { name: 'Audio options', exact: true }).isVisible().catch(() => false)) return;
-    // With a reply baseline the new audio reply is ours (one task per account); Muse may show the request text differently.
-    // Legacy admissions lack that baseline, so bind recovery to the exact latest user prompt and DOM order.
-    const current = beforeReplyCount !== undefined || await reply.evaluate((element, prompt) => {
-      const users = document.querySelectorAll('[data-message-item][data-message-role="user"]'), user = users[users.length - 1];
-      const normalize = (value: string) => value.replace(/\s+/g, ' ').trim();
-      const text = normalize((user as HTMLElement | undefined)?.innerText || ''); const wanted = normalize(prompt);
-      return !!user && !!wanted && text.endsWith(wanted) && text.length - wanted.length <= 64 && !!(element.compareDocumentPosition(user) & Node.DOCUMENT_POSITION_PRECEDING);
-    }, task.prompt);
-    if (!current) throw new NeedsInputError('Reply nhạc không thuộc yêu cầu đang chạy; kiểm tra thread, không gửi lại.');
+    if (beforeReplyCount === undefined) {
+      // Legacy admissions lack a baseline, so bind recovery to the exact latest user prompt and DOM order.
+      const current = await reply.evaluate((element, prompt) => {
+        const users = document.querySelectorAll('[data-message-item][data-message-role="user"]'), user = users[users.length - 1];
+        const normalize = (value: string) => value.replace(/\s+/g, ' ').trim();
+        const text = normalize((user as HTMLElement | undefined)?.innerText || ''); const wanted = normalize(prompt);
+        return !!user && !!wanted && text.endsWith(wanted) && text.length - wanted.length <= 64 && !!(element.compareDocumentPosition(user) & Node.DOCUMENT_POSITION_PRECEDING);
+      }, task.prompt);
+      if (!current) throw new NeedsInputError('Reply nhạc không thuộc yêu cầu đang chạy; kiểm tra thread, không gửi lại.');
+    } else {
+      // A reload renders fewer assistant elements than the live page, so the reply count alone cannot tell a new reply.
+      // Anchor on the newest user message: once it is no longer the pre-submit one, an audio reply after it is ours
+      // (one task per account; Muse may show our request text differently). Without an anchor, legacy checkpoints bind to the prompt.
+      const state = await reply.evaluate((element, { prompt, anchor }) => {
+        const users = Array.from(document.querySelectorAll<HTMLElement>('[data-message-item][data-message-role="user"]')), user = users.at(-1);
+        const normalize = (value: string) => value.replace(/\s+/g, ' ').trim();
+        const text = normalize(user?.innerText ?? '').slice(0, 2000);
+        let owner: 'ours' | 'before' | 'unknown';
+        if (!user) owner = 'unknown';
+        else if (!anchor) { const wanted = normalize(prompt); owner = !!wanted && text.endsWith(wanted) && text.length - wanted.length <= 64 ? 'ours' : 'unknown'; }
+        else {
+          const id = user.getAttribute('data-message-id') ?? '', grew = users.length > anchor.count;
+          // Muse may render a request truncated ("… Xem thêm"), so compare the leading text; a doubtful match counts as the same message.
+          const lead = (value: string) => value.split(/…|\.\.\./)[0].trim().slice(0, 48);
+          const same = !!anchor.text && (text.includes(lead(anchor.text)) || anchor.text.includes(lead(text)));
+          if (anchor.id && id === anchor.id) owner = 'before';
+          else if (!anchor.id && !anchor.text) owner = grew ? 'ours' : 'unknown';
+          else if (!same) owner = 'ours';
+          else owner = grew ? 'ours' : anchor.id && id ? 'unknown' : 'before';
+        }
+        return owner === 'ours' && !(user!.compareDocumentPosition(element) & Node.DOCUMENT_POSITION_FOLLOWING) ? 'waiting' : owner;
+      }, { prompt: task.prompt, anchor: anchor ?? null });
+      if (state === 'before' || state === 'waiting') return;
+      if (state === 'unknown') {
+        if (count <= beforeReplyCount) throw new NeedsInputError(`Không xác định được reply nhạc của yêu cầu này sau khi trang Muse tải lại. ${MUSIC_IMPORT_HINT}`);
+        // Live page: the reply count still grew past the baseline, as before.
+      }
+    }
     const folder = join(this.store.root, 'work', task.id); await mkdir(folder, { recursive: true, mode: 0o700 });
     const temporary = await mkdtemp(join(folder, 'audio-'));
     let download: Download | undefined, session: CDPSession | undefined;

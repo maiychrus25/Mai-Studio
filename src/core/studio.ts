@@ -730,8 +730,9 @@ export class StudioService extends EventEmitter {
     const notes = affiliateRun && ['all', 'render'].includes(stage) ? structuredClone(object(task.input.attention ?? {})) as Record<string, string[]> : undefined;
     // A checked Video Aff run measures speech in its review, which repairs a silent clip within qualityRetries, and again when it renders.
     const deferSpeech = affiliateRun && project.data.autoChecks === true && ['all', 'videos'].includes(stage); let overflowed = false;
-    const scene = (id: string): string => `cảnh ${steps.filter(step => step.kind === 'video').findIndex(step => step.id === id) + 1}`;
-    const regenerate = (id: string): string => `bấm "Tạo lại clip riêng cảnh này" ở ${scene(id)}`;
+    // Name the card the way the Storyboard shows it ("Shot N") and the icon button by its tooltip.
+    const scene = (id: string): string => `Shot ${steps.filter(step => step.kind === 'video').findIndex(step => step.id === id) + 1}`;
+    const regenerate = (id: string): string => `trong tab "Shot & timeline" (mục Storyboard), bấm nút biểu tượng phim "Tạo lại clip riêng cảnh này" ở thẻ ${scene(id)}`;
     const fastShots: Array<FastEditShot & { path: string }> | undefined = fastEdit && affiliateTemplateGroup(fastEdit.contentStyle) === 'talk' && fastEdit.pace === 'fast' ? [] : undefined;
     for (let index = 0; index < steps.length; index++) {
       const step = steps[index]; context.signal.throwIfAborted();
@@ -791,7 +792,7 @@ export class StudioService extends EventEmitter {
           if (!analysis?.parts.length && !affiliateRun) throw new NeedsInputError(`Clip ${base} chưa phát hiện lời nói để căn hình và phụ đề`);
           if (!analysis?.parts.length && !reviewed) throw new NeedsInputError(`Clip ${scene(step.id)} ${info.hasAudio ? 'chưa nghe rõ lời thoại' : 'không có tiếng'}; ${regenerate(step.id)} rồi dựng lại`);
           // After run-all's repairs a clip with no audible line is rendered whole and listed.
-          if (!analysis?.parts.length) notes![base] ??= ['không nghe thấy lời thoại trong clip'];
+          if (!analysis?.parts.length) { if (!notes![base]?.length) notes![base] = ['không nghe thấy lời thoại trong clip']; }
           else {
             // v2 measures the clip where both picture and decoded sound exist, the same basis as speech review.
             let window = clipWindow(project.data, measuredCuts ? Math.min(info.duration, analysis.duration) : info.duration, step.duration, analysis, affiliateRun);

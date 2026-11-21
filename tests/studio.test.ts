@@ -1007,7 +1007,7 @@ test('manual render of a legacy affiliate project with a cut-off line still wait
     }
     for (const data of [{ ...base, autoChecks: true, shots: shots(cut.id) }, { ...base, affiliatePlanVersion: 2, productLook: 'A white cotton shirt.', autoChecks: true, shots: shots(cut.id) }]) {
       const truncated = await run(data, 'render');
-      assert.equal(truncated.task.status, 'waiting_input'); assert.match(truncated.task.error, /cảnh 2 bị cắt ở cuối clip/); assert.match(truncated.task.error, /"Tạo lại clip riêng cảnh này" ở cảnh 2/);
+      assert.equal(truncated.task.status, 'waiting_input'); assert.match(truncated.task.error, /Shot 2 bị cắt ở cuối clip/); assert.match(truncated.task.error, /tab "Shot & timeline" \(mục Storyboard\).*"Tạo lại clip riêng cảnh này" ở thẻ Shot 2/);
       assert.doesNotMatch(truncated.task.error, /Chạy toàn bộ|%2F|\//, 'no run-all advice and no internal shot id');
     }
   } finally { await studio.close(); rmSync(root, { recursive: true, force: true }); }

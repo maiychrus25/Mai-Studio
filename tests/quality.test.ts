@@ -558,6 +558,6 @@ test('affiliate run-all repairs a silent spoken clip within the budget, then ren
     assert.equal(done.message, 'Đã xuất video Affiliate. 1 cảnh cần xem lại: cảnh 1 (không nghe rõ lời thoại).');
     assert.equal((studio.store.project(p.id).data.qualityReviews as any)[`${p.id}/one`].speech.status, 'fail');
     const manual = await finish(studio, await studio.invoke<Task>('studio.run', { projectId: spoken.id, stage: 'render' }));
-    assert.equal(manual.status, 'waiting_input'); assert.equal(manual.error, 'Clip cảnh 1 không có tiếng; bấm "Tạo lại clip riêng cảnh này" ở cảnh 1 rồi dựng lại');
+    assert.equal(manual.status, 'waiting_input'); assert.equal(manual.error, 'Clip Shot 1 không có tiếng; trong tab "Shot & timeline" (mục Storyboard), bấm nút biểu tượng phim "Tạo lại clip riêng cảnh này" ở thẻ Shot 1 rồi dựng lại');
   });
 });
