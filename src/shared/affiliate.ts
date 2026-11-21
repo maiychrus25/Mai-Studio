@@ -30,6 +30,8 @@ export const AFFILIATE_LANGUAGES = [
   { id: 'ru', vi: 'Tiếng Nga', en: 'Russian' }, { id: 'tr', vi: 'Tiếng Thổ Nhĩ Kỳ', en: 'Turkish' }, { id: 'hi', vi: 'Tiếng Hindi', en: 'Hindi' }, { id: 'ar', vi: 'Tiếng Ả Rập', en: 'Arabic' },
 ] as const;
 export const AFFILIATE_LANGUAGES16 = AFFILIATE_LANGUAGES;
+export const AFFILIATE_PACES = [{ id: 'fast', vi: 'Nhanh kiểu TikTok — cắt khoảng lặng, đổi khung', en: 'Fast — cut silences, switch framing' }, { id: 'plain', vi: 'Gọn — giữ nguyên clip', en: 'Plain — keep clips whole' }] as const;
+export const AFFILIATE_SPEECH_SPEEDS = [{ id: 1, vi: '1,0×', en: '1.0×' }, { id: 1.1, vi: '1,1× (khuyên dùng)', en: '1.1× (recommended)' }, { id: 1.2, vi: '1,2×', en: '1.2×' }] as const;
 export const AFFILIATE_AGES = [{ id: 'young', vi: '20–25 tuổi', en: '20–25 years' }, { id: 'adult', vi: '26–35 tuổi', en: '26–35 years' }, { id: 'middle', vi: '36–50 tuổi', en: '36–50 years' }] as const;
 export const AFFILIATE_GENDERS = [{ id: 'female', vi: 'Nữ', en: 'Female' }, { id: 'male', vi: 'Nam', en: 'Male' }] as const;
 export const AFFILIATE_ACCENTS = [{ id: 'north', vi: 'Bắc (Hà Nội)', en: 'Northern (Hanoi)' }, { id: 'south', vi: 'Nam (Sài Gòn)', en: 'Southern (Saigon)' }, { id: 'central', vi: 'Trung (Huế)', en: 'Central (Hue)' }] as const;
@@ -42,6 +44,7 @@ export interface AffiliateSettings {
   notes: string; caption: string; cta: string; affiliateUrl: string;
   showPrice: boolean; screenText: boolean; aiLabel: boolean; adLabel: boolean; endCard: boolean;
   presenterAssetId: string; backgroundAssetId: string; outfitAssetIds: string[];
+  pace: typeof AFFILIATE_PACES[number]['id']; speechSpeed: typeof AFFILIATE_SPEECH_SPEEDS[number]['id'];
 }
 
 function bounded(value: unknown, field: string, max: number): string {
@@ -73,10 +76,12 @@ export function readAffiliateSettings(value?: unknown): AffiliateSettings {
   const raw = value === undefined ? {} : value;
   if (!raw || typeof raw !== 'object' || Array.isArray(raw) || ![Object.prototype, null].includes(Object.getPrototypeOf(raw))) throw new Error('Invalid Affiliate configuration');
   const input = raw as Record<string, unknown>;
-  const allowed = new Set(['contentStyle', 'hostMode', 'seconds', 'hookStyle', 'pose', 'gender', 'age', 'accent', 'notes', 'caption', 'cta', 'affiliateUrl', 'showPrice', 'screenText', 'aiLabel', 'adLabel', 'endCard', 'presenterAssetId', 'backgroundAssetId', 'outfitAssetIds']);
+  const allowed = new Set(['contentStyle', 'hostMode', 'seconds', 'hookStyle', 'pose', 'gender', 'age', 'accent', 'notes', 'caption', 'cta', 'affiliateUrl', 'showPrice', 'screenText', 'aiLabel', 'adLabel', 'endCard', 'presenterAssetId', 'backgroundAssetId', 'outfitAssetIds', 'pace', 'speechSpeed']);
   if (Reflect.ownKeys(input).some(key => typeof key !== 'string' || !allowed.has(key))) throw new Error('Invalid Affiliate configuration key or prototype key');
   const seconds = input.seconds === undefined ? 30 : input.seconds;
   if (typeof seconds !== 'number' || ![15, 30, 45, 60].includes(seconds)) throw new Error('Invalid Affiliate seconds: expected 15, 30, 45 or 60');
+  const speechSpeed = input.speechSpeed === undefined ? 1.1 : input.speechSpeed;
+  if (!AFFILIATE_SPEECH_SPEEDS.some(item => item.id === speechSpeed)) throw new Error('Invalid Affiliate speechSpeed: expected 1, 1.1 or 1.2');
   const boolean = (field: string): boolean => { if (input[field] === undefined) return true; if (typeof input[field] !== 'boolean') throw new Error(`Invalid Affiliate ${field}`); return input[field]; };
   const outfits = input.outfitAssetIds === undefined ? [] : input.outfitAssetIds;
   if (!Array.isArray(outfits) || outfits.length > 4) throw new Error('Invalid Affiliate outfitAssetIds: limit 4');
@@ -89,6 +94,7 @@ export function readAffiliateSettings(value?: unknown): AffiliateSettings {
     cta: bounded(input.cta === undefined ? 'Xem chi tiết sản phẩm tại liên kết bên dưới.' : input.cta, 'cta', 512), affiliateUrl: affiliateUrl(input.affiliateUrl),
     showPrice: boolean('showPrice'), screenText: boolean('screenText'), aiLabel: boolean('aiLabel'), adLabel: boolean('adLabel'), endCard: boolean('endCard'),
     presenterAssetId: asset(input.presenterAssetId, 'presenterAssetId'), backgroundAssetId: asset(input.backgroundAssetId, 'backgroundAssetId'), outfitAssetIds,
+    pace: option(input.pace, 'fast', AFFILIATE_PACES, 'pace'), speechSpeed: speechSpeed as AffiliateSettings['speechSpeed'],
   };
 }
 

@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import {
   AFFILIATE_STYLES, AFFILIATE_HOSTS, AFFILIATE_HOOKS, AFFILIATE_POSES, AFFILIATE_LANGUAGES,
-  AFFILIATE_AGES, AFFILIATE_GENDERS, AFFILIATE_ACCENTS,
+  AFFILIATE_AGES, AFFILIATE_GENDERS, AFFILIATE_ACCENTS, AFFILIATE_PACES, AFFILIATE_SPEECH_SPEEDS,
   readAffiliateSettings, affiliateSceneCount, affiliateMode, affiliateTemplateGroup,
   MAX_AFFILIATE_REFERENCES, type AffiliateSettings,
 } from '../shared/affiliate';
@@ -146,6 +146,10 @@ export function AffiliateWorkflow({ project, data, onChange, onRun }: {
         <Field label={t('Kiểu nội dung', 'Content style')} hint={style ? t(style.hintVi, style.hintEn) : undefined}><select value={settings.contentStyle} disabled={disabled} onChange={event => patch({ contentStyle: event.target.value })}>{options(AFFILIATE_STYLES)}</select></Field>
         <Field label={t('Cách dẫn dắt', 'Host mode')}><select value={settings.hostMode} disabled={disabled} onChange={event => patch({ hostMode: event.target.value })}>{options(AFFILIATE_HOSTS)}</select></Field>
         <Field label={t('Thời lượng mục tiêu', 'Target duration')} hint={affiliateTemplateGroup(settings.contentStyle) && data.affiliateDub !== true ? t('Video có lời được cắt theo lời nói thật nên có thể dài hoặc ngắn hơn mục tiêu.', 'Spoken videos are cut to the measured speech, so the result can run longer or shorter than the target.') : undefined}><select value={settings.seconds} disabled={disabled} onChange={event => patch({ seconds: Number(event.target.value) })}>{[15, 30, 45, 60].map(seconds => <option key={seconds} value={seconds}>{seconds} {t('giây', 'seconds')}</option>)}</select></Field>
+        {affiliateTemplateGroup(settings.contentStyle) === 'talk' && data.affiliateDub !== true && <>
+          <Field label={t('Nhịp dựng', 'Edit pace')}><select value={settings.pace} disabled={disabled} onChange={event => patch({ pace: event.target.value })}>{options(AFFILIATE_PACES)}</select></Field>
+          <Field label={t('Tốc độ nói', 'Speech speed')}><select value={settings.speechSpeed} disabled={disabled || settings.pace !== 'fast'} onChange={event => patch({ speechSpeed: Number(event.target.value) })}>{AFFILIATE_SPEECH_SPEEDS.map(speed => <option key={speed.id} value={speed.id}>{t(speed.vi, speed.en)}</option>)}</select></Field>
+        </>}
         <Field label={t('Cách mở đầu', 'Opening hook')}><select value={settings.hookStyle} disabled={disabled} onChange={event => patch({ hookStyle: event.target.value })}>{options(AFFILIATE_HOOKS)}</select></Field>
         <Field label={t('Tư thế / chuyển động', 'Pose / movement')}><select value={settings.pose} disabled={disabled} onChange={event => patch({ pose: event.target.value })}>{options(AFFILIATE_POSES)}</select></Field>
         <Field label={t('Ngôn ngữ video', 'Video language')}><select value={stringValue(data.language) || 'vi'} disabled={disabled} onChange={event => onChange({ language: event.target.value })}>{!AFFILIATE_LANGUAGES.some(value => value.id === data.language) && !!stringValue(data.language) && <option value={stringValue(data.language)}>{stringValue(data.language)}</option>}{options(AFFILIATE_LANGUAGES)}</select></Field>

@@ -384,3 +384,14 @@ test('v2 style rejects a legacy-shaped reply', () => {
   assert.throws(() => planning().parsePlan(JSON.stringify(muse.raw), source, true), /productLook/);
   assert.equal((planning().parsePlan(JSON.stringify(raw), source) as any).affiliatePlanVersion, undefined, 'the review-only path still follows the stored marker');
 });
+
+test('affiliate settings default to fast pace at 1.1 and reject invalid values', () => {
+  const settings = shared().readAffiliateSettings();
+  assert.equal(settings.pace, 'fast'); assert.equal(settings.speechSpeed, 1.1);
+  const chosen = shared().readAffiliateSettings({ pace: 'plain', speechSpeed: 1.2 });
+  assert.equal(chosen.pace, 'plain'); assert.equal(chosen.speechSpeed, 1.2);
+  assert.equal(shared().readAffiliateSettings({ speechSpeed: 1 }).speechSpeed, 1);
+  for (const value of [{ pace: 'slow' }, { pace: null }, { pace: 1 }, { speechSpeed: 1.15 }, { speechSpeed: '1.1' }, { speechSpeed: null }, { speechSpeed: NaN }, { speechSpeed: 2 }]) {
+    assert.throws(() => shared().readAffiliateSettings(value), /affiliate|invalid/i, JSON.stringify(value));
+  }
+});

@@ -478,3 +478,13 @@ Source: three complete Muse 1.13.18 Video Aff projects in the operator's databas
 **Planner.** Muse's script prompt (`aff.script_turn`) is typed into chat and never stored, so MaiStudio's v2 planner prompt is authored to produce Muse-shaped data; only its outputs are evidence. Planning a v2 style always validates the reply against the v2 shape; a reply that misses it goes through the existing single repair attempt.
 
 **Not verified.** No live provider run of a v2 project; speech-window margins (0.12 s / 0.30 s) were tested only on synthetic sine clips.
+
+## Affiliate fast edit — 2026-11-21
+
+Design: `docs/specs/2026-11-21-affiliate-fast-edit.md`; code: `src/core/affiliate-fast-edit.ts`, `src/core/media.ts` (`speed`, `punch`, `pop` inputs), wired in `src/core/studio.ts` for spoken (`talk`) v2 projects rendered from native audio with `pace: 'fast'`.
+
+**From Muse (static decompile of 1.13.17, UI defaults of 1.13.18).** `JUMP_GAP 0.3`, `JUMP_KEEP 0.08`, `PUNCH_EVERY 1.7`, no split when the remainder is ≤ 1.7 × 1.5, pieces under 0.12 s dropped, `POP_SEC 0.4`, speeds 1.0/1.1/1.2 with 1.1 the default, fast pace on by default, `setpts=(PTS-STARTPTS)/speed` and `atempo=speed`, the punch crop `crop=iw/1.1:ih/1.1:(iw-iw/1.1)/2:(ih-ih/1.1)*0.4`, phrase captions of 2–6 words, the `_cut_ok` scores and the `_WEAK_END`/`_VI_HEAD` word lists, and the overlapping-cue end `max(start + 0.2, next − 0.02)`.
+
+**MaiStudio's own choices (no Muse evidence).** Words are shared between speech parts in proportion to part length and `reach = 2`; the pop zooms 1.15 → 1.0 linearly (implemented with `zoompan`); each shot starts on the normal frame; a silent shot longer than 2.55 s is split every 1.7 s like speech; when the ±2-word window has no better cut, the phrase split searches the whole line; `pace` and `speechSpeed` are render options that mark output stale without asking for a new plan or script review.
+
+**Not verified.** No real Muse or provider clip was rendered with fast edit; checks used synthetic sine-tone clips. MaiStudio's `analyzeSpeech` is coarser than Muse's speech detection, so short silences may be misdetected.

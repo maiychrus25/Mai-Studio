@@ -811,3 +811,107 @@ test('v2 captions and flashes land on the measured cut points', async t => {
     const flash = flashes.at(-1)!; assert.equal(flash.length, 2); flash.forEach((value, index) => assert.ok(Math.abs(value - cuts[index + 1]) < 0.002, `${flash} vs ${cuts}`));
   } finally { await studio.close(); rmSync(root, { recursive: true, force: true }); }
 });
+
+// Speech at 1–2 s and 2.8–3.8 s with a 0.8 s silence between, the shape fast edit jump-cuts.
+const gapClip = (root: string): string => {
+  const source = join(root, 'gap.mp4');
+  assert.equal(spawnSync(require('ffmpeg-static') as string, ['-v', 'error', '-f', 'lavfi', '-i', 'color=c=blue:s=64x64:r=24:d=4.5', '-f', 'lavfi', '-i', "aevalsrc='sin(2*PI*180*t)*0.5*(between(t,1,2)+between(t,2.8,3.8))':s=16000:d=4.5", '-map', '0:v', '-map', '1:a', '-c:v', 'libx264', '-pix_fmt', 'yuv420p', '-c:a', 'aac', '-t', '4.5', source]).status, 0);
+  return source;
+};
+const fastLine = 'Áo cotton mềm mại, mặc cả ngày rất thoáng mát.';
+const talkProject = (clipId: string, affiliate: Record<string, unknown> = {}): Record<string, unknown> => ({
+  affiliate: { contentStyle: 'review', hostMode: 'voiceover', screenText: false, seconds: 15, ...affiliate }, affiliatePlanVersion: 2, productLook: 'A white cotton shirt.',
+  nativeAudio: true, keepAudio: true, width: 64, height: 64, product: { name: 'Shirt' },
+  shots: ['one', 'two'].map((id, index) => ({ id, prompt: 'Shirt on the cabinet', videoAssetId: clipId, duration: 3.5, start: index * 3.5, dialogue: fastLine, caption: `Chữ ${index + 1}`, beat: 'hook', shotType: 'insert', ...(index ? { transition: 'flash' } : {}) })),
+});
+const captureMerge = (t: { mock: { method: Function } }): Array<{ inputs: Array<Record<string, any>>; options: Record<string, any> }> => {
+  const calls: Array<{ inputs: Array<Record<string, any>>; options: Record<string, any> }> = []; const merge = MediaTools.prototype.merge;
+  t.mock.method(MediaTools.prototype, 'merge', function (this: MediaTools, ...args: Parameters<MediaTools['merge']>) { calls.push({ inputs: structuredClone(args[0]) as any, options: structuredClone(args[2]) as any }); return merge.apply(this, args); });
+  return calls;
+};
+const renderStage = async (studio: StudioService, projectId: string): Promise<Task> => {
+  const task = await studio.invoke<Task>('studio.run', { projectId, stage: 'render' });
+  for (let n = 0; n < 3000 && ['draft', 'queued', 'running'].includes(studio.store.task(task.id).status); n++) await delay(10);
+  return studio.store.task(task.id);
+};
+
+test('fast edit render cuts silences, punches and speeds up spoken shots', async t => {
+  const root = mkdtempSync(join(tmpdir(), 'maistudio-fast-')); const studio = new StudioService(root); const calls = captureMerge(t);
+  try {
+    const [clip] = await studio.importFiles([gapClip(root)]);
+    const fast = await studio.invoke<Project>('project.save', { name: 'fast', kind: 'affiliate', data: talkProject(clip.id) });
+    const done = await renderStage(studio, fast.id); assert.equal(done.status, 'succeeded', done.error);
+    const inputs = calls.at(-1)!.inputs;
+    assert.ok(inputs.length > 2, `more segments than shots: ${inputs.length}`);
+    assert.ok(inputs.every(input => input.speed === 1.1), JSON.stringify(inputs));
+    assert.equal(inputs[0].pop, true); assert.ok(inputs.slice(1).every(input => input.pop !== true));
+    assert.deepEqual(inputs.map(input => input.punch), [false, true, false, true]);
+    const { analyzeSpeech } = require('../src/core/acoustics') as typeof import('../src/core/acoustics');
+    const speech = await analyzeSpeech(studio.store.assetPath(clip.id), require('ffmpeg-static') as string, new AbortController().signal);
+    for (const shot of [inputs.slice(0, 2), inputs.slice(2)]) for (const part of speech.parts) assert.ok(shot.some(input => input.trimStart <= part.start && input.trimEnd >= part.end), `no spoken word is cut: ${JSON.stringify(part)} in ${JSON.stringify(shot)}`);
+    const cues = await studio.invoke<Array<{ text: string }>>('srt.parse', { text: (studio.store.project(fast.id).data.production as any).subtitle });
+    assert.ok(cues.length >= 4, JSON.stringify(cues));
+    cues.forEach(cue => { const words = cue.text.split(/\s+/).length; assert.ok(words >= 2 && words <= 6, cue.text); });
+    assert.equal(cues.map(cue => cue.text).join(' '), `${fastLine} ${fastLine}`);
+    const plain = await studio.invoke<Project>('project.save', { name: 'plain', kind: 'affiliate', data: talkProject(clip.id, { pace: 'plain' }) });
+    const whole = await renderStage(studio, plain.id); assert.equal(whole.status, 'succeeded', whole.error);
+    const media = new MediaTools(); const short = await media.probe(studio.store.assetPath(done.outputIds[0])), long = await media.probe(studio.store.assetPath(whole.outputIds[0]));
+    assert.ok(short.duration < long.duration - 1, `fast ${short.duration} vs plain ${long.duration}`);
+  } finally { await studio.close(); rmSync(root, { recursive: true, force: true }); }
+});
+
+// Inputs and options captured from the same projects on main (before fast edit), with paths and floats normalised.
+const mergeShape = (call: { inputs: Array<Record<string, any>>; options: Record<string, any> }, root: string): unknown => {
+  const seen: string[] = []; const label = (path: string): string => `input${seen.includes(path) ? seen.indexOf(path) : seen.push(path) - 1}`;
+  const { basename } = require('node:path') as typeof import('node:path');
+  return JSON.parse(JSON.stringify({ inputs: call.inputs.map(input => ({ ...input, path: label(input.path) })), options: call.options },
+    (_key, value) => typeof value === 'number' ? Math.round(value * 1000) / 1000 : typeof value === 'string' && value.startsWith(root) ? basename(value) : value));
+};
+const PLAIN_RENDERS: unknown = {
+  plain: {"inputs": [{"path": "input0", "duration": 3.29, "start": 0, "trimStart": 0.836, "trimEnd": 4.126}, {"path": "input0", "duration": 3.29, "start": 3.29, "trimStart": 0.836, "trimEnd": 4.126}], "options": {"width": 64, "height": 64, "fps": 24, "fit": "pad", "keepAudio": true, "fadeIn": 0, "fadeOut": 0, "ducking": false, "motion": "none", "subtitleMarginV": 52, "overlayPath": "product-overlay.png", "captionPath": "affiliate-captions.srt", "flashes": [3.29]}, "subtitle": "1\n00:00:00,120 --> 00:00:02,990\nÁo cotton mềm mại, mặc cả ngày rất thoáng mát.\n\n2\n00:00:03,410 --> 00:00:06,280\nÁo cotton mềm mại, mặc cả ngày rất thoáng mát.\n", "captions": "1\n00:00:00,000 --> 00:00:03,290\nChữ 1\n\n2\n00:00:03,290 --> 00:00:06,580\nChữ 2\n"},
+  legacy: {"inputs": [{"path": "input0", "duration": 3.5, "start": 0, "trimStart": 0.506, "trimEnd": 4.006}, {"path": "input0", "duration": 3.5, "start": 3.5, "trimStart": 0.506, "trimEnd": 4.006}], "options": {"width": 64, "height": 64, "fps": 24, "fit": "pad", "keepAudio": true, "fadeIn": 0, "fadeOut": 0, "ducking": false, "motion": "none", "subtitleMarginV": 52, "overlayPath": "product-overlay.png", "captionPath": "affiliate-captions.srt", "flashes": [3.5]}, "subtitle": "1\n00:00:00,450 --> 00:00:03,320\nÁo cotton mềm mại, mặc cả ngày rất thoáng mát.\n\n2\n00:00:03,950 --> 00:00:06,820\nÁo cotton mềm mại, mặc cả ngày rất thoáng mát.\n", "captions": "1\n00:00:00,000 --> 00:00:03,500\nChữ 1\n\n2\n00:00:03,500 --> 00:00:07,000\nChữ 2\n"},
+  fashion: {"inputs": [{"path": "input0", "duration": 3.5, "start": 0, "trimStart": 0.836, "trimEnd": 4.336}, {"path": "input0", "duration": 3.5, "start": 3.5, "trimStart": 0.836, "trimEnd": 4.336}], "options": {"width": 64, "height": 64, "fps": 24, "fit": "pad", "keepAudio": true, "fadeIn": 0, "fadeOut": 0, "ducking": false, "motion": "none", "subtitleMarginV": 52, "overlayPath": "product-overlay.png", "captionPath": "affiliate-captions.srt", "flashes": [3.5]}, "subtitle": "1\n00:00:00,120 --> 00:00:02,990\nÁo cotton mềm mại, mặc cả ngày rất thoáng mát.\n\n2\n00:00:03,620 --> 00:00:06,490\nÁo cotton mềm mại, mặc cả ngày rất thoáng mát.\n", "captions": "1\n00:00:00,000 --> 00:00:03,500\nChữ 1\n\n2\n00:00:03,500 --> 00:00:07,000\nChữ 2\n"},
+};
+
+test('plain pace and legacy projects render as before', async t => {
+  const root = mkdtempSync(join(tmpdir(), 'maistudio-plain-')); const studio = new StudioService(root); const calls = captureMerge(t);
+  try {
+    const [clip] = await studio.importFiles([gapClip(root)]);
+    const text = { screenText: true, endCard: false, aiLabel: false, adLabel: false, showPrice: false };
+    const { affiliatePlanVersion: _version, productLook: _look, ...legacy } = talkProject(clip.id, text);
+    const cases: Record<string, Record<string, unknown>> = { plain: talkProject(clip.id, { ...text, pace: 'plain' }), legacy, fashion: talkProject(clip.id, { ...text, contentStyle: 'fashion' }) };
+    const shapes: Record<string, unknown> = {};
+    for (const [name, data] of Object.entries(cases)) {
+      const p = await studio.invoke<Project>('project.save', { name, kind: 'affiliate', data });
+      const done = await renderStage(studio, p.id); assert.equal(done.status, 'succeeded', `${name}: ${done.error}`);
+      const { readFileSync } = await import('node:fs');
+      shapes[name] = { ...(mergeShape(calls.at(-1)!, root) as object), subtitle: (studio.store.project(p.id).data.production as any).subtitle, captions: readFileSync(join(root, 'work', done.id, 'affiliate-captions.srt'), 'utf8') };
+    }
+    assert.deepEqual(shapes, PLAIN_RENDERS);
+  } finally { await studio.close(); rmSync(root, { recursive: true, force: true }); }
+});
+
+test('changing pace or speech speed invalidates the rendered output', async t => {
+  const root = mkdtempSync(join(tmpdir(), 'maistudio-pace-')); const studio = new StudioService(root); const calls = captureMerge(t);
+  try {
+    const [clip] = await studio.importFiles([gapClip(root)]);
+    const p = await studio.invoke<Project>('project.save', { name: 'pace', kind: 'affiliate', data: { ...talkProject(clip.id), planning: { source: 'ai-api' }, planningNeedsUpdate: false, affiliateReview: { status: 'pass' } } });
+    const first = await renderStage(studio, p.id); assert.equal(first.status, 'succeeded', first.error);
+    let previous = (studio.store.project(p.id).data.production as any).render.assetId;
+    const checks: Array<[Record<string, unknown>, (inputs: Array<Record<string, any>>) => boolean]> = [
+      [{ speechSpeed: 1.2 }, inputs => inputs.length > 2 && inputs.every(input => input.speed === 1.2)],
+      [{ pace: 'plain' }, inputs => inputs.length === 2 && inputs.every(input => input.speed === undefined && input.punch === undefined && input.pop === undefined)],
+    ];
+    for (const [change, check] of checks) {
+      const latest = studio.store.project(p.id);
+      const saved = await studio.invoke<Project>('project.save', { ...latest, data: { ...latest.data, affiliate: { ...(latest.data.affiliate as object), ...change } } });
+      assert.equal(saved.data.productionStale, true, JSON.stringify(change));
+      assert.notEqual(saved.data.planningNeedsUpdate, true, 'a render option does not ask for a new plan');
+      assert.notEqual((saved.data.affiliateReview as any).stale, true, 'a render option does not invalidate the script review');
+      const done = await renderStage(studio, p.id); assert.equal(done.status, 'succeeded', done.error);
+      assert.ok(check(calls.at(-1)!.inputs), JSON.stringify(calls.at(-1)!.inputs));
+      const render = (studio.store.project(p.id).data.production as any).render;
+      assert.notEqual(render.assetId, previous); assert.equal(studio.store.project(p.id).data.productionStale, false); previous = render.assetId;
+    }
+  } finally { await studio.close(); rmSync(root, { recursive: true, force: true }); }
+});

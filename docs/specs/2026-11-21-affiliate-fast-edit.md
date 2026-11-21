@@ -1,7 +1,7 @@
 # Video Aff: khâu dựng nhịp nhanh theo Muse
 
 Ngày: 21/11/2026
-Trạng thái: Đã được anh duyệt hướng ngày 21/11/2026 (quy trình spec → plan → giao việc → review, không duyệt lại tài liệu); chưa thực thi.
+Trạng thái: Đã được anh duyệt hướng ngày 21/11/2026 (quy trình spec → plan → giao việc → review, không duyệt lại tài liệu); đã thực thi trên nhánh `feat/affiliate-fast-edit` ngày 21/11/2026, chưa phát hành. Mã khác thiết kế ở vài điểm, xem "Ghi chú sau thực thi".
 Nguồn bằng chứng: bản dịch ngược tĩnh MuseStudio 1.13.17 (`affstudio.fast_edit`, `affstudio.phrase_cues`, `affstudio._cut_ok`, `affstudio._best_cut`, `slideshow.render_slideshow.<locals>.build`) và giao diện Muse 1.13.18 trên VPS của anh, nơi Video Aff mặc định "Nhịp dựng: Nhanh kiểu TikTok — nói xong là chuyển, cắt khoảng lặng" và "Tốc độ nói 1,1× (khuyên dùng)".
 
 ## 1. Mục đích
@@ -128,3 +128,13 @@ Tên hàm nội bộ, cách tách hàm, cách viết chuỗi lọc FFmpeg miễn
 
 - Bộ dò lời của MaiStudio (`analyzeSpeech`) dò theo tính tuần hoàn âm, thô hơn Muse; khoảng lặng ngắn có thể bị dò thành có lời hoặc ngược lại. Đệm 0,08 giây giảm rủi ro cắt chữ nhưng không loại hẳn.
 - Video nhiều đoạn hơn làm khâu dựng chậm hơn vài giây.
+
+## Ghi chú sau thực thi
+
+- Cảnh không lời có cửa sổ dài hơn 2,55 giây (thời lượng ra) cũng được chia mỗi 1,7 giây và đảo khung như đoạn nói liền (5.3 ghi một mảnh duy nhất).
+- Chia cụm phụ đề: nếu trong khoảng ±2 chữ không có chỗ ngắt tốt hơn thì tìm trên cả câu.
+- Hiệu ứng bật hình dùng `zoompan` (cùng cách hiệu ứng Ken Burns có sẵn).
+- `pace` và `speechSpeed` là tuỳ chọn dựng như `showPrice`/`screenText`: đổi chúng đánh dấu output cũ là stale (dấu `inputHash` của render đã gồm toàn bộ `data.affiliate`) nhưng không đặt `planningNeedsUpdate` và không làm cũ đánh giá kịch bản; nếu không, đổi nhịp dựng sẽ chặn dựng cho tới khi lập lại kế hoạch.
+- Ô "Tốc độ nói" bị khoá khi chọn "Gọn", vì tốc độ chỉ có tác dụng ở nhịp nhanh.
+- Kiểm thử dự án lồng tiếng của "dựng như trước" nằm ở `tests/affiliate-workflow.test.ts` (nơi có fixture TTS cục bộ), ba trường hợp còn lại ở `tests/studio.test.ts`; cả hai so đầu vào và tuỳ chọn của `media().merge` cùng phụ đề với giá trị chụp từ mã trước khi nối khâu này.
+- Caption trên màn hình trùng nguyên văn câu thoại vốn bị bỏ để không lặp với phụ đề; khi phụ đề chia cụm thì không cue nào trùng nguyên câu nên caption đó sẽ hiện cùng phụ đề. Chưa xử lý vì caption v2 thường là chữ ngắn khác lời.

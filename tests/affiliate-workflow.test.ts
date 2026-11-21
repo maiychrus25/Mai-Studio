@@ -325,3 +325,27 @@ test('Affiliate reserves a reference slot for an auto-generated host before savi
     assert.equal(studio.store.tasks().length, before, 'invalid reference budget never reaches the queue');
   });
 });
+
+// Captured from main (before fast edit) with asset paths replaced by their order and floats rounded to milliseconds.
+const DUBBED_V2_RENDER: unknown = {
+  inputs: [0, 1, 2, 3].map(index => ({ path: `input${index}`, duration: 3.75, start: index * 3.75, base: `shot-${index + 1}` })),
+  options: { width: 64, height: 64, fps: 10, fit: 'pad', keepAudio: true, fadeIn: 0, fadeOut: 0, ducking: false, motion: 'none', subtitleMarginV: 52, flashes: [] },
+  subtitle: '1\n00:00:00,000 --> 00:00:01,526\nHello product\n\n2\n00:00:03,750 --> 00:00:05,276\nHello product\n',
+};
+
+test('plain pace and legacy projects render as before: a dubbed v2 project keeps whole clips', async t => {
+  const calls: Array<{ inputs: Array<Record<string, any>>; options: Record<string, any> }> = []; const merge = MediaTools.prototype.merge;
+  t.mock.method(MediaTools.prototype, 'merge', function (this: MediaTools, ...args: Parameters<MediaTools['merge']>) { calls.push({ inputs: structuredClone(args[0]) as any, options: structuredClone(args[2]) as any }); return merge.apply(this, args); });
+  await dubFixture(async (studio, project) => {
+    const shots = (project.data.shots as Array<Record<string, unknown>>).map((shot, index) => ({ ...shot, beat: ['hook', 'benefit', 'demo', 'cta'][index], shotType: 'insert' }));
+    const v2 = await studio.invoke<Project>('project.save', { ...project, data: { ...project.data, affiliatePlanVersion: 2, productLook: 'A blue short-sleeve cotton shirt.', shots } });
+    const run = async (stage: string) => settle(studio, (await studio.invoke<Task>('studio.run', { projectId: v2.id, stage })).id);
+    const speech = await run('speech'); assert.equal(speech.status, 'succeeded', speech.error);
+    const rendered = await run('render'); assert.equal(rendered.status, 'succeeded', rendered.error);
+    const seen: string[] = []; const label = (path: string): string => `input${seen.includes(path) ? seen.indexOf(path) : seen.push(path) - 1}`;
+    const root = studio.store.root, call = calls.at(-1)!;
+    const shape = JSON.parse(JSON.stringify({ inputs: call.inputs.map(input => ({ ...input, path: label(input.path), base: String(input.base).split('/').at(-1) })), options: call.options, subtitle: (studio.store.project(v2.id).data.production as any).subtitle },
+      (_key, value) => typeof value === 'number' ? Math.round(value * 1000) / 1000 : typeof value === 'string' && value.startsWith(root) ? value.split(/[\\/]/).at(-1) : value));
+    assert.deepEqual(shape, DUBBED_V2_RENDER);
+  });
+});

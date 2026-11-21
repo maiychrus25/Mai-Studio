@@ -31,6 +31,7 @@ import { shopeeBookmarklet } from '../shared/shopee-capture';
 import { readAffiliateSettings, affiliateMode, affiliateTemplateGroup, affiliateV2, MAX_AFFILIATE_REFERENCES } from '../shared/affiliate';
 import { affiliateReviewPrompt, parseAffiliateReview } from './affiliate';
 import { affiliateCaptionCues, affiliatePostText, affiliateSpeechWindow, alignAffiliateShots, detectAffiliateBeats } from './affiliate-edit';
+import { affiliateFastEdit, type FastEditShot } from './affiliate-fast-edit';
 
 export interface DesktopActions {
   openExternal?(url: string): Promise<void>;
@@ -164,7 +165,7 @@ export class StudioService extends EventEmitter {
           const affiliateIntent = (value: unknown, review = false) => {
             if (value === undefined) return undefined;
             const settings: Record<string, unknown> = { ...readAffiliateSettings(value) };
-            for (const key of ['showPrice', 'screenText', 'aiLabel', 'adLabel', 'endCard', 'affiliateUrl', ...(!review ? ['caption', 'cta'] : [])]) delete settings[key];
+            for (const key of ['showPrice', 'screenText', 'aiLabel', 'adLabel', 'endCard', 'affiliateUrl', 'pace', 'speechSpeed', ...(!review ? ['caption', 'cta'] : [])]) delete settings[key];
             return settings;
           };
           const affiliateChanged = kind === 'affiliate' && JSON.stringify(affiliateIntent(data.affiliate)) !== JSON.stringify(affiliateIntent(previous.data.affiliate));
@@ -685,7 +686,7 @@ export class StudioService extends EventEmitter {
       const id = object(production.characterImages ?? {})[character.id]; const signature = this.characterFingerprint(project, character);
       return !character.assetId && fingerprints[`character/${character.id}`] === signature && typeof id === 'string' && this.store.assets().some(asset => asset.id === id) ? { ...character, assetId: id } : character;
     });
-    const steps = pipelineSteps({ ...project, data: { ...project.data, characters } }, { speech: !['images', 'videos'].includes(stage) }); const results = object(task.checkpoint.steps ?? {}); const clips: Array<{ path: string; duration: number; start?: number; trimStart?: number; trimEnd?: number; base?: string }> = []; const voices: Array<{ path: string; start: number; duration?: number }> = []; const nativeCues: ReturnType<typeof parseSrt> = [];
+    const steps = pipelineSteps({ ...project, data: { ...project.data, characters } }, { speech: !['images', 'videos'].includes(stage) }); const results = object(task.checkpoint.steps ?? {}); const clips: Array<{ path: string; duration: number; start?: number; trimStart?: number; trimEnd?: number; base?: string; speed?: number; punch?: boolean; pop?: boolean }> = []; const voices: Array<{ path: string; start: number; duration?: number }> = []; const nativeCues: ReturnType<typeof parseSrt> = [];
     const selected = Array.isArray(task.input.shotIds) ? new Set(task.input.shotIds as string[]) : undefined;
     const stageIds: string[] = [];
     const projectHash = this.contentFingerprint(project.data);
@@ -697,6 +698,8 @@ export class StudioService extends EventEmitter {
     const stills = new Map<string, string>(); let position = 0;
     // v2 spoken clips run for their measured speech, so they follow each other instead of the planned starts.
     const measuredCuts = affiliateV2(project) && !dubbing && project.data.nativeAudio === true && project.data.renderMode !== 'slideshow' ? [0] : undefined;
+    const fastEdit = measuredCuts && readAffiliateSettings(project.data.affiliate);
+    const fastShots: Array<FastEditShot & { path: string }> | undefined = fastEdit && affiliateTemplateGroup(fastEdit.contentStyle) === 'talk' && fastEdit.pace === 'fast' ? [] : undefined;
     for (let index = 0; index < steps.length; index++) {
       const step = steps[index]; context.signal.throwIfAborted();
       const base = step.id.replace(/\/(image|video|speech)$/, '');
@@ -748,7 +751,7 @@ export class StudioService extends EventEmitter {
       if (step.kind === 'image') stills.set(base, assetId);
       else if (step.kind === 'video') {
         const path = this.store.assetPath(assetId); const info = await this.media().probe(path, context.signal); let duration = Math.min(step.duration, info.duration); let trimStart = 0;
-        const start = measuredCuts ? position : step.start ?? position;
+        const start = measuredCuts ? position : step.start ?? position; let parts: FastEditShot['parts'] = [];
         if (!dubbing && project.data.nativeAudio === true && step.dialogue) {
           if (!info.hasAudio) throw new NeedsInputError(`Clip ${base} chưa có lời thoại; kiểm tra hoặc tạo lại trước khi dựng`);
           const analysis = await this.withMedia(context.signal, () => analyzeSpeech(path, this.media().executablePath, context.signal));
@@ -757,9 +760,12 @@ export class StudioService extends EventEmitter {
           const window = clipWindow(project.data, measuredCuts ? Math.min(info.duration, analysis.duration) : info.duration, step.duration, analysis, project.kind === 'affiliate' && project.data.affiliate !== undefined); trimStart = window.start; duration = window.duration;
           if (window.speechOverflow && (stage === 'render' || project.data.autoChecks !== true)) throw new NeedsInputError(`Lời thoại shot ${base} vượt khoảng dựng; review và tạo lại clip trước khi xuất để không cắt mất lời`);
           if (window.truncated && (stage === 'render' || project.data.autoChecks !== true)) throw new NeedsInputError(`Lời thoại shot ${base} bị cắt ở cuối clip; tạo lại clip để nói trọn câu trước khi xuất`);
-          nativeCues.push({ index: nativeCues.length + 1, start: start + analysis.parts[0].start - trimStart, end: Math.min(start + duration, start + analysis.parts.at(-1)!.end - trimStart), text: step.dialogue });
+          if (fastShots) parts = analysis.parts;
+          else nativeCues.push({ index: nativeCues.length + 1, start: start + analysis.parts[0].start - trimStart, end: Math.min(start + duration, start + analysis.parts.at(-1)!.end - trimStart), text: step.dialogue });
         }
-        clips.push({ path, duration: dubbing ? step.duration : duration, start: dubbing || project.data.nativeAudio === true ? start : step.start, ...(dubbing ? { base } : trimStart || project.data.nativeAudio === true ? { trimStart, trimEnd: trimStart + duration } : {}) }); position = start + (dubbing ? step.duration : duration);
+        if (fastShots) fastShots.push({ path, clipDuration: info.duration, window: { start: trimStart, duration }, parts, dialogue: step.dialogue });
+        else clips.push({ path, duration: dubbing ? step.duration : duration, start: dubbing || project.data.nativeAudio === true ? start : step.start, ...(dubbing ? { base } : trimStart || project.data.nativeAudio === true ? { trimStart, trimEnd: trimStart + duration } : {}) });
+        position = start + (dubbing ? step.duration : duration);
         measuredCuts?.push(position);
       }
       else if (!dubbing) voices.push({ path: this.store.assetPath(assetId), start: step.start ?? Math.max(0, position - step.duration), duration: step.duration });
@@ -772,6 +778,11 @@ export class StudioService extends EventEmitter {
       context.checkpoint({ outputIds }); return { outputIds, message: 'Đã tạo và review clip; xem các đánh giá nội dung trước khi dựng' };
     }
     if (['images', 'videos', 'speech'].includes(stage)) { context.checkpoint({ outputIds: [...new Set(stageIds)] }); return { outputIds: [...new Set(stageIds)], message: `Hoàn tất bước ${stage}` }; }
+    if (fastShots) {
+      const edit = affiliateFastEdit(fastShots, fastEdit!.speechSpeed); let at = 0;
+      for (const segment of edit.segments) { clips.push({ path: fastShots[segment.shot].path, start: at, trimStart: segment.trimStart, trimEnd: segment.trimEnd, duration: segment.duration, speed: fastEdit!.speechSpeed, punch: segment.punch, pop: segment.pop }); at += segment.duration; }
+      measuredCuts!.splice(0, measuredCuts!.length, ...edit.cuts); nativeCues.push(...edit.cues);
+    }
     if (!clips.length) throw new Error('Pipeline chưa có clip để dựng');
     if (dubbing) {
       project = await this.prepareAffiliateDubs(task, this.store.project(project.id), context);
