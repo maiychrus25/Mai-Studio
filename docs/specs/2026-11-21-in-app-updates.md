@@ -1,7 +1,7 @@
 # Cập nhật trong app và phát hành theo phiên bản trên GitHub
 
 Ngày: 21/11/2026
-Trạng thái: Anh đồng ý hướng ngày 21/11/2026 ("ok": Mac báo + tải + mở bộ cài; Windows/Linux tự cài; được push `main` và phát hành `0.2.0-dev.5` khi xong).
+Trạng thái: Anh đồng ý hướng ngày 21/11/2026 ("ok": Mac báo + tải + mở bộ cài; Windows/Linux tự cài; được push `main` và phát hành `0.2.0-dev.5` khi xong). Đã thực thi trên nhánh `feat/in-app-updates` ngày 21/11/2026, chưa phát hành.
 
 ## 1. Mục đích
 
@@ -62,3 +62,12 @@ Mục tiêu: mỗi lần phát hành có một release công khai trên GitHub g
 - Đóng gói thử cục bộ macOS arm64 (`--publish never`): có `app-update.yml` trong Resources, tên tệp khớp URL trong `latest-mac.yml`.
 - `make build`, `caffeinate -i -s make test`, `make lint`, `node scripts/check-docs.js`, hai vòng stress desktop/mobile có ảnh dải thông báo sáng/tối.
 - Chạy thật toàn bộ chu trình chỉ kiểm được sau khi có hai release liên tiếp (dev.5 → dev.6); ghi rõ phần chưa kiểm.
+
+## Ghi chú sau thực thi
+
+- `artifactName` chỉ đặt cho macOS (`MaiStudio-<v>-<arch>.dmg/.zip`, cả x64 cũng có hậu tố kiến trúc) và NSIS (`MaiStudio-Setup-<v>.exe`); tên AppImage/DEB mặc định vốn không có dấu cách nên giữ nguyên.
+- Input `release_tag` (tạo draft thủ công) bị bỏ: release chỉ đi qua tag; `workflow_dispatch` còn đóng gói thử. Gộp `latest-mac.yml` và kiểm URL/sha512/size nằm trong `scripts/prepare-release.js` (Node, không cần thư viện YAML).
+- AppImage không dùng `isForceRunAfter` của electron-updater (bản mới sẽ mở khi bản cũ còn giữ khóa single-instance); app cài lặng rồi `app.relaunch` tệp AppImage sau khi thoát. Windows cài lặng với `--force-run`. Nếu bước chuyển sang trình cài lỗi, app báo lỗi và mở khóa thay vì treo ở "Đang chuẩn bị cập nhật".
+- macOS tải dmg vào thư mục tạm của hệ thống (`mai-studio-updates`) qua `net.fetch`; bấm lại sau khi tải xong sẽ kiểm sha512 lần nữa rồi mở lại dmg.
+- Với bản dev, electron-updater thử `dev-mac.yml` (404) trước rồi mới đọc `latest-mac.yml`; chỉ thêm một yêu cầu, không cần phát hành tệp kênh riêng.
+- Chưa kiểm được chu trình thật giữa hai release (dev.5 → dev.6), cài NSIS/AppImage thật và tải dmg từ release có `latest-mac.yml`; đã kiểm bản đóng gói macOS arm64 cục bộ đọc feed GitHub thật và báo lỗi đúng khi release chưa có `latest-mac.yml`.

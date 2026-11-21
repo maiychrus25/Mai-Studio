@@ -6,7 +6,7 @@ import { mkdir, writeFile, rm, copyFile } from 'node:fs/promises';
 import { dirname, extname, join } from 'node:path';
 import { pipeline } from 'node:stream/promises';
 import { Readable, Transform } from 'node:stream';
-import type { Account, Asset, Capability, Character, LicenseView, MediaOptions, Project, ProjectKind, Settings, Shot, StudioCommand, StudioState, Task, TaskContext, TaskKind, TaskResult } from '../shared/studio';
+import type { Account, Asset, Capability, Character, LicenseView, MediaOptions, Project, ProjectKind, Settings, Shot, StudioCommand, StudioState, Task, TaskContext, TaskKind, TaskResult, UpdateView } from '../shared/studio';
 import { Store, object, text, publicUrl } from './store';
 import { JobQueue, NeedsInputError, RetryableError, hasPendingAdmission } from './queue';
 import { SecretVault, type EncryptionPort } from './vault';
@@ -40,8 +40,9 @@ export interface DesktopActions {
   exportAsset?(path: string, name: string): Promise<void>;
   checkUpdate?(): Promise<unknown>;
   installUpdate?(beforeInstall: () => void): Promise<unknown>;
+  updateState?(): UpdateView;
 }
-export interface StudioOptions { encryption?: EncryptionPort; actions?: DesktopActions; commercial?: boolean; licensePublicKey?: string }
+export interface StudioOptions { encryption?: EncryptionPort; actions?: DesktopActions; commercial?: boolean; licensePublicKey?: string; version?: string }
 type MediaResult = { url?: string; buffer?: Buffer; mime: string };
 // MuseStudio plans films with a multi-turn director (filmstudio.write_script). Projects locked to subtitle cues,
 // measured narration or the customer's verbatim script keep the single planning request, whose shot count is fixed.
@@ -124,8 +125,10 @@ export class StudioService extends EventEmitter {
   snapshot(): StudioState {
     const settings = structuredClone(this.store.settings());
     for (const [key, value] of Object.entries(settings.providers)) value.hasKey = !!this.vault.get(`${key}.key`);
-    return { version: '0.2.0-dev.1', projects: this.store.projects(), tasks: this.store.tasks(), accounts: this.store.accounts(), proxies: this.store.proxies(), assets: this.store.assets(),
-      settings, logs: this.store.logs(), capabilities: this.capabilities(), queuePaused: this.queue.isPaused(), codexJobs: this.codex.list(), license: this.license() };
+    const version = this.options.version ?? 'dev';
+    return { version, projects: this.store.projects(), tasks: this.store.tasks(), accounts: this.store.accounts(), proxies: this.store.proxies(), assets: this.store.assets(),
+      settings, logs: this.store.logs(), capabilities: this.capabilities(), queuePaused: this.queue.isPaused(), codexJobs: this.codex.list(), license: this.license(),
+      update: this.actions.updateState?.() ?? { status: 'unsupported', mode: 'page', current: version, message: 'Chỉ bản cài mới cập nhật được' } };
   }
   async importFiles(paths: string[]): Promise<Asset[]> {
     if (this.preparingUpdate) throw new Error('Đang chuẩn bị cập nhật ứng dụng');
@@ -388,7 +391,7 @@ export class StudioService extends EventEmitter {
   private ids(value: unknown): string[] { if (!Array.isArray(value) || !value.length || value.length > 1000) throw new Error('Cần danh sách 1–1000 ID'); return [...new Set(value.map(id => text(id, 'ID', 100)))]; }
   private assertUpdateIdle(): void {
     if (this.closed) throw new Error('Ứng dụng đang đóng');
-    if (this.activeMutations || this.store.tasks().some(task => task.status === 'running') || this.codex.list().some(job => ['queued', 'running'].includes(job.status))) throw new Error('Dừng công việc và Codex trước khi cập nhật');
+    if (this.activeMutations || this.store.tasks().some(task => task.status === 'running') || this.codex.list().some(job => ['queued', 'running'].includes(job.status))) throw new Error('Đợi công việc và Codex xong rồi cài cập nhật');
   }
   private validateRefs(tasks: Task[]): void {
     for (const task of tasks) this.validateInputRefs(task.input);

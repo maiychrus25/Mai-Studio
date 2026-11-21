@@ -6,6 +6,7 @@ import { AdvancedStudio } from './AdvancedStudio';
 import { Connections, Codex, Market } from './Connections';
 import { SettingsView } from './Settings';
 import { ProductImport } from './Production';
+import { UpdateBanner } from './Updates';
 
 export type Page = ProjectKind | 'library' | 'market' | 'accounts' | 'proxies' | 'codex' | 'settings';
 const navigation: { id: Page; vi: string; en: string; group: number }[] = [
@@ -94,6 +95,7 @@ export default function App() {
       </header>
       <div className="main-shell">
         <div className="topbar"><div className="breadcrumb"><Button className="mobile-menu" aria-label={t('Mở điều hướng', 'Open navigation')} onClick={() => setDrawer(true)}><Icon name="menu"/></Button><span className="desktop-label">{t('Không gian làm việc', 'Workspace')}</span><span className="desktop-label">/</span><strong>{t(currentNav.vi, currentNav.en)}</strong></div><div className="topbar-actions"><span className="runtime"><span className={`status-dot ${running ? 'active-dot' : ''}`}/>{running} {t('đang chạy', 'running')}</span><Button aria-label={t('Làm mới trạng thái', 'Refresh state')} disabled={context.busy} onClick={() => void act(refresh)}><Icon name="refresh" size={16}/></Button><Button aria-label={t('Chuyển giao diện sáng tối', 'Toggle light and dark theme')} disabled={context.busy} onClick={() => void act(() => invoke('settings.save', { theme: state.settings.theme === 'dark' ? 'light' : 'dark' }))}>{state.settings.theme === 'dark' ? '☀' : '☾'}</Button><span className="user-avatar" title={t('Workspace cục bộ', 'Local workspace')}>M</span></div></div>
+        <UpdateBanner/>
         <main id="workspace" className="workspace" tabIndex={-1}>
           {error && <div role="alert" className="error-banner"><span>{error}</span><Button onClick={() => setError('')} aria-label={t('Đóng lỗi', 'Dismiss error')}><Icon name="close" size={16}/></Button></div>}
           <div className="page-heading"><div><div className="eyebrow">{projectPage ? 'CREATE & PRODUCE' : 'YOUR WORKSPACE'}</div><h1>{t(currentNav.vi, currentNav.en)}{page === 'studio' && <span className="heading-tag">AI WORKSPACE</span>}</h1><p>{page === 'affiliate' ? t('Sản phẩm → kịch bản → ảnh cảnh → clip → video hoàn chỉnh.', 'Product → script → scene images → clips → finished video.') : page === 'studio' ? t('Từ ý tưởng đầu tiên đến sản phẩm hoàn chỉnh.', 'From the first idea to the final frame.') : page === 'library' ? t('Mọi tài nguyên. Một thư viện.', 'Every asset. One library.') : t('Làm chủ từng bước trong quy trình sáng tạo.', 'Stay in control of your creative workflow.')}</p></div><div className="actions">{page === 'affiliate' && <ProductImport onImported={projects => { if (projects[0]) setSelected(previous => ({ ...previous, affiliate: projects[0].id })); }}/>}{projectPage && <Button primary disabled={context.busy} onClick={() => setProjectEdit({})}><Icon name="plus" size={16}/>{t('Dự án mới', 'New project')}</Button>}</div></div>

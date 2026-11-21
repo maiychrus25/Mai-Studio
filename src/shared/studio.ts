@@ -23,9 +23,10 @@ export interface Settings {
 export interface Capability { id: string; ready: boolean; message: string }
 export interface CodexJob { id: string; mode: 'plan' | 'edit'; prompt: string; status: string; log: string; result: string; createdAt: number; approved: boolean }
 export interface LicenseView { valid: boolean; mode: string; expiresAt?: number; message: string }
+export interface UpdateView { status: 'unsupported' | 'idle' | 'checking' | 'latest' | 'available' | 'downloading' | 'downloaded' | 'error'; mode: 'install' | 'dmg' | 'page'; current: string; version?: string; percent?: number; message?: string }
 export interface StudioState {
   version: string; projects: Project[]; tasks: Task[]; accounts: Account[]; proxies: Proxy[]; assets: Asset[];
-  settings: Settings; logs: LogEntry[]; capabilities: Capability[]; queuePaused: boolean; codexJobs: CodexJob[]; license: LicenseView;
+  settings: Settings; logs: LogEntry[]; capabilities: Capability[]; queuePaused: boolean; codexJobs: CodexJob[]; license: LicenseView; update: UpdateView;
 }
 export type StudioCommand =
   | 'state' | 'project.save' | 'project.delete' | 'task.create' | 'task.update' | 'task.action' | 'task.reorder'

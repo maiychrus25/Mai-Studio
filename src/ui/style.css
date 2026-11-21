@@ -644,3 +644,10 @@ input[type="file"] { width: 100%; max-width: 100%; min-width: 0; }
 .affiliate-editor[data-view='shots'] .editor-inspector, .affiliate-editor[data-view='outputs'] .editor-inspector { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); }
 @media (min-width: 1300px) { .affiliate-editor[data-view='shots'] .shot-group { grid-template-columns: repeat(4, minmax(0, 1fr)); } }
 @media (max-width: 640px) { .affiliate-editor[data-view='shots'] .editor-inspector, .affiliate-editor[data-view='outputs'] .editor-inspector { grid-template-columns: minmax(0, 1fr); } }
+.update-banner { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 8px 16px; padding: 10px 18px; background: var(--accent-soft); border-bottom: 1px solid var(--border); font-size: 12px; }
+.update-banner > div:first-child { flex: 1; min-width: 180px; }
+.update-banner p { margin: 2px 0 0; color: var(--muted); overflow-wrap: anywhere; }
+.update-state { margin: 10px 0; font-size: 12px; overflow-wrap: anywhere; }
+.update-state.update-error { color: var(--red); }
+.update-state + progress { margin-bottom: 12px; }
+@media (max-width: 900px) { .update-banner { padding: 10px 14px; } }
