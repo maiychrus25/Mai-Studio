@@ -457,3 +457,107 @@ test('video review prompt marks a planned product absence only when asked', () =
   const absent = videoReviewPrompt(...args, true, true);
   assert.match(absent, /intentionally absent from this shot by plan and must not appear/); assert.ok(!absent.includes('Product identity cannot be not_applicable'));
 });
+
+const affiliateImage = () => ({ ...imageVerdict, product: { status: 'pass', reason: 'Controlled fixture' } });
+const affiliateMotion = (status = 'pass') => ({ ...videoVerdict(status), identity: { status: 'pass', reason: 'The supplied product is preserved' } });
+async function affiliateProject(studio: StudioService, paths: string[], count: number, data: Record<string, unknown> = {}) {
+  const { p, frame, videos } = await project(studio, paths);
+  const saved = await studio.invoke<Project>('project.save', { name: 'Affiliate run all', kind: 'affiliate', data: { affiliate: { contentStyle: 'review', hostMode: 'silent', seconds: 15, screenText: false }, affiliateReview: { status: 'pass' },
+    product: { name: 'Shirt' }, nativeAudio: false, narrationMode: 'none', videoReview: true, autoChecks: true, width: 64, height: 64, fps: 24,
+    shots: ['one', 'two', 'three'].slice(0, count).map(id => ({ ...(p.data.shots as any[])[0], id })), ...data } });
+  return { p: saved, frame, videos };
+}
+
+test('affiliate run-all whose reviews keep failing renders the best take within the repair budget', async t => {
+  await fixture(async (studio, paths, _requests, decide) => {
+    decide(() => affiliateMotion('fail'), affiliateImage);
+    const { p, videos } = await affiliateProject(studio, paths.slice(0, 2), 1, { qualityRetries: 1 }); let calls = 0;
+    t.mock.method(studio as unknown as Port, 'generate', async () => ({ outputIds: [videos[calls++ % videos.length].id] }));
+    const done = await finish(studio, await studio.invoke<Task>('studio.run', { projectId: p.id }));
+    assert.equal(done.status, 'succeeded', done.error); assert.equal(calls, 2, 'one generation plus exactly qualityRetries repairs');
+    assert.equal(done.outputIds.length, 2); assert.ok(studio.store.assets().some(asset => asset.id === done.outputIds[0] && asset.mime.startsWith('video/')));
+    const data = studio.store.project(p.id).data as any;
+    assert.equal(data.qualityReviews[`${p.id}/one`].video.status, 'fail', 'a failing take is never recorded as a pass');
+    assert.deepEqual(data.production.attention, [{ shot: 'cảnh 1', reasons: ['The requested teapot movement is missing'] }]);
+  });
+});
+
+test('affiliate run-all lists shots to review in the success message', async t => {
+  await fixture(async (studio, paths, _requests, decide) => {
+    decide(index => affiliateMotion(['pass', 'fail', 'unknown'][index] ?? 'pass'), affiliateImage);
+    const { p, videos } = await affiliateProject(studio, paths.slice(0, 1), 3, { qualityRetries: 0 });
+    t.mock.method(studio as unknown as Port, 'generate', async () => ({ outputIds: [videos[0].id] }));
+    const done = await finish(studio, await studio.invoke<Task>('studio.run', { projectId: p.id }));
+    assert.equal(done.status, 'succeeded', done.error);
+    assert.equal(done.message, 'Đã xuất video Affiliate. 2 cảnh cần xem lại: cảnh 2 (The requested teapot movement is missing), cảnh 3 (chưa kiểm được).');
+  });
+});
+
+test('affiliate run-all with unknown reviews renders without extra generation and never marks a pass', async t => {
+  await fixture(async (studio, paths, _requests, decide) => {
+    decide(() => affiliateMotion('unknown'), affiliateImage);
+    const { p, videos } = await affiliateProject(studio, paths.slice(0, 1), 1, { qualityRetries: 2 }); let calls = 0;
+    t.mock.method(studio as unknown as Port, 'generate', async () => { calls++; return { outputIds: [videos[0].id] }; });
+    const done = await finish(studio, await studio.invoke<Task>('studio.run', { projectId: p.id }));
+    assert.equal(done.status, 'succeeded', done.error); assert.equal(calls, 1, 'unknown evidence never buys a repair');
+    const data = studio.store.project(p.id).data as any;
+    assert.equal(data.qualityReviews[`${p.id}/one`].video.status, 'unknown');
+    assert.deepEqual(data.production.attention, [{ shot: 'cảnh 1', reasons: ['chưa kiểm được'] }]);
+    assert.equal(done.message, 'Đã xuất video Affiliate. 1 cảnh cần xem lại: cảnh 1 (chưa kiểm được).');
+  });
+});
+
+test('affiliate videos stage with checks finishes with the shots to review', async t => {
+  await fixture(async (studio, paths, _requests, decide) => {
+    decide(() => affiliateMotion('fail'), affiliateImage);
+    const { p, videos } = await affiliateProject(studio, paths.slice(0, 1), 1, { qualityRetries: 0 });
+    t.mock.method(studio as unknown as Port, 'generate', async () => ({ outputIds: [videos[0].id] }));
+    const done = await finish(studio, await studio.invoke<Task>('studio.run', { projectId: p.id, stage: 'videos' }));
+    assert.equal(done.status, 'succeeded', done.error);
+    assert.equal(done.message, 'Đã tạo và review clip. 1 cảnh cần xem lại: cảnh 1 (The requested teapot movement is missing).');
+    assert.equal((studio.store.project(p.id).data.qualityReviews as any)[`${p.id}/one`].video.status, 'fail');
+  });
+});
+
+test('a second affiliate run-all replaces the attention list of the first', async t => {
+  await fixture(async (studio, paths, _requests, decide) => {
+    decide(() => affiliateMotion('fail'), affiliateImage);
+    const { p, videos } = await affiliateProject(studio, paths.slice(0, 1), 1, { qualityRetries: 0 });
+    t.mock.method(studio as unknown as Port, 'generate', async () => ({ outputIds: [videos[0].id] }));
+    assert.equal((await finish(studio, await studio.invoke<Task>('studio.run', { projectId: p.id }))).status, 'succeeded');
+    assert.equal((studio.store.project(p.id).data.production as any).attention.length, 1);
+    decide(() => affiliateMotion(), affiliateImage);
+    assert.equal((await finish(studio, await studio.invoke<Task>('studio.run', { projectId: p.id, stage: 'check' }))).status, 'succeeded');
+    const done = await finish(studio, await studio.invoke<Task>('studio.run', { projectId: p.id }));
+    assert.equal(done.status, 'succeeded', done.error); assert.equal(done.message, 'Đã xuất video Affiliate và nội dung đăng bài');
+    assert.deepEqual((studio.store.project(p.id).data.production as any).attention, []);
+  });
+});
+
+test('non-affiliate run-all and videos stage still stop on failing and unknown reviews with the same messages', async t => {
+  for (const kind of ['srt', 'film']) for (const stage of ['all', 'videos']) for (const status of ['fail', 'unknown']) await fixture(async (studio, paths, _requests, decide) => {
+    decide(() => videoVerdict(status));
+    const { p, videos } = await project(studio, paths.slice(0, 1), { autoChecks: true, qualityRetries: 0 });
+    const current = studio.store.saveProject({ ...p, kind: kind as Project['kind'] });
+    t.mock.method(studio as unknown as Port, 'generate', async () => ({ outputIds: [videos[0].id] }));
+    const done = await finish(studio, await studio.invoke<Task>('studio.run', { projectId: current.id, stage }));
+    assert.equal(done.status, 'waiting_input', `${kind} ${stage} ${status}: ${done.error}`);
+    assert.equal(done.error, status === 'fail' ? 'Kiểm tra chất lượng còn fail; đã giữ bản có đánh giá tốt nhất trong giới hạn tạo lại. Xem review trước khi dựng thủ công' : 'Review còn unknown hoặc thiếu bằng chứng; cần anh xem trước khi tạo lại hoặc dựng');
+    assert.equal((studio.store.project(p.id).data.production as any).attention, undefined);
+  });
+});
+
+test('affiliate run-all repairs a silent spoken clip within the budget, then renders it and lists the shot', async t => {
+  await fixture(async (studio, paths, _requests, decide) => {
+    decide(() => affiliateMotion(), affiliateImage);
+    const { p, videos } = await affiliateProject(studio, paths.slice(0, 2), 1, { qualityRetries: 1, nativeAudio: true, keepAudio: true, affiliate: { contentStyle: 'review', hostMode: 'voiceover', seconds: 15, screenText: false } });
+    const spoken = studio.store.saveProject({ ...p, data: { ...p.data, shots: (p.data.shots as any[]).map(shot => ({ ...shot, dialogue: 'Áo cotton mềm mại.' })) } }); let calls = 0;
+    t.mock.method(studio as unknown as Port, 'generate', async () => ({ outputIds: [videos[calls++ % videos.length].id] }));
+    const done = await finish(studio, await studio.invoke<Task>('studio.run', { projectId: spoken.id }));
+    assert.equal(done.status, 'succeeded', done.error); assert.equal(calls, 2, 'the silent clip is repaired once, never beyond qualityRetries');
+    assert.equal(done.message, 'Đã xuất video Affiliate. 1 cảnh cần xem lại: cảnh 1 (không nghe rõ lời thoại).');
+    assert.equal((studio.store.project(p.id).data.qualityReviews as any)[`${p.id}/one`].speech.status, 'fail');
+    const manual = await finish(studio, await studio.invoke<Task>('studio.run', { projectId: spoken.id, stage: 'render' }));
+    assert.equal(manual.status, 'waiting_input'); assert.equal(manual.error, 'Clip Shot 1 không có tiếng; trong tab "Shot & timeline" (mục Storyboard), bấm nút biểu tượng phim "Tạo lại clip riêng cảnh này" ở thẻ Shot 1 rồi dựng lại');
+  });
+});

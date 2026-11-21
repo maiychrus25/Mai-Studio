@@ -349,3 +349,75 @@ test('plain pace and legacy projects render as before: a dubbed v2 project keeps
     assert.deepEqual(shape, DUBBED_V2_RENDER);
   });
 });
+
+async function runAllPlanned(studio: StudioService, project: Project, t: { mock: { method: Function } }) {
+  const clip = join(studio.store.root, 'clip.mp4'), made = spawnSync(require('ffmpeg-static'), ['-v', 'error', '-f', 'lavfi', '-i', 'color=c=red:s=64x64:r=10:d=4', '-c:v', 'libx264', '-pix_fmt', 'yuv420p', clip]);
+  assert.equal(made.status, 0, made.stderr.toString()); const [video] = await studio.importFiles([clip]);
+  const image = (project.data.productAssetIds as string[])[0];
+  t.mock.method(studio as unknown as { generate(task: Task): Promise<unknown> }, 'generate', async (task: Task) => ({ outputIds: [task.kind === 'image' ? image : video.id] }));
+  const saved = await studio.invoke<Project>('project.save', { ...project, data: { ...project.data, autoChecks: false, width: 64, height: 64, affiliate: { ...(project.data.affiliate as object), screenText: false } } });
+  return settle(studio, (await studio.invoke<Task>('studio.run', { projectId: saved.id, stage: 'all' })).id);
+}
+
+test('affiliate script review failure after one rewrite continues with the latest plan and warns', async t => {
+  await plannedFixture(async (studio, project, calls, decide) => {
+    decide((review, index) => review ? verdict('fail') : index === 0 ? museCandidate() : { ...museCandidate(), summary: 'Bản viết lại' });
+    const done = await runAllPlanned(studio, project, t);
+    assert.equal(done.status, 'succeeded', done.error); assert.equal(calls.length, 4, 'one rewrite, never a third script');
+    const data = studio.store.project(project.id).data as any;
+    assert.equal(data.summary, 'Bản viết lại'); assert.equal(data.affiliateReview.status, 'fail'); assert.equal(data.affiliateReview.attempts, 2);
+    assert.equal(done.message, 'Đã xuất video Affiliate. Kịch bản cần xem lại: Remove the unsupported claim.');
+    assert.deepEqual(data.production.attention, [{ shot: 'kịch bản', reasons: ['Remove the unsupported claim'] }]);
+  });
+  await plannedFixture(async (studio, project, calls, decide) => {
+    decide(review => review ? verdict('unknown') : museCandidate());
+    const done = await runAllPlanned(studio, project, t);
+    assert.equal(done.status, 'succeeded', done.error); assert.equal(calls.length, 2, 'unknown evidence is not rewritten');
+    assert.equal((studio.store.project(project.id).data.affiliateReview as any).status, 'unknown');
+    assert.equal(done.message, 'Đã xuất video Affiliate. Kịch bản cần xem lại: chưa kiểm được.');
+  });
+  await plannedFixture(async (studio, project, calls, decide) => {
+    decide((review, index) => review ? verdict('fail') : index === 0 ? { ...museCandidate(), summary: 'Bản hợp lệ' } : candidate());
+    const done = await runAllPlanned(studio, project, t);
+    assert.equal(done.status, 'succeeded', done.error); assert.equal(calls.length, 3, 'an invalid rewrite is not reviewed');
+    const data = studio.store.project(project.id).data as any;
+    assert.equal(data.summary, 'Bản hợp lệ', 'the latest valid script is kept'); assert.equal(data.affiliateReview.status, 'fail');
+  });
+});
+
+test('affiliate script with an invalid shape after one repair still waits with a rerun instruction', async () => {
+  await plannedFixture(async (studio, project, calls, decide) => {
+    decide(review => review ? verdict('pass') : candidate());
+    const done = await settle(studio, (await studio.invoke<Task>('studio.run', { projectId: project.id, stage: 'all' })).id);
+    assert.equal(done.status, 'waiting_input'); assert.match(done.error, /chưa đúng cấu hình sau một lượt sửa/); assert.match(done.error, /Bấm "Phân tích kịch bản"/);
+    assert.equal(calls.length, 2); assert.deepEqual(studio.store.project(project.id).data, project.data);
+  });
+});
+
+test('a dubbed Video Aff run-all with checks lists a script that did not pass review', async t => {
+  await dubFixture(async (studio, project) => {
+    const baseUrl = studio.store.settings().providers.voice.baseUrl;
+    await studio.invoke('settings.save', { providers: { asr: { baseUrl, model: 'whisper-1' }, text: { baseUrl, model: 'controlled-vision' } } });
+    const offline = (studio as unknown as { offline: { ready(): boolean; embed(path: string, signal: AbortSignal): Promise<number[]> } }).offline;
+    t.mock.method(offline, 'ready', () => true);
+    t.mock.method(offline, 'embed', async () => Array.from({ length: 256 }, (_, index) => index === 0 ? 1 : 0));
+    const run = async (stage: string) => settle(studio, (await studio.invoke<Task>('studio.run', { projectId: project.id, stage })).id);
+    assert.equal((await run('speech')).status, 'succeeded');
+    const current = studio.store.project(project.id);
+    studio.store.saveProject({ ...current, data: { ...current.data, autoChecks: true, qualityRetries: 0, affiliateReview: { ...verdict('fail'), status: 'fail', checks: verdict('fail'), attempts: 2 } } });
+    const done = await run('all');
+    assert.equal(done.status, 'succeeded', done.error);
+    assert.equal(done.message, 'Đã xuất video Affiliate. Kịch bản cần xem lại: Remove the unsupported claim.');
+    assert.deepEqual((studio.store.project(project.id).data.production as any).attention, [{ shot: 'kịch bản', reasons: ['Remove the unsupported claim'] }]);
+  });
+});
+
+test('an edited Affiliate script that fails review stops with readable reasons and the button to press', async () => {
+  await plannedFixture(async (studio, project, _calls, decide) => {
+    decide(review => review ? verdict('fail') : museCandidate());
+    studio.store.saveProject({ ...project, data: { ...project.data, ...museCandidate(), planning: { source: 'ai-api' }, planningNeedsUpdate: false, affiliatePlanVersion: 2, affiliateReview: { status: 'pass', stale: true } } });
+    const done = await settle(studio, (await studio.invoke<Task>('studio.run', { projectId: project.id, stage: 'check' })).id);
+    assert.equal(done.status, 'waiting_input');
+    assert.equal(done.error, 'Kịch bản đã chỉnh chưa được duyệt; giữ nguyên nội dung của anh. Thông tin sản phẩm: Remove the unsupported claim. Sửa kịch bản theo các lý do trên rồi bấm "Chạy toàn bộ" để duyệt lại, hoặc bấm "Phân tích kịch bản" để AI viết kịch bản mới');
+  });
+});

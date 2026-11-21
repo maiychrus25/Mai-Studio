@@ -483,6 +483,89 @@ test('cancelling an audio-menu download never imports its partial bytes', async 
   }, 'menu.wav', true);
 });
 
+test('music resumed after a reload with fewer rendered replies than its baseline takes the audio reply after its request', async () => {
+  await musicFixture(async ({ store, browsers, task, context, submissions, downloads, wav }) => {
+    task.input.timeoutMs = 1000; await assert.rejects(browsers.generate(task, context), NeedsInputError); await browsers.shutdown(); await delay(1000);
+    assert.equal(task.checkpoint.beforeUserCount, 0, 'the user-message anchor is recorded at submit');
+    task.checkpoint.beforeReplyCount = 27; task.input.timeoutMs = 4500;
+    const reopened = new BrowserManager(store);
+    try { const result = await reopened.generate(task, context); assert.equal(submissions.length, 1); assert.equal(downloads(), 1); assert.deepEqual(readFileSync(store.assetPath(result.outputIds[0])), wav); }
+    finally { await reopened.shutdown(); }
+  }, 'menu.wav');
+});
+
+// A reloaded Muse page: fewer assistant elements than the live baseline, replies with a download menu.
+async function reloadedMusicFixture(body: string, checkpoint: Record<string, unknown>, run: (fixture: {
+  browsers: BrowserManager; store: Store; task: Task; context: TaskContext; downloads: () => Record<string, number>;
+}) => Promise<void>) {
+  const wav = Buffer.alloc(44 + 3200); wav.write('RIFF'); wav.writeUInt32LE(wav.length - 8, 4); wav.write('WAVEfmt ', 8);
+  wav.writeUInt32LE(16, 16); wav.writeUInt16LE(1, 20); wav.writeUInt16LE(1, 22); wav.writeUInt32LE(8000, 24); wav.writeUInt32LE(16000, 28);
+  wav.writeUInt16LE(2, 32); wav.writeUInt16LE(16, 34); wav.write('data', 36); wav.writeUInt32LE(3200, 40);
+  for (let i = 0; i < 1600; i++) wav.writeInt16LE(Math.round(Math.sin(i * 2 * Math.PI * 440 / 8000) * 8000), 44 + i * 2);
+  const downloads: Record<string, number> = {}, root = mkdtempSync(join(tmpdir(), 'mai-music-reload-')), store = new Store(root), browsers = new BrowserManager(store);
+  const server = createServer((req, res) => {
+    if (req.url?.endsWith('.wav')) { downloads[req.url] = (downloads[req.url] ?? 0) + 1; res.writeHead(200, { 'content-type': 'audio/wav' }); res.end(wav); return; }
+    if (req.url === '/submit') { downloads.submit = (downloads.submit ?? 0) + 1; res.end('{}'); return; }
+    res.setHeader('content-type', 'text/html; charset=utf-8');
+    res.end(`<textarea id="prompt"></textarea><button id="send" onclick="fetch('/submit')">Send</button><button id="stop" hidden>Stop</button><section>${body}</section>`);
+  });
+  try {
+    await new Promise<void>(resolve => server.listen(0, '127.0.0.1', resolve));
+    const account = store.saveAccount({ name: 'Reload fixture', url: `http://127.0.0.1:${(server.address() as import('node:net').AddressInfo).port}/` });
+    store.setSettings({ browserVisible: false, museSelectors: { composer: '#prompt', submit: '#send', response: '[data-message-item][data-message-role="assistant"]', stop: '#stop' } });
+    const project = store.saveProject({ name: 'Reload' });
+    const task: Task = { ...store.createTasks({ projectId: project.id, prompts: ['Light, cheerful instrumental pop for a product video'], accountId: account.id, kind: 'image' })[0], kind: 'music', checkpoint: { remoteSubmitted: true, threadUrl: account.url, beforeUrls: [], ...checkpoint }, input: { timeoutMs: 1500 } };
+    const context: TaskContext = { signal: new AbortController().signal, progress() {}, checkpoint(value) { task.checkpoint = { ...task.checkpoint, ...value }; } };
+    await run({ browsers, store, task, context, downloads: () => downloads });
+  } finally {
+    await browsers.shutdown(); store.close(); server.closeAllConnections(); await new Promise<void>(resolve => server.close(() => resolve())); rmSync(root, { recursive: true, force: true });
+  }
+}
+const userMessage = (id: string, text: string) => `<div data-message-item data-message-role="user" data-message-id="${id}">${text}</div>`;
+const textReply = (id: string, text: string) => `<div data-message-item data-message-role="assistant" data-message-id="${id}">${text}</div>`;
+const audioReply = (id: string, file: string) => `<div data-message-item data-message-role="assistant" data-message-id="${id}"><button aria-label="Audio options">0:00</button><button aria-label="More options" onclick="document.body.append(this.nextElementSibling.content.cloneNode(true))">More</button><template><div role="menuitem" data-pel-click="chat_audio_download" onclick="const a=document.createElement('a');a.href='/${file}';a.download='result.wav';a.click()">Download</div></template></div>`;
+const earlierMusic = userMessage('u-old', 'Earlier background track request') + textReply('assistant-msg-old', 'Here is your earlier track') + audioReply('old-audio', 'old.wav');
+const userAnchor = { beforeReplyCount: 27, beforeUserCount: 9, beforeUserId: 'u-old', beforeUserText: 'Earlier background track request' };
+
+test('music resumed after a reload takes the last audio reply after its own request, not an earlier one', async () => {
+  const body = earlierMusic + userMessage('u-new', 'Light, cheerful instrumental pop… Xem thêm') + textReply('assistant-msg-new', 'Done — here is your track') + audioReply('a7784c61', 'first.wav')
+    + textReply('assistant-msg-fix', 'Small correction: 30 seconds') + audioReply('b66c3bc8', 'new.wav');
+  await reloadedMusicFixture(body, userAnchor, async ({ browsers, store, task, context, downloads }) => {
+    const result = await browsers.generate(task, context);
+    assert.deepEqual(downloads(), { '/new.wav': 1 }, 'no resubmission and only the newest audio after our request');
+    assert.equal(store.asset(result.outputIds[0]).mime, 'audio/wav');
+  });
+});
+
+for (const [name, body] of [['the same pre-submit request', earlierMusic], ['the pre-submit request remounted with a new id and shorter text', userMessage('u-reloaded', 'Earlier background track… Xem thêm') + textReply('assistant-msg-old', 'Here is your earlier track') + audioReply('old-audio', 'old.wav')]] as const) {
+  test(`music never attaches an earlier audio reply when the newest user message is ${name}`, async () => {
+    await reloadedMusicFixture(body, userAnchor, async ({ browsers, store, task, context, downloads }) => {
+      await assert.rejects(browsers.generate(task, context), (error: Error) => error instanceof NeedsInputError && /Thư viện/.test(error.message));
+      assert.deepEqual(downloads(), {}); assert.equal(store.assets().length, 0); assert.equal(task.checkpoint.outputIds, undefined);
+    });
+  });
+}
+
+test('music stops quickly with import instructions when a reload leaves its request undecidable', async () => {
+  await reloadedMusicFixture(textReply('assistant-msg-x', 'Done') + audioReply('x-audio', 'unknown.wav'), userAnchor, async ({ browsers, store, task, context, downloads }) => {
+    task.input.timeoutMs = 60000; const started = Date.now();
+    await assert.rejects(browsers.generate(task, context), (error: Error) => error instanceof NeedsInputError && /Thư viện/.test(error.message) && /MP3/.test(error.message));
+    assert.ok(Date.now() - started < 15000, 'no 15-minute wait'); assert.deepEqual(downloads(), {}); assert.equal(store.assets().length, 0);
+  });
+});
+
+test('legacy music checkpoints with only a reply baseline recover after a reload by their exact request', async () => {
+  const prompt = 'Light, cheerful instrumental pop for a product video';
+  await reloadedMusicFixture(earlierMusic + userMessage('u-new', prompt) + audioReply('new-audio', 'new.wav'), { beforeReplyCount: 27 }, async ({ browsers, task, context, downloads }) => {
+    assert.equal((await browsers.generate(task, context)).outputIds.length, 1); assert.deepEqual(downloads(), { '/new.wav': 1 });
+  });
+  await reloadedMusicFixture(earlierMusic, { beforeReplyCount: 27 }, async ({ browsers, store, task, context, downloads }) => {
+    task.input.timeoutMs = 60000; const started = Date.now();
+    await assert.rejects(browsers.generate(task, context), /Thư viện/); assert.ok(Date.now() - started < 15000);
+    assert.deepEqual(downloads(), {}); assert.equal(store.assets().length, 0);
+  });
+});
+
 async function downloadSafetyFixture(kind: 'declared' | 'chunked' | 'late' | 'extension' | 'url', run: (fixture: {
   browsers: BrowserManager; store: Store; task: Task; context: TaskContext; page: import('playwright-core').Page;
   transferred: () => number; closed: () => boolean;
