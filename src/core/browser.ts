@@ -268,8 +268,9 @@ export class BrowserManager {
     if (!count || beforeReplyCount !== undefined && count <= beforeReplyCount) return;
     const reply = responses.last();
     if (!await reply.getByRole('button', { name: 'Audio options', exact: true }).isVisible().catch(() => false)) return;
-    // Legacy admissions lack a reply baseline; bind recovery to the exact latest user prompt and DOM order.
-    const current = await reply.evaluate((element, prompt) => {
+    // With a reply baseline the new audio reply is ours (one task per account); Muse may show the request text differently.
+    // Legacy admissions lack that baseline, so bind recovery to the exact latest user prompt and DOM order.
+    const current = beforeReplyCount !== undefined || await reply.evaluate((element, prompt) => {
       const users = document.querySelectorAll('[data-message-item][data-message-role="user"]'), user = users[users.length - 1];
       const normalize = (value: string) => value.replace(/\s+/g, ' ').trim();
       const text = normalize((user as HTMLElement | undefined)?.innerText || ''); const wanted = normalize(prompt);

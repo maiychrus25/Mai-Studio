@@ -4,6 +4,7 @@ This file records development changes. No production release is declared by a de
 
 ## Unreleased — development
 
+- Accept the new Muse audio reply when the music request has a reply baseline, even if Muse shows the request text differently; the exact-text binding now applies only to legacy admissions without a baseline. Run-all with automatic music no longer stops on "Reply nhạc không thuộc yêu cầu đang chạy".
 - Normalize Video Aff background music to −10 LUFS before applying its volume (new `musicLoudness` media option), so the music bed is audible at the chosen level whatever the track's mastering; a quiet −20 LUFS track at 14% used to sit more than 20 dB under the voice. Other project kinds mix music as before.
 - Plan Video Aff scripts in Muse's shape for nine content styles (one fact per shot, labelled beats, product/presenter shots, `productLook`, `productVisible`, outfit and narrator descriptions) behind a stored `affiliatePlanVersion: 2` marker. Planning these styles always requires the v2 shape (one repair attempt, then the existing stop); ASMR, POV and saved projects that are not re-planned keep the previous path.
 - Compose v2 image, clip and host-portrait prompts from Muse's observed templates with Muse's reference order; spoken Vietnamese lines in clip prompts read numbers and units as words while frames and subtitles keep the written line.

@@ -456,6 +456,17 @@ test('legacy admitted music recovers its current audio-menu reply without anothe
   }, 'menu.wav');
 });
 
+test('music with a reply baseline takes the new audio reply even when Muse shows the request differently', async () => {
+  await musicFixture(async ({ store, browsers, task, context, submissions, downloads, wav }) => {
+    task.input.timeoutMs = 1000; await assert.rejects(browsers.generate(task, context), NeedsInputError); await browsers.shutdown(); await delay(1000);
+    assert.equal(typeof task.checkpoint.beforeReplyCount, 'number');
+    submissions[0] = 'Light, cheerful instrumental pop… Xem thêm'; task.input.timeoutMs = 4500;
+    const reopened = new BrowserManager(store);
+    try { const result = await reopened.generate(task, context); assert.equal(submissions.length, 1); assert.equal(downloads(), 1); assert.deepEqual(readFileSync(store.assetPath(result.outputIds[0])), wav); }
+    finally { await reopened.shutdown(); }
+  }, 'menu.wav');
+});
+
 test('music menu cannot collect an attachment from a different latest user request', async () => {
   await musicFixture(async ({ store, browsers, task, context, submissions, downloads }) => {
     task.input.timeoutMs = 1000; await assert.rejects(browsers.generate(task, context), NeedsInputError); await browsers.shutdown(); await delay(1000);
