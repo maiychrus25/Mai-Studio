@@ -62,6 +62,24 @@ export function clipWindow(data: Record<string, unknown>, duration: number, requ
   return { start, duration: Math.floor((end - start) * fps) / fps };
 }
 
+// Video Aff run-all finishes with the shots to review instead of stopping; shots are numbered by their order in the video.
+type Attention = Array<{ shot: string; reasons: string[] }>;
+function attentionReason(result: Record<string, unknown>): string {
+  if (result.status !== 'fail') return 'chưa kiểm được';
+  const check = Object.values(object(result.checks ?? {})).map(object).find(value => value.status === 'fail');
+  const reason = [check?.reason, result.reason].find((value): value is string => typeof value === 'string' && !!value.trim())?.trim() ?? 'chưa đạt review';
+  return reason.length > 80 ? reason.slice(0, 79) + '…' : reason;
+}
+function attentionList(steps: Array<{ id: string; kind: string }>, notes: Record<string, string[]>, script?: Record<string, unknown>): Attention {
+  const list: Attention = steps.filter(step => step.kind === 'video').flatMap((step, index) => { const reasons = notes[step.id.replace(/\/video$/, '')]; return reasons?.length ? [{ shot: `cảnh ${index + 1}`, reasons: [...new Set(reasons)] }] : []; });
+  if (script && script.status !== 'pass') list.unshift({ shot: 'kịch bản', reasons: [attentionReason(script)] });
+  return list;
+}
+function attentionMessage(done: string, list: Attention): string {
+  const shots = list.filter(item => item.shot !== 'kịch bản'), script = list.find(item => item.shot === 'kịch bản');
+  return [`${done}.`, shots.length ? `${shots.length} cảnh cần xem lại: ${shots.map(item => `${item.shot} (${item.reasons.join('; ')})`).join(', ')}.` : '', script ? `Kịch bản cần xem lại: ${script.reasons.join('; ')}.` : ''].filter(Boolean).join(' ');
+}
+
 export class StudioService extends EventEmitter {
   readonly store: Store;
   readonly vault: SecretVault;
@@ -697,8 +715,13 @@ export class StudioService extends EventEmitter {
     };
     const stills = new Map<string, string>(); let position = 0;
     // v2 spoken clips run for their measured speech, so they follow each other instead of the planned starts.
-    const measuredCuts = affiliateV2(project) && !dubbing && project.data.nativeAudio === true && project.data.renderMode !== 'slideshow' ? [0] : undefined;
-    const fastEdit = measuredCuts && readAffiliateSettings(project.data.affiliate);
+    // A legacy Video Aff run-all whose line overflows its slot renders again with this placement (`measuredSpeech`).
+    const measuredCuts = (affiliateV2(project) || task.input.measuredSpeech === true) && !dubbing && project.data.nativeAudio === true && project.data.renderMode !== 'slideshow' ? [0] : undefined;
+    const fastEdit = measuredCuts && affiliateV2(project) ? readAffiliateSettings(project.data.affiliate) : undefined;
+    // Video Aff run-all notes shots to review; once its quality review ran (`input.attention`), a long or cut-off line is noted instead of stopping.
+    const reviewed = task.input.attention !== undefined;
+    const notes = project.kind === 'affiliate' && project.data.affiliate !== undefined && (stage === 'all' || reviewed) ? structuredClone(object(task.input.attention ?? {})) as Record<string, string[]> : undefined;
+    const scene = (id: string): string => `cảnh ${steps.filter(step => step.kind === 'video').findIndex(step => step.id === id) + 1}`;
     const fastShots: Array<FastEditShot & { path: string }> | undefined = fastEdit && affiliateTemplateGroup(fastEdit.contentStyle) === 'talk' && fastEdit.pace === 'fast' ? [] : undefined;
     for (let index = 0; index < steps.length; index++) {
       const step = steps[index]; context.signal.throwIfAborted();
@@ -757,9 +780,14 @@ export class StudioService extends EventEmitter {
           const analysis = await this.withMedia(context.signal, () => analyzeSpeech(path, this.media().executablePath, context.signal));
           if (!analysis.parts.length) throw new NeedsInputError(`Clip ${base} chưa phát hiện lời nói để căn hình và phụ đề`);
           // v2 measures the clip where both picture and decoded sound exist, the same basis as speech review.
-          const window = clipWindow(project.data, measuredCuts ? Math.min(info.duration, analysis.duration) : info.duration, step.duration, analysis, project.kind === 'affiliate' && project.data.affiliate !== undefined); trimStart = window.start; duration = window.duration;
-          if (window.speechOverflow && (stage === 'render' || project.data.autoChecks !== true)) throw new NeedsInputError(`Lời thoại shot ${base} vượt khoảng dựng; review và tạo lại clip trước khi xuất để không cắt mất lời`);
-          if (window.truncated && (stage === 'render' || project.data.autoChecks !== true)) throw new NeedsInputError(`Lời thoại shot ${base} bị cắt ở cuối clip; tạo lại clip để nói trọn câu trước khi xuất`);
+          let window = clipWindow(project.data, measuredCuts ? Math.min(info.duration, analysis.duration) : info.duration, step.duration, analysis, project.kind === 'affiliate' && project.data.affiliate !== undefined);
+          if (window.speechOverflow && notes && reviewed && !measuredCuts) return this.executePipeline({ ...task, input: { ...task.input, measuredSpeech: true } }, context);
+          // A legacy line keeps every measured part, not only the first run, so no word is cut.
+          if (measuredCuts && !affiliateV2(project)) { if (window.speechOverflow) (notes![base] ??= []).push('dài hơn dự kiến'); window = affiliateSpeechWindow(Math.min(info.duration, analysis.duration), [{ start: analysis.parts[0].start, end: analysis.parts.at(-1)!.end }])!; }
+          trimStart = window.start; duration = window.duration;
+          if (window.speechOverflow && (stage === 'render' || project.data.autoChecks !== true)) throw new NeedsInputError(`Lời thoại ${scene(step.id)} vượt khoảng dựng; bấm "Chạy toàn bộ" với "Review trước khi dựng" đang bật để tự nối cảnh theo lời nói thật, hoặc tạo lại clip ${scene(step.id)}`);
+          if (window.truncated && notes && reviewed) (notes[base] ??= []).push('câu cuối bị cụt trong clip gốc');
+          else if (window.truncated && (stage === 'render' || project.data.autoChecks !== true)) throw new NeedsInputError(`Lời thoại ${scene(step.id)} bị cắt ở cuối clip; bấm "Tạo lại clip" ở ${scene(step.id)} để nói trọn câu rồi dựng lại`);
           if (fastShots) parts = analysis.parts;
           else nativeCues.push({ index: nativeCues.length + 1, start: start + analysis.parts[0].start - trimStart, end: Math.min(start + duration, start + analysis.parts.at(-1)!.end - trimStart), text: step.dialogue });
         }
@@ -771,11 +799,12 @@ export class StudioService extends EventEmitter {
       else if (!dubbing) voices.push({ path: this.store.assetPath(assetId), start: step.start ?? Math.max(0, position - step.duration), duration: step.duration });
     }
     if (!repair && stage === 'videos' && project.data.autoChecks === true) {
-      await this.reviewAndRepair(task, this.store.project(project.id), context);
+      const reviewNotes = await this.reviewAndRepair(task, this.store.project(project.id), context), list = reviewNotes && attentionList(steps, reviewNotes);
+      if (list) { const latest = this.store.project(project.id); this.store.saveProject({ ...latest, data: { ...latest.data, production: { ...object(latest.data.production ?? {}), attention: list } } }); }
       const videos = object(object(this.store.project(project.id).data.production ?? {}).videos ?? {});
       const outputIds = steps.filter(step => step.kind === 'video').filter(step => !selected || selected.has(step.id.replace(/\/video$/, '')) || selected.has(decodeURIComponent(step.id.split('/').at(-2)!)))
         .map(step => step.videoAssetId ?? videos[step.id.replace(/\/video$/, '')]).filter((id): id is string => typeof id === 'string');
-      context.checkpoint({ outputIds }); return { outputIds, message: 'Đã tạo và review clip; xem các đánh giá nội dung trước khi dựng' };
+      context.checkpoint({ outputIds }); return { outputIds, message: list?.length ? attentionMessage('Đã tạo và review clip', list) : 'Đã tạo và review clip; xem các đánh giá nội dung trước khi dựng' };
     }
     if (['images', 'videos', 'speech'].includes(stage)) { context.checkpoint({ outputIds: [...new Set(stageIds)] }); return { outputIds: [...new Set(stageIds)], message: `Hoàn tất bước ${stage}` }; }
     if (fastShots) {
@@ -796,9 +825,9 @@ export class StudioService extends EventEmitter {
       }
     }
     if (stage === 'all' && project.data.autoChecks === true) {
-      await this.reviewAndRepair(task, this.store.project(project.id), context);
+      const attention = await this.reviewAndRepair(task, this.store.project(project.id), context);
       let rendered = object(task.checkpoint.qualityRender ?? {});
-      return this.executePipeline({ ...task, input: { ...task.input, projectSnapshot: this.store.project(project.id), stage: 'render', force: false }, checkpoint: rendered }, { ...context, checkpoint: value => { rendered = { ...rendered, ...value }; context.checkpoint({ qualityRender: rendered }); } });
+      return this.executePipeline({ ...task, input: { ...task.input, projectSnapshot: this.store.project(project.id), stage: 'render', force: false, ...(attention ? { attention } : {}) }, checkpoint: rendered }, { ...context, checkpoint: value => { rendered = { ...rendered, ...value }; context.checkpoint({ qualityRender: rendered }); } });
     }
     if (measuredCuts && selected) throw new NeedsInputError('Video Aff kiểu mới nối các cảnh theo lời nói thật nên chỉ dựng toàn bộ video; bỏ chọn cảnh rồi dựng lại');
     const narration = object(production.narration ?? {});
@@ -884,8 +913,9 @@ export class StudioService extends EventEmitter {
       await this.exportOutput(asset, task, context.signal); await this.exportOutput(post, task, context.signal);
       const latest = this.store.project(project.id);
       if (this.contentFingerprint(latest.data) !== projectHash) throw new NeedsInputError('Dự án đã đổi trong lúc xuất Affiliate; giữ output ở công việc để kiểm tra');
-      this.store.saveProject({ ...latest, data: { ...latest.data, production: { ...object(latest.data.production ?? {}), affiliatePostAssetId: post.id } } });
-      context.checkpoint({ outputIds: [asset.id, post.id] }); return { outputIds: [asset.id, post.id], message: 'Đã xuất video Affiliate và nội dung đăng bài' };
+      const list = notes && attentionList(steps, notes, project.data.affiliateReview ? object(project.data.affiliateReview) : undefined);
+      this.store.saveProject({ ...latest, data: { ...latest.data, production: { ...object(latest.data.production ?? {}), affiliatePostAssetId: post.id, ...(list ? { attention: list } : {}) } } });
+      context.checkpoint({ outputIds: [asset.id, post.id] }); return { outputIds: [asset.id, post.id], message: list?.length ? attentionMessage('Đã xuất video Affiliate', list) : 'Đã xuất video Affiliate và nội dung đăng bài' };
     }
     context.checkpoint({ outputIds: [asset.id] }); await this.exportOutput(asset, task, context.signal); return { outputIds: [asset.id] };
   }
@@ -1119,7 +1149,9 @@ export class StudioService extends EventEmitter {
       if (review.status !== 'pass') throw new NeedsInputError('Kịch bản đã chỉnh chưa được duyệt; giữ nguyên nội dung của anh: ' + JSON.stringify(review));
       return { response, review, attempts: 1 };
     }
-    let feedback = '';
+    // Run-all keeps the latest valid script that did not pass review; the render lists it to review.
+    let feedback = '', latest: { response: string; review: ReturnType<typeof parseAffiliateReview> } | undefined;
+    const runAll = task.input.stage === 'all';
     for (let attempt = 0; attempt < 2; attempt++) {
       const response = await complete(`plan:${attempt}`, text(`${planningPrompt(project)}${feedback ? `\nRevise the previous failed draft. Fix these observed problems without changing the product facts or requested settings:\n${feedback}` : ''}`, 'Affiliate planning request', 32768));
       let data: Record<string, unknown>;
@@ -1127,13 +1159,14 @@ export class StudioService extends EventEmitter {
       catch (error) {
         feedback = error instanceof Error ? error.message : 'Invalid Affiliate plan';
         context.checkpoint({ affiliatePlanError: feedback });
-        if (attempt === 1) throw new NeedsInputError('Kịch bản Affiliate chưa đúng cấu hình sau một lượt sửa: ' + feedback);
+        if (attempt === 1 && runAll && latest) return { ...latest, attempts: 2 };
+        if (attempt === 1) throw new NeedsInputError(`Kịch bản Affiliate chưa đúng cấu hình sau một lượt sửa: ${feedback}. Bấm "Phân tích kịch bản" để AI viết kịch bản mới`);
         continue;
       }
       const review = parseAffiliateReview(await complete(`review:${attempt}`, affiliateReviewPrompt(project, data)));
       context.checkpoint({ affiliateReview: review });
-      if (review.status === 'pass') return { response, review, attempts: attempt + 1 };
-      feedback = JSON.stringify(review);
+      if (review.status === 'pass' || runAll && (review.status === 'unknown' || attempt === 1)) return { response, review, attempts: attempt + 1 };
+      feedback = JSON.stringify(review); latest = { response, review };
       if (review.status === 'unknown') throw new NeedsInputError('Chưa đủ bằng chứng để duyệt kịch bản Affiliate: ' + feedback);
       if (attempt === 1) throw new NeedsInputError('Kịch bản Affiliate chưa đạt sau một lượt sửa: ' + feedback);
     }
@@ -1324,13 +1357,20 @@ export class StudioService extends EventEmitter {
     if (!analysis.parts.length) throw new NeedsInputError('Chưa phát hiện câu nói rõ trong audio nguồn');
     return this.offline.transcribeParts(path, analysis.parts, signal);
   }
-  private async reviewAndRepair(task: Task, project: Project, context: TaskContext): Promise<void> {
+  // Video Aff returns the shots to review (empty when all pass) instead of stopping at unknown or exhausted repairs.
+  private async reviewAndRepair(task: Task, project: Project, context: TaskContext): Promise<Record<string, string[]> | undefined> {
     const limit = qualityRetries(project.data.qualityRetries), state = object(task.checkpoint.qualityControl ?? {});
     const rounds = object(state.rounds ?? {}), repairs = object(state.repairs ?? {});
     const selected = Array.isArray(task.input.shotIds) ? new Set(task.input.shotIds as string[]) : undefined;
     const steps = pipelineSteps(project, { speech: false });
     const videos = steps.filter(step => step.kind === 'video').filter(step => !selected || selected.has(step.id.replace(/\/video$/, '')) || selected.has(decodeURIComponent(step.id.split('/').at(-2)!)));
     if (!videos.length) throw new NeedsInputError('Chưa có shot để review');
+    // Dubbed Video Aff keeps the stops: a failed TTS line is not published (tests/affiliate-workflow.test.ts).
+    const affiliate = project.kind === 'affiliate' && project.data.affiliate !== undefined && !affiliateDubbing(project), requirements: Record<string, string[]> = {};
+    const notes = (final: Record<string, unknown>) => Object.fromEntries(videos.map(step => {
+      const base = step.id.replace(/\/video$/, ''), review = object(final[base] ?? {}), keys = requirements[base];
+      return [base, [...keys.filter(key => object(review[key] ?? {}).status === 'fail').slice(0, 1).map(key => attentionReason(object(review[key]))), ...(!keys.length || keys.some(key => !['pass', 'fail'].includes(String(object(review[key] ?? {}).status))) ? ['chưa kiểm được'] : [])]];
+    }));
     let round = typeof state.round === 'number' ? state.round : 0;
     if (!Number.isInteger(round) || round < 0 || round > 2) throw new Error('Invalid quality repair checkpoint');
     const save = () => context.checkpoint({ qualityControl: { ...state, round, rounds, repairs } });
@@ -1359,7 +1399,7 @@ export class StudioService extends EventEmitter {
         const base = step.id.replace(/\/video$/, ''), review = object(reviews[base] ?? {});
         const required = [...(steps.some(value => value.id === `${base}/image`) || step.refIds.length ? ['image'] : []),
           ...(project.data.videoReview === true && project.data.renderMode !== 'slideshow' ? ['video'] : []), ...((project.data.nativeAudio === true || affiliateDubbing(project)) && project.data.renderMode !== 'slideshow' ? ['speech'] : [])];
-        const statuses = required.map(key => object(review[key] ?? {}).status);
+        const statuses = required.map(key => object(review[key] ?? {}).status); requirements[base] = required;
         unknown ||= !statuses.length || statuses.some(status => !['pass', 'fail'].includes(String(status)));
         const failed = required.filter(key => object(review[key] ?? {}).status === 'fail'); failures += failed.length;
         const takes = Array.isArray(history[base]) ? history[base] as Array<Record<string, unknown>> : [];
@@ -1385,8 +1425,9 @@ export class StudioService extends EventEmitter {
         }
       }
       production.qualityTakes = history; this.store.saveProject({ ...latest, data: { ...latest.data, production } });
-      if (!failures && !unknown) { save(); return; }
-      if (unknown) throw new NeedsInputError('Review còn unknown hoặc thiếu bằng chứng; cần anh xem trước khi tạo lại hoặc dựng');
+      if (!failures && !unknown) { save(); return affiliate ? {} : undefined; }
+      if (unknown && !affiliate) throw new NeedsInputError('Review còn unknown hoặc thiếu bằng chứng; cần anh xem trước khi tạo lại hoặc dựng');
+      if (!failures) { save(); return notes(reviews); }
       if (round >= limit || !imageIds.length && !videoIds.length) {
         const chosenReviews = { ...reviews }, fingerprints = { ...object(production.fingerprints ?? {}) };
         for (const step of videos) {
@@ -1409,6 +1450,7 @@ export class StudioService extends EventEmitter {
         }
         production.fingerprints = fingerprints; rounds[round] = checkpoint; save();
         this.store.saveProject({ ...latest, data: { ...latest.data, production, qualityReviews: chosenReviews } });
+        if (affiliate) return notes(chosenReviews);
         throw new NeedsInputError('Kiểm tra chất lượng còn fail; đã giữ bản có đánh giá tốt nhất trong giới hạn tạo lại. Xem review trước khi dựng thủ công');
       }
       round++; repairs[round] = { imagesIds: imageIds, videosIds: videoIds, feedback, done: false }; save();

@@ -1,7 +1,7 @@
 # Video Aff: chạy toàn bộ luồng không dừng giữa chừng
 
 Ngày: 21/11/2026
-Trạng thái: Anh đồng ý hướng ngày 21/11/2026 ("ok trong lúc làm a sẽ test"); chưa thực thi.
+Trạng thái: Anh đồng ý hướng ngày 21/11/2026 ("ok trong lúc làm a sẽ test"); đã thực thi trên nhánh `feat/affiliate-run-all` ngày 21/11/2026, xem "Ghi chú sau thực thi".
 
 ## 1. Mục đích
 
@@ -62,3 +62,14 @@ Mục tiêu: với Video Aff, một lần bấm chạy toàn bộ luồng (`stud
 - Dự án kiểu cũ có lời tràn: chạy toàn bộ luồng và bấm dựng tay đều ra video, không chữ nào bị cắt (cụm lời nằm trọn trong đoạn dựng).
 - Dự án không phải Video Aff: các điểm dừng giữ nguyên (kiểm bằng test có sẵn, không sửa test cũ).
 - `make build`, `caffeinate -i -s make test`, `make lint`, `node scripts/check-docs.js`, hai vòng stress.
+
+## Ghi chú sau thực thi
+
+- **Dựng tay dự án kiểu cũ có lời tràn vẫn dừng.** Mục 3 muốn bỏ điểm dừng này, nhưng test có sẵn `v2 render places spoken clips by measured speech and stops on a cut-off line` (`tests/studio.test.ts`) khẳng định dựng tay kiểu cũ tràn lời phải `waiting_input` "vượt khoảng dựng", và quy tắc là không sửa test cũ. Đã giữ điểm dừng, đổi thông báo: gọi "cảnh N" và bảo bấm "Chạy toàn bộ" với "Review trước khi dựng" đang bật (lượt đó tự nối cảnh theo lời nói) hoặc tạo lại clip cảnh đó. Muốn bỏ hẳn cần anh đồng ý sửa test đó.
+- Nối theo lời nói cho dự án kiểu cũ chỉ bật ở lượt dựng sau review của chạy toàn bộ có `autoChecks` (khi gặp cảnh tràn đầu tiên thì dựng lại cả video theo cách mới). Chạy toàn bộ không bật `autoChecks` giữ điểm dừng lời tràn/câu cụt như cũ, nhưng vẫn ghi lý do kịch bản vào danh sách.
+- Cửa sổ dựng kiểu cũ lấy từ đầu đoạn lời đầu tiên đến cuối đoạn lời cuối cùng (qua `affiliateSpeechWindow`), không chỉ cụm lời đầu như v2, để không cắt chữ nào. Nhịp nhanh (`pace: 'fast'`) không bật cho dự án kiểu cũ.
+- Nếu kịch bản viết lại sai cấu hình nhưng bản trước hợp lệ (chỉ chưa đạt review), chạy toàn bộ dùng bản trước.
+- Nút "Chạy lại" ở bảng 2 không có; tác vụ "Thử lại" dùng lại checkpoint nên sẽ ra cùng kết quả. Thông báo dùng nút thật "Phân tích kịch bản".
+- `production.attention` có thêm mục `{ shot: 'kịch bản', reasons }` khi kịch bản chưa đạt; dựng tay không ghi đè danh sách.
+- Review chưa có provider lời nói (ASR) vẫn báo lời tràn là fail theo đo âm thanh; lý do đó (rút gọn) đứng trước "dài hơn dự kiến" trong cùng cảnh.
+- **Video Aff lồng tiếng giữ điểm dừng review.** Test có sẵn `Affiliate dub speech review assesses the fitted current TTS clip, not the replaced native voice` yêu cầu chạy toàn bộ dự án lồng tiếng có review lời fail phải `waiting_input`; không sửa test cũ nên `reviewAndRepair` chỉ đổi hành vi cho Video Aff không lồng tiếng. Dự án lồng tiếng vẫn được ghi lý do kịch bản khi chạy toàn bộ không bật `autoChecks`.

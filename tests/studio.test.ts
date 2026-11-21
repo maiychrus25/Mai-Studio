@@ -944,3 +944,59 @@ test('fast edit captions and flashes land on the fast-edit cuts', async t => {
     assert.equal(options.flashes.length, 1); assert.ok(Math.abs(options.flashes[0] - cut) < 1e-9, `${options.flashes} vs ${cut}`);
   } finally { await studio.close(); rmSync(root, { recursive: true, force: true }); }
 });
+
+async function spokenClips(root: string, studio: StudioService) {
+  const make = async (name: string, speech: number) => {
+    const source = join(root, `${name}.mp4`);
+    assert.equal(spawnSync(require('ffmpeg-static') as string, ['-v', 'error', '-f', 'lavfi', '-i', 'color=c=blue:s=64x64:r=24:d=3.5', '-f', 'lavfi', '-i', `sine=frequency=180:sample_rate=16000:duration=${speech}`, '-filter_complex', '[1:a]adelay=1000:all=1,apad=whole_dur=3.5[a]', '-map', '0:v', '-map', '[a]', '-c:v', 'libx264', '-pix_fmt', 'yuv420p', '-c:a', 'aac', '-t', '3.5', source]).status, 0);
+    return (await studio.importFiles([source]))[0];
+  };
+  const short = await make('short', 1), cut = await make('cut', 2.5);
+  const shots = (second: string) => ['one', 'two'].map((id, index) => ({ id, prompt: 'Shirt on the cabinet', videoAssetId: index ? second : short.id, duration: 0.5, start: index * 0.5, dialogue: 'Áo cotton mềm mại.', beat: 'hook', shotType: 'insert' }));
+  const base = { affiliate: { contentStyle: 'review', hostMode: 'voiceover', screenText: false, seconds: 15 }, affiliateReview: { status: 'pass' }, nativeAudio: true, keepAudio: true, width: 64, height: 64, product: { name: 'Shirt' } };
+  const run = async (data: Record<string, unknown>, stage: string) => {
+    const p = await studio.invoke<Project>('project.save', { name: 'spoken', kind: 'affiliate', data }), task = await studio.invoke<Task>('studio.run', { projectId: p.id, stage });
+    for (let n = 0; n < 3000 && ['draft', 'queued', 'running'].includes(studio.store.task(task.id).status); n++) await delay(10);
+    return { project: p, task: studio.store.task(task.id) };
+  };
+  return { short, cut, shots, base, run };
+}
+
+test('legacy affiliate run-all with an overflowing line renders by measured speech without cutting words', async t => {
+  const root = mkdtempSync(join(tmpdir(), 'maistudio-legacy-overflow-')); const studio = new StudioService(root);
+  const merges: Array<Array<Record<string, any>>> = []; const merge = MediaTools.prototype.merge;
+  t.mock.method(MediaTools.prototype, 'merge', function (this: MediaTools, ...args: Parameters<MediaTools['merge']>) { merges.push(structuredClone(args[0]) as any); return merge.apply(this, args); });
+  try {
+    const { analyzeSpeech } = require('../src/core/acoustics') as typeof import('../src/core/acoustics');
+    const { short, cut, shots, base, run } = await spokenClips(root, studio);
+    const legacy = await run({ ...base, autoChecks: true, qualityRetries: 0, shots: shots(short.id) }, 'all');
+    assert.equal(legacy.task.status, 'succeeded', legacy.task.error);
+    assert.match(legacy.task.message, /^Đã xuất video Affiliate\. 2 cảnh cần xem lại: cảnh 1 \([^)]*dài hơn dự kiến\), cảnh 2 \([^)]*dài hơn dự kiến\)\.$/);
+    const inputs = merges.at(-1)!; assert.equal(inputs.length, 2);
+    let at = 0;
+    for (const input of inputs) {
+      const speech = await analyzeSpeech(input.path, new MediaTools().executablePath);
+      assert.ok(input.trimStart <= speech.parts[0].start && input.trimEnd >= speech.parts.at(-1)!.end, `every spoken part stays inside the segment: ${JSON.stringify({ input, parts: speech.parts })}`);
+      assert.ok(Math.abs(input.start - at) < 1e-6, 'clips follow each other by measured speech'); at = input.start + input.duration;
+    }
+    const video = await new MediaTools().probe(studio.store.assetPath(legacy.task.outputIds[0]));
+    assert.ok(video.duration > 2.4, `two measured lines, not the 1 s plan: ${video.duration}`);
+    const attention = (studio.store.project(legacy.project.id).data.production as any).attention;
+    assert.deepEqual(attention.map((item: any) => item.shot), ['cảnh 1', 'cảnh 2']);
+    const truncated = await run({ ...base, affiliatePlanVersion: 2, productLook: 'A white cotton shirt.', autoChecks: true, qualityRetries: 0, shots: shots(cut.id) }, 'all');
+    assert.equal(truncated.task.status, 'succeeded', truncated.task.error);
+    assert.match(truncated.task.message, /cảnh 2 \([^)]*câu cuối bị cụt trong clip gốc\)/);
+  } finally { await studio.close(); rmSync(root, { recursive: true, force: true }); }
+});
+
+test('manual render of a legacy affiliate project with a cut-off line still waits and names the shot to regenerate', async () => {
+  const root = mkdtempSync(join(tmpdir(), 'maistudio-manual-cut-')); const studio = new StudioService(root);
+  try {
+    const { short, cut, shots, base, run } = await spokenClips(root, studio);
+    const legacy = await run({ ...base, autoChecks: true, shots: shots(short.id) }, 'render');
+    assert.equal(legacy.task.status, 'waiting_input'); assert.match(legacy.task.error, /cảnh 1 vượt khoảng dựng/); assert.match(legacy.task.error, /Chạy toàn bộ/);
+    assert.doesNotMatch(legacy.task.error, /%2F|\//, 'no internal shot id');
+    const truncated = await run({ ...base, affiliatePlanVersion: 2, productLook: 'A white cotton shirt.', autoChecks: true, shots: shots(cut.id) }, 'render');
+    assert.equal(truncated.task.status, 'waiting_input'); assert.match(truncated.task.error, /cảnh 2 bị cắt ở cuối clip/); assert.match(truncated.task.error, /Tạo lại clip/);
+  } finally { await studio.close(); rmSync(root, { recursive: true, force: true }); }
+});

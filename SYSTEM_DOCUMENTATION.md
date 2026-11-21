@@ -234,6 +234,20 @@ Chưa kiểm (nhịp nhanh): chưa dựng clip Muse thật hay clip provider th�
 
 Chưa kiểm: chưa chạy provider thật cho v2; hai số 0,12/0,30 giây mới thử bằng sóng sine; sáu kiểu talk ngoài `review` và lookbook có ảnh bộ đồ là khuôn suy rộng.
 
+## Video Aff chạy toàn bộ không dừng giữa chừng — dev 21/11/2026
+
+Thiết kế: `docs/specs/2026-11-21-affiliate-run-all.md`; kế hoạch: `docs/plans/2026-11-21-affiliate-run-all.md`. Chỉ áp cho dự án Video Aff (`project.kind === 'affiliate'` và có `data.affiliate`), cả kiểu cũ lẫn v2; mọi loại dự án khác giữ nguyên các điểm dừng và thông báo.
+
+**Review chất lượng.** `reviewAndRepair` của Video Aff không lồng tiếng (dự án lồng tiếng giữ điểm dừng cũ để không xuất lời TTS sai) không dừng khi review còn `unknown` hay khi hết `qualityRetries` mà còn fail: nó vẫn chỉ tạo lại cảnh fail trong giới hạn (unknown không được tạo lại), giữ bản có điểm tốt nhất như trước, rồi trả về danh sách cảnh cần xem lại. `qualityReviews` giữ đúng `fail`/`unknown`, không cảnh nào bị ghi thành đạt. Chạy toàn bộ (có `autoChecks`) đi tiếp sang dựng; bước `videos` có tự kiểm kết thúc thành công với danh sách đó.
+
+**Kịch bản.** Khi chạy toàn bộ, kịch bản hợp lệ mà review chưa đạt sau một lượt viết lại, hoặc review `unknown` (không viết lại), vẫn được dùng (bản hợp lệ mới nhất); `affiliateReview` ghi đúng trạng thái và số lượt. Kịch bản sai cấu hình sau một lượt sửa mà không có bản hợp lệ nào vẫn dừng, thông báo bảo bấm "Phân tích kịch bản". Bước `plan` riêng giữ các điểm dừng cũ.
+
+**Dựng.** Ở lượt dựng sau review của chạy toàn bộ: dự án kiểu cũ có lời tràn khoảng dựng được dựng lại một lần bằng cách nối cảnh theo lời nói thật như v2 (`measuredSpeech`), cửa sổ mỗi cảnh phủ mọi đoạn lời đo được nên không chữ nào bị cắt, thời lượng thật có thể dài hơn mục tiêu; kiểu cũ không tràn dựng y như trước. Câu bị cụt ở cuối clip gốc được dựng với clip đó và ghi lại. Dựng tay (`render`) vẫn dừng ở lời tràn và câu cụt, nhưng thông báo gọi cảnh theo số thứ tự và nói bấm gì ("Chạy toàn bộ" với "Review trước khi dựng" đang bật, hoặc "Tạo lại clip").
+
+**Kết quả.** `production.attention` (mảng `{ shot, reasons }`, `shot` là "cảnh N" theo thứ tự trong video hoặc "kịch bản") được ghi đè ở mỗi lần chạy toàn bộ và mỗi bước `videos` có tự kiểm; dựng tay không đổi nó. Lý do ngắn lấy từ tiêu chí fail đầu tiên (≤ 80 ký tự) hoặc câu cố định: "chưa kiểm được", "dài hơn dự kiến", "câu cuối bị cụt trong clip gốc". Tin nhắn tác vụ, ví dụ: "Đã xuất video Affiliate. 2 cảnh cần xem lại: cảnh 4 (…), cảnh 5 (…). Kịch bản cần xem lại: …"; không có gì cần xem thì giữ tin nhắn cũ.
+
+Chưa kiểm: chưa chạy provider thật hay máy Windows; ghi chú trong giao diện "Unknown dừng để anh xem" chưa đổi theo hành vi mới của Video Aff.
+
 ## Ma trận chức năng — trạng thái dev
 
 | Nhóm | Mã hiện có | Điều kiện nghiệm thu còn lại |
